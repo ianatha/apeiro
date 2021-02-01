@@ -1,0 +1,10 @@
+[package]
+name = "pristine_stepper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+brotli = "3.3.4"
+v8 = "0.55.0"
+anyhow = "1.0.66"
+tokio = { version = "1", features = ["full"] }

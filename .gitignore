@@ -2,3 +2,5 @@ secrets.yaml
 apeirod
 coverage.out
 *.db
+/notes
+/target
