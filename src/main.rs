@@ -28,8 +28,8 @@ async fn main() -> Result<()> {
     .await;
 
     match res {
-        Result::Ok(()) => {
-            println!("ok");
+        Result::Ok(state) => {
+            println!("state: {}", state);
         }
         Err(e) => {
             println!("error: {}", e);

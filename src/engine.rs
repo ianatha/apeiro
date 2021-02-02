@@ -5,7 +5,7 @@ use crate::fs::*;
 use crate::v8_helpers::*;
 use std::string::String;
 
-pub async fn step_fs_process(pid: &String, js_stmt: String) -> Result<()> {
+pub async fn step_fs_process(pid: &String, js_stmt: String) -> Result<String> {
     let state = file_to_bytes(format!("{}.state.json", pid))
         .map(|x| std::str::from_utf8(x.as_slice()).unwrap().to_string());
     let snapshot = file_to_bytes_decompress(format!("{}.snapshot.bin", pid), true);
@@ -19,10 +19,12 @@ pub async fn step_fs_process(pid: &String, js_stmt: String) -> Result<()> {
 
     let (new_state, new_snpashot) = step_process(src, state, snapshot, js_stmt).await?;
 
+    let result = new_state.clone();
+
     bytes_to_file(new_state.into_bytes(), format!("{}.state.json", pid))?;
     bytes_to_file_compress(new_snpashot, format!("{}.snapshot.bin", pid), true)?;
 
-    Ok(())
+    Ok(result)
 }
 
 pub async fn step_process(
@@ -35,13 +37,11 @@ pub async fn step_process(
         (Some(src), None, None) => {
             // First step
             let (state, snapshot) = step_process_first(src, js_stmt).await?;
-            println!("state: {:?}", state);
             Ok((state, snapshot))
         }
         (None, Some(_state), Some(snapshot)) => {
             // Subsequent step
             let (new_state, new_snapshot) = step_process_subsequent(snapshot, js_stmt).await?;
-            println!("state: {:?}", new_state);
             Ok((new_state, new_snapshot))
         }
         (_, Some(_), None) => Err(anyhow!(
