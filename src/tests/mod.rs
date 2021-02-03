@@ -1,40 +1,32 @@
-use crate::engine::{step_process, v8_init};
-use std::sync::Once;
-
-static INIT: Once = Once::new();
-
-pub fn initialize() {
-    INIT.call_once(|| {
-        v8_init();
-    });
-}
+use crate::engine::Engine;
 
 #[tokio::test]
 async fn it_maintains_state() {
-    initialize();
-
     let src = include_bytes!("counter.js").to_vec();
+    let engine = Engine::new();
 
-    let (mut state, mut snapshot) = step_process(
-        Some(src),
-        None,
-        None,
-        "counter.i(); counter.g()".to_string(),
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(state, "1");
-
-    for n in 2..100 {
-        (state, snapshot) = step_process(
+    let (mut state, mut snapshot) = engine
+        .step_process(
+            Some(src),
             None,
-            Some(state),
-            Some(snapshot),
+            None,
             "counter.i(); counter.g()".to_string(),
         )
         .await
         .unwrap();
+
+    assert_eq!(state, "1");
+
+    for n in 2..100 {
+        (state, snapshot) = engine
+            .step_process(
+                None,
+                Some(state),
+                Some(snapshot),
+                "counter.i(); counter.g()".to_string(),
+            )
+            .await
+            .unwrap();
 
         assert_eq!(state, n.to_string());
     }
@@ -42,28 +34,29 @@ async fn it_maintains_state() {
 
 #[tokio::test]
 async fn it_catches_exceptions() {
-    initialize();
-
     let src = include_bytes!("counter.js").to_vec();
+    let engine = Engine::new();
 
-    let (state, snapshot) = step_process(
-        Some(src),
-        None,
-        None,
-        "counter.i(); counter.g()".to_string(),
-    )
-    .await
-    .unwrap();
+    let (state, snapshot) = engine
+        .step_process(
+            Some(src),
+            None,
+            None,
+            "counter.i(); counter.g()".to_string(),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(state, "1");
 
-    let result = step_process(
-        None,
-        Some(state),
-        Some(snapshot),
-        "bad_code_here()".to_string(),
-    )
-    .await;
+    let result = engine
+        .step_process(
+            None,
+            Some(state),
+            Some(snapshot),
+            "bad_code_here()".to_string(),
+        )
+        .await;
 
     match result {
         Ok(_) => panic!("expected an error"),

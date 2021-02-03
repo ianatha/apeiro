@@ -5,6 +5,7 @@ mod tests;
 mod v8_helpers;
 
 use anyhow::{anyhow, Ok, Result};
+use engine::Engine;
 use std::env;
 use std::string::String;
 
@@ -16,16 +17,17 @@ use std::string::String;
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    engine::v8_init();
+    let engine = Engine::new();
 
-    let res = engine::step_fs_process(
-        args.get(1)
-            .ok_or(anyhow!("missing first argument: src name, without the js"))?,
-        args.get(2)
-            .ok_or(anyhow!("missing stepping js expression"))?
-            .clone(),
-    )
-    .await;
+    let res = engine
+        .step_fs_process(
+            args.get(1)
+                .ok_or(anyhow!("missing first argument: src name, without the js"))?,
+            args.get(2)
+                .ok_or(anyhow!("missing stepping js expression"))?
+                .clone(),
+        )
+        .await;
 
     match res {
         Result::Ok(state) => {
