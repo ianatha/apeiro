@@ -1,11 +1,35 @@
+mod compiler;
 mod engine;
 mod fs;
 mod v8_helpers;
 
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{Ok, Result};
+use clap::{Arg, ArgAction, Command};
 use engine::Engine;
-use std::env;
 use std::string::String;
+
+fn cli() -> Command {
+    Command::new("pristine_stepper")
+        .arg(
+            Arg::new("no-compile")
+                .short('N')
+                .long("no-compile")
+                .action(ArgAction::SetTrue)
+                .num_args(0),
+        )
+        .arg(
+            Arg::new("pid")
+                .action(ArgAction::Set)
+                .required(true)
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("step")
+                .action(ArgAction::Set)
+                .required(true)
+                .num_args(1),
+        )
+}
 
 /// pristine_stepper [id] [js_stmt]
 /// Steps a Pristine function by executing [js_stmt]. If no [id].state.json, or [id].snapshot.bin exist,
@@ -13,19 +37,14 @@ use std::string::String;
 /// [id].js is not evaluated after the first step.
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
+    let matches = cli().get_matches();
+    let no_compile = matches.get_flag("no-compile");
+    let pid = matches.get_one::<String>("pid").expect("pid");
+    let step = matches.get_one::<String>("step").expect("step").to_owned();
 
     let engine = Engine::new();
 
-    let res = engine
-        .step_fs_process(
-            args.get(1)
-                .ok_or(anyhow!("missing first argument: src name, without the js"))?,
-            args.get(2)
-                .ok_or(anyhow!("missing stepping js expression"))?
-                .clone(),
-        )
-        .await;
+    let res = engine.step_fs_process(pid, step, !no_compile).await;
 
     match res {
         Result::Ok(state) => {

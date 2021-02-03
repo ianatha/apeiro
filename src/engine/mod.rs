@@ -4,6 +4,7 @@ mod tests;
 use anyhow::{anyhow, Ok, Result};
 use v8::ScriptOrigin;
 
+use crate::compiler::pristine_compile;
 use crate::fs::*;
 use crate::v8_helpers::*;
 use std::string::String;
@@ -38,14 +39,31 @@ impl Engine {
         Engine {}
     }
 
-    pub async fn step_fs_process(&self, pid: &String, js_stmt: String) -> Result<String> {
+    pub async fn step_fs_process(
+        &self,
+        pid: &String,
+        js_stmt: String,
+        compile: bool,
+    ) -> Result<String> {
         let state = file_to_bytes(format!("{}.state.json", pid))
             .map(|x| std::str::from_utf8(x.as_slice()).unwrap().to_string());
         let snapshot = file_to_bytes_decompress(format!("{}.snapshot.bin", pid), true);
 
         let src: Option<Vec<u8>> = if state.is_none() || snapshot.is_none() {
             let src_loc = format!("{}.js", pid);
-            file_to_bytes(src_loc)
+            match file_to_bytes(src_loc) {
+                Some(src_bytes) => {
+                    if compile {
+                        let src = std::str::from_utf8(src_bytes.as_slice())
+                            .unwrap()
+                            .to_string();
+                        Some(pristine_compile(src).unwrap().into_bytes())
+                    } else {
+                        Some(src_bytes)
+                    }
+                }
+                None => None,
+            }
         } else {
             None
         };
