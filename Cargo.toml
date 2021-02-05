@@ -16,3 +16,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "pristine_stepper"
 path = "src/main.rs"
+
+[dev-dependencies]
+criterion = { version = "0.3", features = ["async_futures", "html_reports"] }
+
+[[bench]]
+name = "snapshot"
+harness = false
