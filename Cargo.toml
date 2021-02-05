@@ -8,3 +8,11 @@ brotli = "3.3.4"
 v8 = "0.55.0"
 anyhow = "1.0.66"
 tokio = { version = "1", features = ["full"] }
+
+[lib]
+name = "pristine_stepper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pristine_stepper"
+path = "src/main.rs"

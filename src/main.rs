@@ -1,7 +1,5 @@
 mod engine;
 mod fs;
-#[cfg(test)]
-mod tests;
 mod v8_helpers;
 
 use anyhow::{anyhow, Ok, Result};

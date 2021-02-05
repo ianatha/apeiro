@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use anyhow::{anyhow, Ok, Result};
 use v8::ScriptOrigin;
 
