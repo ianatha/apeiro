@@ -5,31 +5,39 @@ import babel, {
 import {
   BlockStatement,
   CallExpression,
-  classBody,
   FunctionDeclaration,
   Identifier,
   Statement,
   SwitchCase,
   VariableDeclaration,
+  ImportDeclaration
 } from "https://esm.sh/v96/@babel/types@7.19.3/lib/index-legacy.d.ts";
 
-function explodeFunctionCalls() {
+function explodeFunctionCalls(frameIndex: number) {
   return {
     CallExpression(path: NodePath<CallExpression | Identifier>) {
       if (
         !path.parentPath.isExpressionStatement() &&
-        !path.parentPath.isVariableDeclarator()
+        !path.parentPath.isVariableDeclarator() &&
+        !path.parentPath.isAssignmentExpression()
       ) {
-        const newVar = path.scope.generateUidIdentifierBasedOnNode(path.node);
+        const newVar = path.scope.generateUidIdentifierBasedOnNode(path.node)
         path.getStatementParent()?.insertBefore(
-          t.variableDeclaration("const", [
-            t.variableDeclarator(
-              newVar,
-              path.node,
-            ),
-          ]),
+          [t.expressionStatement(
+            t.assignmentExpression("=",
+              t.identifier("$f" + frameIndex + ".s." + newVar.name),
+              path.node)
+          ),
+        ]).forEach((s) => s.skip());
+        path.getStatementParent()?.insertAfter(
+          t.expressionStatement(
+          t.unaryExpression(
+            "delete",
+            t.identifier("$f" + frameIndex + ".s." + newVar.name),
+          ))
         );
-        path.replaceWith(newVar);
+
+        path.replaceWith(t.identifier("$f" + frameIndex + ".s." + newVar.name));
       }
     },
   };
@@ -41,26 +49,29 @@ const introduceContext = {
   },
 };
 
-function assignFrameIndex(path: NodePath<Statement>) {
+function assignFrameIndex(path: NodePath<Statement>): number {
   const parentWithIndex = path.findParent((p) =>
     p.getData("frame") !== undefined
   );
   if (parentWithIndex) {
-    path.setData("frame", parentWithIndex.getData("frame") + 1);
+    const parentFrameIndex = parentWithIndex.getData("frame");
+    path.setData("frame", parentFrameIndex + 1);
+    return parentFrameIndex + 1;
   } else {
     path.setData("frame", 0);
+    return 0;
   }
 }
 
 function generateFrameDeclaration(
   path: NodePath<Statement>,
+  frameIndex: number,
 ): [Identifier, VariableDeclaration] {
-  assignFrameIndex(path);
   const frameInvocation = (path.getData("frame") == 0)
     ? t.identifier("$ctx.frame()")
     : t.identifier(`$f${path.getData("frame") - 1}.subframe()`);
 
-  const frameIdentifier = t.identifier("$f" + path.data.frame);
+  const frameIdentifier = t.identifier("$f" + frameIndex);
   const frameDeclaration = t.variableDeclaration("const", [
     t.variableDeclarator(
       frameIdentifier,
@@ -116,14 +127,15 @@ function rewriteBindingsToFrameState(
 function transform(code) {
   const output = babel.transformSync(code, {
     plugins: [
-      function myCustomPlugin2() {
+      function apeiroInstrumentationPlugin() {
         return {
           visitor: {
             ...introduceContext,
             BlockStatement(path: NodePath<BlockStatement>) {
-              path.traverse(explodeFunctionCalls());
+              const frameIndex = assignFrameIndex(path);
+              path.traverse(explodeFunctionCalls(frameIndex));
               const [frameIdentifier, frameDeclaration] =
-                generateFrameDeclaration(path);
+                generateFrameDeclaration(path, frameIndex);
               rewriteBindingsToFrameState(path, frameIdentifier);
               path.node.body = [
                 frameDeclaration,

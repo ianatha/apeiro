@@ -15,22 +15,34 @@ func TestApeiroTransformSimple(t *testing.T) {
 	defer transformer.Close()
 
 	assert.Nil(t, err)
-	result, err := transformer.ApeiroTransform([]byte("function simple(a, b) { c = a + b; d = a * b; return c + d; }"))
+	result, err := transformer.ApeiroTransform([]byte(`function simple(a, b) {
+let c = a + b;
+let d = a * square(b);
+return c + d;
+}`))
 	assert.Nil(t, err)
 	assert.Equal(t, `function simple($ctx, a, b) {
   const $f0 = $ctx.frame();
 
   switch ($f0.pc) {
     case 0:
-      c = a + b;
+      $f0.s.c = a + b;
       $f0.pc++;
 
     case 1:
-      d = a * b;
+      $f0.s._square = square(b);
       $f0.pc++;
 
     case 2:
-      return c + d;
+      $f0.s.d = a * $f0.s._square;
+      $f0.pc++;
+
+    case 3:
+      delete $f0.s._square;
+      $f0.pc++;
+
+    case 4:
+      return $f0.s.c + $f0.s.d;
       $f0.pc++;
   }
 
