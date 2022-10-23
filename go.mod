@@ -5,9 +5,9 @@ go 1.19
 require (
 	github.com/evanw/esbuild v0.15.11
 	github.com/gin-gonic/gin v1.8.1
+	github.com/goccy/go-json v0.9.7
 	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/stretchr/testify v1.7.1
-	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	rogchap.com/v8go v0.7.0
 )
 
@@ -17,8 +17,6 @@ require (
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
-	github.com/goccy/go-json v0.9.7 // indirect
-	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -31,10 +29,9 @@ require (
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.3.6 // indirect
-	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
-replace rogchap.com/v8go v0.7.0 => ../v8go
+replace rogchap.com/v8go v0.7.0 => github.com/ianatha/v8go v0.0.0-20221023183758-2e9fa851a5b2
