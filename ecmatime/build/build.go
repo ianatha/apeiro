@@ -103,9 +103,9 @@ func main() {
 		EntryPoints:       []string{*inputFile},
 		Format:            api.FormatIIFE,
 		Bundle:            true,
-		MinifyWhitespace:  true,
-		MinifyIdentifiers: true,
-		MinifySyntax:      true,
+		MinifyWhitespace:  false,
+		MinifyIdentifiers: false,
+		MinifySyntax:      false,
 		GlobalName:        ecmatime.OBJECT_NAME,
 		Plugins: []api.Plugin{
 			DenoModuleLoaderPlugin(),

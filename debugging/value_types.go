@@ -1,4 +1,4 @@
-package apeiro
+package debugging
 
 import "rogchap.com/v8go"
 

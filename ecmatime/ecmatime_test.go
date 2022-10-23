@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	_ "embed"
+
 	"github.com/stretchr/testify/assert"
 	"rogchap.com/v8go"
 )
@@ -23,8 +25,7 @@ func arrayDiff(a, b []string) []string {
 }
 
 func WithEcmatime(t *testing.T, fn func(ctx *v8go.Context)) {
-	iso := v8go.NewIsolate()
-	ctx := v8go.NewContext(iso)
+	ctx := NewEcmatime()
 	_, err := ctx.RunScript(ECMATIME, "<ecmatime>")
 	if err != nil {
 		t.Error()
@@ -34,21 +35,39 @@ func WithEcmatime(t *testing.T, fn func(ctx *v8go.Context)) {
 	ctx.Isolate().Dispose()
 }
 
+func JSErrorString(err error) string {
+	if jserr, ok := (err).(*v8go.JSError); ok {
+		return fmt.Sprintf("%s at %s\n%s", jserr.Message, jserr.Location, jserr.StackTrace)
+	}
+	return err.Error()
+}
+
 func TestEcmatimeExports(t *testing.T) {
-	iso := v8go.NewIsolate()
-	ctx := v8go.NewContext(iso)
+	ctx := NewEcmatime()
 
 	propertyNamesBefore := ctx.Global().GetOwnPropertyNames()
 
 	_, err := ctx.RunScript(ECMATIME, "<ecmatime>")
 	if err != nil {
-		t.Error()
+		t.Error(JSErrorString(err))
 	}
 
-	propertyNamesAfter := ctx.Global().GetOwnPropertyNames()
+	global := ctx.Global()
+	propertyNamesAfter := global.GetOwnPropertyNames()
 
 	delta := arrayDiff(propertyNamesAfter, propertyNamesBefore)
 	assert.Equal(t, []string{OBJECT_NAME}, delta)
+
+	apeiroModuleVal, err := global.Get(OBJECT_NAME)
+	if err != nil {
+		t.Error(JSErrorString(err))
+	}
+
+	apeiroModule, err := apeiroModuleVal.AsObject()
+	if err != nil {
+		t.Error(JSErrorString(err))
+	}
+	assert.Equal(t, []string{"__esModule", "Decoder", "Encoder", "step"}, apeiroModule.GetOwnPropertyNames())
 
 	ctx.Close()
 	ctx.Isolate().Dispose()
@@ -75,7 +94,7 @@ func TestSerializationSimpleObject(t *testing.T) {
 		ctx.Global().Set("serialized", serialized)
 		val, err := ctx.RunScript("var state = (new $apeiro.Decoder()).decode(serialized); state", "<test>")
 		if err != nil {
-			t.Error(err)
+			t.Error(JSErrorString(err))
 		}
 
 		a, err := val.Object().Get("str_a")

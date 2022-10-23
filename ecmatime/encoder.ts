@@ -124,7 +124,7 @@ export class Encoder {
     }
     const result = this.encodeValue(v);
     this.cleanValue(v);
-    return msgpackEncode(result);
+    return JSON.stringify(result);
   }
 }
 

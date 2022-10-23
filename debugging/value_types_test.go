@@ -1,4 +1,4 @@
-package apeiro
+package debugging
 
 import (
 	"testing"

@@ -77,7 +77,7 @@ export class Decoder {
   public decode(input: any, ctx: any) {
     this.ctx = ctx;
     this.BY_TAG = {};
-    const v = msgpackDecode(input);
+    const v = JSON.parse(input);
     if (v.type !== "object") {
       throw new Error("root must be an object");
     }
