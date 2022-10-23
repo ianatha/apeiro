@@ -79,7 +79,7 @@ func TestSpawnAndWait(t *testing.T) {
 	script := `export default function hello() { return "Hello, world!" }`
 	r, a := SetupApp()
 	a.Start()
-	// defer a.Stop()
+	defer a.Stop()
 
 	req, _ := http.NewRequest("POST", "/mount", bytes.NewBuffer([]byte(script)))
 	w := httptest.NewRecorder()
@@ -97,9 +97,6 @@ func TestSpawnAndWait(t *testing.T) {
 	assert.Equal(t, `{"pid":"pid_1","val":"\"Hello, world!\""}`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// TODO
-	time.Sleep(100 * time.Millisecond)
-
 	req, _ = http.NewRequest("GET", "/process/pid_1", nil)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -107,4 +104,29 @@ func TestSpawnAndWait(t *testing.T) {
 	responseData, _ = io.ReadAll(w.Body)
 	assert.Equal(t, `"Hello, world!"`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func BenchmarkSpawnHelloWrold(b *testing.B) {
+	script := `export default function hello() { return "Hello, world!" }`
+	r, a := SetupApp()
+	a.Start()
+	defer a.Stop()
+
+	req, _ := http.NewRequest("POST", "/mount", bytes.NewBuffer([]byte(script)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	responseData, _ := io.ReadAll(w.Body)
+	assert.Equal(b, `{"mid":"fn_1"}`, string(responseData))
+	assert.Equal(b, http.StatusOK, w.Code)
+
+	for i := 0; i < b.N; i++ {
+		req, _ = http.NewRequest("POST", "/spawn", bytes.NewBuffer([]byte(`{"mid":"fn_1","wait":true}`)))
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		responseData, _ = io.ReadAll(w.Body)
+		assert.Contains(b, string(responseData), `,"val":"\"Hello, world!\""}`)
+		assert.Equal(b, http.StatusOK, w.Code)
+	}
 }
