@@ -1,7 +1,6 @@
 package apeiro
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 
@@ -30,8 +29,6 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 			})
 			return
 		}
-
-		fmt.Printf("src: %s\n", string(src))
 
 		mid, err := a.Mount(src)
 		if err != nil {

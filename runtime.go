@@ -38,8 +38,6 @@ func NewApeiroRuntime(database string) (*ApeiroRuntime, error) {
 		return nil, err
 	}
 
-	fmt.Printf("new runtime at %s\n", database)
-
 	return &ApeiroRuntime{
 		isolates:             isolates,
 		db:                   db,
@@ -56,7 +54,6 @@ func (a *ApeiroRuntime) Start() {
 			case pid := <-a.scheduleForExecution:
 				a.execute(pid)
 			case <-a.terminate:
-				fmt.Printf("execute goroutine terminating\n")
 				return
 			}
 		}
@@ -68,9 +65,7 @@ func (a *ApeiroRuntime) HasPending() bool {
 }
 
 func (a *ApeiroRuntime) Stop() {
-	fmt.Printf("terminating but %d scheduled for execution\n", len(a.scheduleForExecution))
 	a.terminate <- true
-	fmt.Printf("terminated\n")
 }
 
 func (a *ApeiroRuntime) execute(pid string) error {
@@ -80,13 +75,10 @@ func (a *ApeiroRuntime) execute(pid string) error {
 
 	switch err := row.Scan(&src); err {
 	case sql.ErrNoRows:
-		fmt.Printf("no process with pid %s", pid)
 		return fmt.Errorf("no process with pid %s", pid)
 	case nil:
-		fmt.Printf("stepping process\n")
 		err := a.stepProcess(pid, src)
 		if err != nil {
-			fmt.Printf("error_in_execute: %v\n", err)
 			a.triggerWatchers(pid)
 			return err
 		}
@@ -213,7 +205,6 @@ func (a *ApeiroRuntime) newProcessContext(iso *v8go.Isolate, src string) (*v8go.
 	metaChan := make(chan *EventProcessMeta, 1)
 
 	printfn := v8go.NewFunctionTemplate(iso, func(info *v8go.FunctionCallbackInfo) *v8go.Value {
-		fmt.Printf("[log] %v\n", info.Args())
 
 		// metaChan <- &EventProcessMeta{
 		// 	log: info.Args()[0].String(),
@@ -295,12 +286,12 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string) error {
 	// TODO: add timer
 	for {
 		select {
-		case meta := <-meta:
-			fmt.Printf("meta: %v\n", meta)
+		// case meta := <-meta:
+		// fmt.Printf("meta: %v\n", meta)
 		case err := <-apeiroRunErrorChan:
-			fmt.Printf("error: %v\n", err)
-			fmt.Printf("error: %v\n", err.Location)
-			fmt.Printf("error: %v\n", err.StackTrace)
+			// fmt.Printf("error: %v\n", err)
+			// fmt.Printf("error: %v\n", err.Location)
+			// fmt.Printf("error: %v\n", err.StackTrace)
 			return err
 		case result := <-apeiroRunResultChan:
 			res, err := result.Object().Get("res")
