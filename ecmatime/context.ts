@@ -113,7 +113,7 @@ class InternalPristineContext implements PristineContext {
 
   frame() {
     if (!this._frame) {
-      this._frame = new PristineFrame(undefined);
+      this._frame = new IPristineFrame(undefined);
     }
     return this._frame;
   }

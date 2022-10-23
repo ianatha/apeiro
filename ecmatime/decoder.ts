@@ -1,3 +1,5 @@
+import { decode as msgpackDecode } from "https://deno.land/x/msgpack@v1.4/mod.ts";
+
 export class Decoder {
   ctx: any = null;
   BY_TAG: Record<number, any> = {};
@@ -75,7 +77,7 @@ export class Decoder {
   public decode(input: any, ctx: any) {
     this.ctx = ctx;
     this.BY_TAG = {};
-    const v = JSON.parse(input);
+    const v = msgpackDecode(input);
     if (v.type !== "object") {
       throw new Error("root must be an object");
     }

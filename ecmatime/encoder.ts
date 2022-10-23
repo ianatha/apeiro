@@ -1,3 +1,5 @@
+import { encode as msgpackEncode } from "https://deno.land/x/msgpack@v1.4/mod.ts";
+
 const TAG = Symbol("APEIRO_TAG");
 
 export class Encoder {
@@ -120,9 +122,9 @@ export class Encoder {
     if (typeof v !== "object") {
       throw new Error("root must be an object");
     }
-    let result = this.encodeValue(v);
+    const result = this.encodeValue(v);
     this.cleanValue(v);
-    return JSON.stringify(result);
+    return msgpackEncode(result);
   }
 }
 
