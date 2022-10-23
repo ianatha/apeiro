@@ -299,6 +299,8 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string) error {
 			fmt.Printf("meta: %v\n", meta)
 		case err := <-apeiroRunErrorChan:
 			fmt.Printf("error: %v\n", err)
+			fmt.Printf("error: %v\n", err.Location)
+			fmt.Printf("error: %v\n", err.StackTrace)
 			return err
 		case result := <-apeiroRunResultChan:
 			res, err := result.Object().Get("res")
