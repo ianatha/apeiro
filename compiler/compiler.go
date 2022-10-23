@@ -101,6 +101,7 @@ func denoBundle(input []byte) ([]byte, error) {
 
 type CompileOptions struct {
 	ApeiroCompilation bool
+	Minify            bool
 	GlobalName        string
 }
 
@@ -137,25 +138,32 @@ func CompileTypescriptWithFlags(input []byte, flags CompileOptions) ([]byte, err
 		return nil, fmt.Errorf("while bundling: %w", err)
 	}
 
-	finalResult := api.Transform(string(thirdStep), api.TransformOptions{
-		Loader:            api.LoaderJS,
-		Format:            api.FormatIIFE,
-		MinifySyntax:      true,
-		MinifyWhitespace:  true,
-		MinifyIdentifiers: true,
-		GlobalName:        flags.GlobalName,
-	})
-	if finalResult.Errors != nil {
-		fmt.Printf("%s\n", thirdStep)
-		return nil, errors.New("while converting js to IFFE: " + finalResult.Errors[0].Text)
+	var finalResult []byte
+	if flags.Minify {
+		finalResults := api.Transform(string(thirdStep), api.TransformOptions{
+			Loader:            api.LoaderJS,
+			Format:            api.FormatIIFE,
+			MinifySyntax:      true,
+			MinifyWhitespace:  true,
+			MinifyIdentifiers: true,
+			GlobalName:        flags.GlobalName,
+		})
+		if finalResults.Errors != nil {
+			fmt.Printf("%s\n", thirdStep)
+			return nil, errors.New("while converting js to IFFE: " + finalResults.Errors[0].Text)
+		}
+		finalResult = finalResults.Code
+	} else {
+		finalResult = thirdStep
 	}
 
-	return finalResult.Code, nil
+	return finalResult, nil
 }
 
 func CompileTypescript(input []byte) ([]byte, error) {
 	return CompileTypescriptWithFlags(input, CompileOptions{
 		ApeiroCompilation: true,
 		GlobalName:        "$fn",
+		Minify:            true,
 	})
 }

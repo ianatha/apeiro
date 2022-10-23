@@ -62,3 +62,46 @@ export default function simple(a: number, b: number): number {
 
 	assert.Equal(t, `var $fn=(()=>{var n=Object.defineProperty;var f=Object.getOwnPropertyDescriptor;var r=Object.getOwnPropertyNames;var i=Object.prototype.hasOwnProperty;var o=(s,e)=>{for(var t in e)n(s,t,{get:e[t],enumerable:!0})},u=(s,e,t,p)=>{if(e&&typeof e=="object"||typeof e=="function")for(let a of r(e))!i.call(s,a)&&a!==t&&n(s,a,{get:()=>e[a],enumerable:!(p=f(e,a))||p.enumerable});return s};var l=s=>u(n({},"__esModule",{value:!0}),s);var h={};o(h,{default:()=>m});function m(s,e,t){const p=s.frame();switch(p.pc){case 0:c=e+t,p.pc++;case 1:d=e*t,p.pc++;case 2:return c+d}p.end()}return l(h);})();`, strings.TrimSpace(string(output)))
 }
+
+func TestCompileImport(t *testing.T) {
+	input := `import { receive } from "pristine://$";
+
+export default function simple(a: number, b: number): number {
+	c = a + b;
+	d = a * b
+	e = receive('specifier');
+	return c + d + e;
+}`
+
+	output, err := CompileTypescriptWithFlags([]byte(input), CompileOptions{
+		ApeiroCompilation: true,
+		GlobalName:        "$fn",
+		Minify:            false,
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, `// deno-fmt-ignore-file
+// deno-lint-ignore-file
+// This code was bundled using `+"`deno bundle`"+` and it's not recommended to edit it manually
+
+const receive = $apeiro.importFunction("$", "receive");
+function simple($ctx, a, b) {
+    const $f0 = $ctx.frame();
+    switch($f0.pc){
+        case 0:
+            c = a + b;
+            $f0.pc++;
+        case 1:
+            d = a * b;
+            $f0.pc++;
+        case 2:
+            e = $ctx.getFunction(receive)("specifier");
+            $f0.pc++;
+        case 3:
+            return c + d + e;
+            $f0.pc++;
+    }
+    $f0.end();
+}
+export { simple as default };`, strings.TrimSpace(string(output)))
+}

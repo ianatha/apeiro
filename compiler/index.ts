@@ -21,6 +21,13 @@ function explodeFunctionCalls(frameIndex: number) {
         !path.parentPath.isVariableDeclarator() &&
         !path.parentPath.isAssignmentExpression()
       ) {
+        if (
+          path.isCallExpression() &&
+          path.node.callee?.type === "Identifier" &&
+          path.node.callee.name.indexOf("$ctx.") == 0
+         ) {
+          return;
+        }
         const newVar = path.scope.generateUidIdentifierBasedOnNode(path.node)
         path.getStatementParent()?.insertBefore(
           [t.expressionStatement(
@@ -131,6 +138,42 @@ function transform(code) {
         return {
           visitor: {
             ...introduceContext,
+            ImportDeclaration(path: NodePath<ImportDeclaration>) {
+              if (path.node.source.value.indexOf("pristine://") != 0) {
+                return;
+              }
+              
+              const [ _, pristinePath ] = path.node.source.value.split("pristine://");
+              path.replaceWithMultiple(
+                path.node.specifiers.map((specifier) => {
+                  const binding = path.scope.getBinding(specifier.local.name);
+                  if (binding) {
+                    binding.referencePaths.forEach((refPath) => {
+                      refPath.replaceWith(
+                        t.callExpression(
+                          t.identifier("$ctx.getFunction"),
+                          [
+                            t.identifier(specifier.local.name)
+                          ]
+                        )
+                      );
+                    });
+                  }
+                  return t.variableDeclaration("const", [
+                    t.variableDeclarator(
+                      t.identifier(specifier.local.name),
+                      t.callExpression(
+                        t.identifier("$apeiro.importFunction"),
+                        [
+                          t.stringLiteral(pristinePath),
+                          t.stringLiteral(specifier.imported.name)
+                        ],
+                      )
+                    ),
+                  ]);
+                })
+              );
+            },
             BlockStatement(path: NodePath<BlockStatement>) {
               const frameIndex = assignFrameIndex(path);
               path.traverse(explodeFunctionCalls(frameIndex));
