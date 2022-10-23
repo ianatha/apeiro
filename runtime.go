@@ -255,7 +255,7 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string) error {
 	iso := a.isolates.Get().(*v8go.Isolate)
 	defer a.isolates.Put(iso)
 
-	ctx, meta, err := a.newProcessContext(iso, src)
+	ctx, _, err := a.newProcessContext(iso, src)
 	if err != nil {
 		return fmt.Errorf("couldn't create process context: %v", err)
 	}
