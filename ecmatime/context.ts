@@ -1,5 +1,7 @@
 import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
 import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
+import { Decoder } from "./decoder.ts";
+import { Encoder } from "./encoder.ts";
 import { IPristineFrame, PristineFrame } from "./frame.ts";
 import {
   PristineSignal,
@@ -33,15 +35,14 @@ function isGenerator(fn) {
 
 class InternalPristineContext implements PristineContext {
   private _counter: number = 0;
-  private readonly _state: any[] = [];
-  private _data: Record<string, any> = {};
   private readonly _lastSuspension?: Record<string, any> = undefined;
   private _frame: PristineFrame | undefined = undefined;
+  private msgToSupply: any = undefined;
 
-  run_fn() {
+  run_fn(fn: any): PristineFrame {
     try {
       let res = null;
-      res = this.f(this);
+      res = fn(this);
       this._frame!.res = res;
     } catch (e) {
       if (e instanceof Suspension) {
@@ -54,10 +55,10 @@ class InternalPristineContext implements PristineContext {
     return this._frame;
   }
 
-  run_generator() {
+  run_generator(fn: any): PristineFrame {
     try {
       let res = null;
-      const generator_instance = this.f(this);
+      const generator_instance = fn(this);
       res = generator_instance.next().value;
       this._frame!.res = res;
       // TODO: probabilistic
@@ -73,41 +74,29 @@ class InternalPristineContext implements PristineContext {
     return this._frame;
   }
 
-  run() {
-    if (isGenerator(this.f)) {
-      return this.run_generator();
+  run(fn: any): PristineFrame {
+    if (isGenerator(fn)) {
+      return this.run_generator(fn);
     } else {
-      return this.run_fn();
+      return this.run_fn(fn);
     }
-  }
-
-  public setData(data: Record<string, any>) {
-    this._data = data;
-  }
-
-  public getData() {
-    return {
-      ...this._data,
-    };
-  }
-
-  private newSuspensionUntilInput(schema: any) {
-    return new SuspensionUntilInput(this._counter - 1, schema);
-  }
-
-  public recv(spec: [z.ZodObject<any>, (x: any) => any][]) {
   }
 
   public useUIInput<T extends z.ZodRawShape>(
     spec: z.ZodObject<T>,
   ): z.infer<typeof spec> {
     const schema = zodToSchema(spec);
-    if (this._frame!.aw && this._frame!.aw?.until_input === undefined) {
-      const res = this._frame!.aw;
-      this._frame!.aw = undefined;
-      return res;
+    if (this._frame!.aw === undefined || this._frame!.aw === null) {
+      throw new SuspensionUntilInput(schema);
     } else {
-      throw this.newSuspensionUntilInput(schema);
+      if (this.msgToSupply != undefined) {
+        const res = this.msgToSupply;
+        this.msgToSupply = undefined;
+        this._frame!.aw = undefined;
+        return res;
+      } else {
+        throw new Error("No message to supply");
+      }
     }
   }
 
@@ -123,29 +112,60 @@ class InternalPristineContext implements PristineContext {
   }
 
   supply(newMsg) {
-    this._frame!.aw = newMsg;
+    this.msgToSupply = newMsg;
   }
 
   log(msg) {
     this._frame?.log(msg);
   }
 
-  constructor(private readonly f: any, serialized_state?: Record<string, any>) {
-    if (serialized_state) {
-      this._state = serialized_state?.s;
-      this._data = serialized_state?.d;
-      this._lastSuspension = serialized_state?.suspended;
-    }
+  constructor() {
+  }
+
+  getFunction([namespace, fn]: [string, string]) {
+    return (args) => {
+      this.useUIInput(args);
+    };
   }
 }
 
-export function step(fn, state?, newMsg?) {
-  const ctx = new InternalPristineContext(fn, {});
-  if (state) {
-    ctx.loadFrame(state);
+export type StepResult = [
+  // frame
+  ReturnType<typeof Encoder.encode>,
+  // result
+  any,
+  // awaiting
+  Record<string, any>,
+];
+
+export function step(
+  fn: any,
+  serializedPreviousFrame?: string,
+  newMsg?: string,
+): StepResult {
+  const ctx = new InternalPristineContext();
+  if (serializedPreviousFrame) {
+    const decoder = new Decoder();
+    const previousFrame = decoder.decode(serializedPreviousFrame, null);
+    ctx.loadFrame(previousFrame);
   }
   if (newMsg) {
-    ctx.supply(newMsg);
+    ctx.supply(JSON.parse(newMsg));
   }
-  return ctx.run();
+
+  const nextFrame = ctx.run(fn);
+
+  const encoder = new Encoder();
+  return [
+    encoder.encode(nextFrame.serialize()),
+    nextFrame.res,
+    nextFrame.aw,
+  ];
+}
+
+export function importFunction(
+  namespace: string,
+  fn: string,
+): [string, string] {
+  return [namespace, fn];
 }

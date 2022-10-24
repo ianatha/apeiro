@@ -3,6 +3,7 @@ export interface PristineFrame {
   pc: number;
   ch: PristineFrame[];
   aw: any;
+  res: any;
 
   serialize(): Record<string, any>;
 }
@@ -68,7 +69,7 @@ export class IPristineFrame implements PristineFrame {
   }
 
   serialize(): Record<string, any> {
-    return encode({
+    return {
       s: this.s,
       pc: this.pc,
       ch: this.ch.map((f) => f.serialize()),
@@ -76,6 +77,6 @@ export class IPristineFrame implements PristineFrame {
       aw: this.aw,
       logs: this.logs,
       res: this.res,
-    });
+    };
   }
 }

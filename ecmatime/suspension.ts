@@ -12,7 +12,7 @@ export class Suspension extends PristineSignal {
 
 export function serializeSuspension(e: Suspension) {
   if (e instanceof SuspensionUntilInput) {
-    return { until_input: e.serialize(), idx: e.idx };
+    return { until_input: e.serialize() };
   } else {
     return true;
   }
@@ -20,10 +20,9 @@ export function serializeSuspension(e: Suspension) {
 
 export class SuspensionUntilInput extends Suspension {
   constructor(
-    public readonly idx: number,
     private readonly schema: any,
   ) {
-    super(idx);
+    super();
   }
 
   serialize() {

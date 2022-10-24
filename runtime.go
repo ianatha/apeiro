@@ -251,11 +251,17 @@ func getModuleFunction(global *v8go.Object, module string, function string) (*v8
 	return result, nil
 }
 
-func (a *ApeiroRuntime) stepProcess(pid string, src string) error {
+type StepResult struct {
+	frame    string
+	result   []byte
+	awaiting []byte
+}
+
+func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string, newMsg string) error {
 	iso := a.isolates.Get().(*v8go.Isolate)
 	defer a.isolates.Put(iso)
 
-	ctx, _, err := a.newProcessContext(iso, src)
+	ctx, _, err := a.newProcessContext(iso, pid, src)
 	if err != nil {
 		return fmt.Errorf("couldn't create process context: %v", err)
 	}
@@ -271,16 +277,64 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string) error {
 		return fmt.Errorf("couldn't find $apeiro.step: %v", err)
 	}
 
-	apeiroRunResultChan := make(chan *v8go.Value, 1)
+	apeiroRunResultChan := make(chan *StepResult, 1)
 	apeiroRunErrorChan := make(chan *v8go.JSError, 1)
 
 	go func() {
-		val, err := apeiroStep.Call(v8go.Null(iso), function)
+		jsPreviousFrame, err := v8go.NewValue(iso, previousFrame)
+		if err != nil {
+			panic(err)
+		}
+		jsNewMsg, err := v8go.NewValue(iso, newMsg)
+		if err != nil {
+			panic(err)
+		}
+
+		jsStepResult, err := apeiroStep.Call(v8go.Null(iso), function, jsPreviousFrame, jsNewMsg)
 		if err != nil {
 			apeiroRunErrorChan <- err.(*v8go.JSError)
 			return
 		}
-		apeiroRunResultChan <- val
+		stepResult, err := jsStepResult.AsObject()
+		if err != nil {
+			panic(err)
+		}
+		// frame
+		jsFrame, err := stepResult.GetIdx(0)
+		if err != nil {
+			panic(err)
+		}
+		frame := jsFrame.String()
+
+		// result
+		jsResult, err := stepResult.GetIdx(1)
+		if err != nil {
+			panic(err)
+		}
+
+		result, err := jsResult.MarshalJSON()
+		if err != nil {
+			panic(err)
+		}
+
+		// awaiting
+		jsAwaiting, err := stepResult.GetIdx(2)
+		if err != nil {
+			panic(err)
+		}
+		var awaiting []byte
+		if jsAwaiting.IsObject() {
+			awaiting, err = jsAwaiting.Object().MarshalJSON()
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		apeiroRunResultChan <- &StepResult{
+			frame:    frame,
+			result:   result,
+			awaiting: awaiting,
+		}
 	}()
 
 	// TODO: add timer
@@ -289,20 +343,28 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string) error {
 		// case meta := <-meta:
 		// fmt.Printf("meta: %v\n", meta)
 		case err := <-apeiroRunErrorChan:
+			log.Error().
+				Str("error", err.Message).
+				Str("loc", err.Location).
+				Str("trace", err.StackTrace).
+				Msg("error in apeiro step")
 			// fmt.Printf("error: %v\n", err)
 			// fmt.Printf("error: %v\n", err.Location)
 			// fmt.Printf("error: %v\n", err.StackTrace)
 			return err
 		case result := <-apeiroRunResultChan:
-			res, err := result.Object().Get("res")
-			if err != nil {
-				panic(err)
-			}
-			resJson, err := res.MarshalJSON()
-			if err != nil {
-				panic(err)
-			}
-			update, err := a.db.Exec("UPDATE process SET val = $1 WHERE pid = $2", resJson, strings.TrimPrefix(pid, "pid_"))
+			log.Info().
+				Str("frame", result.frame).
+				Str("result", string(result.result)).
+				Str("awaiting", string(result.awaiting)).
+				Msg("apeiro step result")
+			update, err := a.db.Exec(
+				"UPDATE process SET result = $1, frame = $2, awaiting = $3 WHERE pid = $4",
+				result.result,
+				result.frame,
+				result.awaiting,
+				strings.TrimPrefix(pid, "pid_"),
+			)
 			if err != nil {
 				return err
 			}
