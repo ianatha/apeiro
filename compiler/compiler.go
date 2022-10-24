@@ -143,9 +143,9 @@ func CompileTypescriptWithFlags(input []byte, flags CompileOptions) ([]byte, err
 		finalResults := api.Transform(string(thirdStep), api.TransformOptions{
 			Loader:            api.LoaderTS,
 			Format:            api.FormatIIFE,
-			MinifySyntax:      true,
-			MinifyWhitespace:  true,
-			MinifyIdentifiers: true,
+			MinifySyntax:      false,
+			MinifyWhitespace:  false,
+			MinifyIdentifiers: false,
 			GlobalName:        flags.GlobalName,
 			Target:            api.ES2016,
 		})

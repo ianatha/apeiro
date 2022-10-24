@@ -453,6 +453,13 @@ var $apeiro = (() => {
         return this.run_fn(fn);
       }
     }
+    call(fn, ...args) {
+      if (fn.$apeiro_func) {
+        return fn(this, ...args);
+      } else {
+        return fn(...args);
+      }
+    }
     useUIInput(schema) {
       if (this._frame.aw === void 0 || this._frame.aw === null) {
         throw new SuspensionUntilInput(schema);

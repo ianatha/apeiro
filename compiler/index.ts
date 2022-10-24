@@ -2,6 +2,7 @@ import babel, {
   NodePath,
   types as t,
 } from "https://esm.sh/@babel/core@7.18.13";
+import { Expression } from "https://esm.sh/v92/@babel/types@7.18.13/lib/index-legacy.d.ts";
 import {
   BlockStatement,
   CallExpression,
@@ -13,9 +14,30 @@ import {
   ImportDeclaration
 } from "https://esm.sh/v96/@babel/types@7.19.3/lib/index-legacy.d.ts";
 
+function callThroughContext(
+  node: CallExpression,
+) {
+  const callee = node.callee as Expression;
+
+  if (callee.type === "MemberExpression" && callee.object.name == "$ctx") {
+    return node;
+  }
+
+  return t.callExpression(
+    t.memberExpression(
+      t.identifier("$ctx"),
+      t.identifier("call"),
+    ),
+    [
+      callee as Expression,
+      ...node.arguments,
+    ]
+  )
+}
+
 function explodeFunctionCalls(frameIndex: number) {
   return {
-    CallExpression(path: NodePath<CallExpression | Identifier>) {
+    CallExpression(path: NodePath<CallExpression>) {
       if (
         !path.parentPath.isExpressionStatement() &&
         !path.parentPath.isVariableDeclarator() &&
@@ -24,7 +46,8 @@ function explodeFunctionCalls(frameIndex: number) {
         if (
           path.isCallExpression() &&
           path.node.callee?.type === "Identifier" &&
-          path.node.callee.name.indexOf("$ctx.") == 0
+          path.node.callee.name.indexOf("$ctx.") == 0 &&
+          path.node.callee.name.indexOf("$ctx.call") != 0
          ) {
           return;
         }
@@ -33,9 +56,10 @@ function explodeFunctionCalls(frameIndex: number) {
           [t.expressionStatement(
             t.assignmentExpression("=",
               t.identifier("$f" + frameIndex + ".s." + newVar.name),
-              path.node)
+              callThroughContext(path.node)
+            )
           ),
-        ]).forEach((s) => s.skip());
+        ]);
         path.getStatementParent()?.insertAfter(
           t.expressionStatement(
           t.unaryExpression(
@@ -45,6 +69,9 @@ function explodeFunctionCalls(frameIndex: number) {
         );
 
         path.replaceWith(t.identifier("$f" + frameIndex + ".s." + newVar.name));
+      } else {
+        path.replaceWith(callThroughContext(path.node));
+        // path.skip();
       }
     },
   };
@@ -53,6 +80,19 @@ function explodeFunctionCalls(frameIndex: number) {
 const introduceContext = {
   FunctionDeclaration(path: NodePath<FunctionDeclaration>) {
     path.node.params.unshift(t.identifier("$ctx"));
+    const functionNameIdentifier = path.node.id!;
+    path.insertAfter(
+      t.expressionStatement(
+        t.assignmentExpression(
+          "=",
+          t.memberExpression(
+            functionNameIdentifier,
+            t.identifier("$apeiro_func")
+          ),
+          t.booleanLiteral(true)
+        )
+      )
+    );
   },
 };
 

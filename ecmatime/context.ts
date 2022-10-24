@@ -74,6 +74,14 @@ class InternalPristineContext implements PristineContext {
     }
   }
 
+  call(fn: any, ...args: any[]): any {
+    if (fn.$apeiro_func) {
+      return fn(this, ...args);
+    } else {
+      return fn(...args);
+    }
+  }
+
   public useUIInput(schema: any) {
     if (this._frame!.aw === undefined || this._frame!.aw === null) {
       throw new SuspensionUntilInput(schema);

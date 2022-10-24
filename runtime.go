@@ -3,6 +3,7 @@ package apeiro
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	// ulid "github.com/oklog/ulid/v2"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"rogchap.com/v8go"
 )
@@ -30,6 +32,7 @@ type ForExecution struct {
 }
 
 func NewApeiroRuntime(database string) (*ApeiroRuntime, error) {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	isolates := &sync.Pool{
 		New: func() any {
 			return v8go.NewIsolate()
@@ -373,8 +376,7 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			return
 		}
 
-		debug, _ := jsStepResult.MarshalJSON()
-		fmt.Printf("val: %v\n\n\n", string(debug))
+		// _, _ := jsStepResult.MarshalJSON()
 		apeiroRunResultChan <- stepResultFromV8Value(jsStepResult)
 	}()
 
@@ -395,7 +397,7 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			return err
 		case result := <-apeiroRunResultChan:
 			log.Info().
-				Int("FrameSize", len(result.frame)).
+				Str("FrameSize", result.frame).
 				Str("Result", string(result.result)).
 				Str("Awaiting", string(result.awaiting)).
 				Msg("apeiro step result")

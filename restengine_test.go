@@ -118,7 +118,8 @@ func TestSpawnAndSupplySimpleFunction(t *testing.T) {
 import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
 import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
 import { inputRest } from "pristine://$"
-export default function hello() {
+
+export default function sum() {
 	const x = inputRest(zodToJsonSchema(z.object({ val1: z.number() }), "$"));
 	const y = inputRest(zodToJsonSchema(z.object({ val2: z.number() }), "$"));
 	return x.val1 + y.val2;
@@ -171,5 +172,79 @@ export default function hello() {
 
 	responseData, _ = io.ReadAll(w.Body)
 	require.Equal(t, `{"pid":"pid_1","val":11}`, string(responseData))
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestSpawnAndSupplyGenerator(t *testing.T) {
+	script := strings.TrimSpace(`
+import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
+import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
+import { inputRest } from "pristine://$"
+
+export default function *hello() {
+	let sum = 0;
+	while (true) {
+		yield sum;
+		const res = inputRest(zodToJsonSchema(z.object({ val: z.number() }), "$"));
+		sum = sum + res.val;
+	}
+	throw new Error("Should not reach here");
+}`)
+	r, a := SetupApp()
+	a.Start()
+	defer a.Stop()
+
+	req, _ := http.NewRequest("POST", "/mount", bytes.NewBuffer([]byte(script)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	responseData, _ := io.ReadAll(w.Body)
+	require.Equal(t, `{"mid":"fn_1"}`, string(responseData))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("POST", "/spawn", bytes.NewBuffer([]byte(`{"mid":"fn_1"}`)))
+	req.Header.Set("Apeiro-Wait", "true")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	const waitingSchema = `{"until_input":{"$ref":"#/definitions/$","$schema":"http://json-schema.org/draft-07/schema#","definitions":{"$":{"additionalProperties":false,"properties":{"val":{"type":"number"}},"required":["val"],"type":"object"}}}}`
+
+	responseData, _ = io.ReadAll(w.Body)
+	require.JSONEq(t, `{"pid":"pid_1","val":0,"waiting":`+waitingSchema+`}`, string(responseData))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("POST", "/process/pid_1", bytes.NewBuffer([]byte(`{"val":10}`)))
+	req.Header.Set("Apeiro-Wait", "true")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	responseData, _ = io.ReadAll(w.Body)
+	require.JSONEq(t, `{"pid":"pid_1","val":10,"waiting":`+waitingSchema+`}`, string(responseData))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("POST", "/process/pid_1", bytes.NewBuffer([]byte(`{"val":1}`)))
+	req.Header.Set("Apeiro-Wait", "true")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	responseData, _ = io.ReadAll(w.Body)
+	require.JSONEq(t, `{"pid":"pid_1","waiting":`+waitingSchema+`,"val":11}`, string(responseData))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("POST", "/process/pid_1", bytes.NewBuffer([]byte(`{"val":100}`)))
+	req.Header.Set("Apeiro-Wait", "true")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	responseData, _ = io.ReadAll(w.Body)
+	require.JSONEq(t, `{"pid":"pid_1","waiting":`+waitingSchema+`,"val":111}`, string(responseData))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("GET", "/process/pid_1", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	responseData, _ = io.ReadAll(w.Body)
+	require.JSONEq(t, `{"pid":"pid_1","waiting":`+waitingSchema+`,"val":111}`, string(responseData))
 	require.Equal(t, http.StatusOK, w.Code)
 }
