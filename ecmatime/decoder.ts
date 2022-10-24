@@ -1,5 +1,3 @@
-import { decode as msgpackDecode } from "https://deno.land/x/msgpack@v1.4/mod.ts";
-
 export class Decoder {
   ctx: any = null;
   BY_TAG: Record<number, any> = {};

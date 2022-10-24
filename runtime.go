@@ -200,19 +200,6 @@ func (a *ApeiroRuntime) GetProcessValue(pid string) (*ProcessExternalState, erro
 	}
 }
 
-func (a *ApeiroRuntime) Send(pid string, msg map[string]interface{}) error {
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	_, err = a.db.Exec("INSERT INTO mbox (pid, msg) VALUES (?, ?)", pid, msgBytes)
-	if err != nil {
-		return err
-	}
-	a.scheduleForExecution <- pid
-	return nil
-}
-
 type EventProcessMeta struct {
 	log string
 }
