@@ -12,11 +12,6 @@ import (
 	"github.com/goccy/go-json"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
-	"go.kuoruan.net/v8go-polyfills/base64"
-	"go.kuoruan.net/v8go-polyfills/console"
-	"go.kuoruan.net/v8go-polyfills/fetch"
-	"go.kuoruan.net/v8go-polyfills/timers"
-	"go.kuoruan.net/v8go-polyfills/url"
 	"rogchap.com/v8go"
 )
 
@@ -26,7 +21,6 @@ type ApeiroRuntime struct {
 	scheduleForExecution chan string
 	terminate            chan bool
 	watchers             *sync.Map
-	ecmatimeCodeCache    []byte
 }
 
 func NewApeiroRuntime(database string) (*ApeiroRuntime, error) {
@@ -223,44 +217,6 @@ type EventProcessMeta struct {
 	log string
 }
 
-func (a *ApeiroRuntime) InstallEcmatime(ctx *v8go.Context) error {
-	iso := ctx.Isolate()
-	if a.ecmatimeCodeCache == nil {
-		unboundScript, _ := iso.CompileUnboundScript(ecmatime.ECMATIME, "<apeiro>", v8go.CompileOptions{})
-		cachedData := unboundScript.CreateCodeCache()
-		if cachedData.Rejected {
-			return errors.New("failed to create code cache")
-		}
-		a.ecmatimeCodeCache = cachedData.Bytes
-	}
-
-	script, err := iso.CompileUnboundScript(ecmatime.ECMATIME, "<apeiro>", v8go.CompileOptions{
-		CachedData: &v8go.CompilerCachedData{
-			Bytes:    a.ecmatimeCodeCache,
-			Rejected: false,
-		},
-	})
-	if err != nil {
-		return err
-	}
-	_, err = script.Run(ctx)
-	return err
-}
-
-func (a *ApeiroRuntime) InstallEcmatimeUncached(ctx *v8go.Context) error {
-	_, err := ctx.RunScript(ecmatime.ECMATIME, "<apeiro>")
-	return err
-}
-
-type WriterToZerolog struct {
-	pid string
-}
-
-func (w WriterToZerolog) Write(p []byte) (n int, err error) {
-	log.Info().Str("pid", w.pid).Msg(string(p))
-	return len(p), nil
-}
-
 /*
 Returns a new context at has:
 * the PristineRuntime at $apeiro
@@ -269,36 +225,9 @@ Returns a new context at has:
 func (a *ApeiroRuntime) newProcessContext(iso *v8go.Isolate, pid string, src string) (*v8go.Context, chan *EventProcessMeta, error) {
 	metaChan := make(chan *EventProcessMeta, 1)
 
-	global := v8go.NewObjectTemplate(iso)
-	if err := base64.InjectTo(iso, global); err != nil {
-		panic(err)
-	}
-	if err := fetch.InjectTo(iso, global); err != nil {
-		panic(err)
-	}
-	if err := timers.InjectTo(iso, global); err != nil {
-		panic(err)
-	}
+	ctx := ecmatime.NewEcmatime(iso, pid)
 
-	ctx := v8go.NewContext(iso, global)
-	if err := console.InjectTo(ctx, console.WithOutput(WriterToZerolog{
-		pid: pid,
-	})); err != nil {
-		panic(err)
-	}
-	if err := url.InjectTo(ctx); err != nil {
-		panic(err)
-	}
-
-	// 4312724 ns/op without cache
-	// 4331443 ns/op with cache
-	// 5239115 with serialization
-	err := a.InstallEcmatimeUncached(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	_, err = ctx.RunScript(src, "your_function.js")
+	_, err := ctx.RunScript(src, "your_function.js")
 	if err != nil {
 		return nil, nil, err
 	}

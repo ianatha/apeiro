@@ -25,14 +25,12 @@ func arrayDiff(a, b []string) []string {
 }
 
 func WithEcmatime(t *testing.T, fn func(ctx *v8go.Context)) {
-	ctx := NewEcmatime()
-	_, err := ctx.RunScript(ECMATIME, "<ecmatime>")
-	if err != nil {
-		t.Error()
-	}
+	iso := v8go.NewIsolate()
+	defer iso.Dispose()
+	ctx := NewEcmatime(iso, "test_"+t.Name())
+	defer ctx.Close()
+
 	fn(ctx)
-	ctx.Close()
-	ctx.Isolate().Dispose()
 }
 
 func JSErrorString(err error) string {
@@ -43,7 +41,8 @@ func JSErrorString(err error) string {
 }
 
 func TestEcmatimeExports(t *testing.T) {
-	ctx := NewEcmatime()
+	iso := v8go.NewIsolate()
+	ctx := NewEcmatimeWithOptionalEcmatime(iso, "test_"+t.Name(), false)
 
 	propertyNamesBefore := ctx.Global().GetOwnPropertyNames()
 
