@@ -45,7 +45,6 @@ var $apeiro = (() => {
           throw new Error("cannot deserialize native function");
         };
       }
-      console.log("eval:" + src);
       const evalFunction = () => {
         return eval(src);
       };
@@ -56,7 +55,9 @@ var $apeiro = (() => {
       Object.keys(v2.value).forEach((k2) => {
         decoded[k2] = this.decodeValue(v2.value[k2]);
       });
-      this.BY_TAG[v2.tag] = decoded;
+      if (v2.tag) {
+        this.BY_TAG[v2.tag] = decoded;
+      }
       return decoded;
     }
     decodeArray(v2) {
@@ -69,6 +70,18 @@ var $apeiro = (() => {
     }
     decodeFunction(v2) {
       let decoded = this.evalInContext(`const fn = ${v2.src}; fn`);
+      if (v2.props) {
+        const propsDecoded = this.decodeObject(v2.props);
+        for (const k2 in propsDecoded) {
+          decoded[k2] = propsDecoded[k2];
+        }
+      }
+      this.BY_TAG[v2.tag] = decoded;
+      return decoded;
+    }
+    decodeFunctionBound(v2) {
+      let propsDecoded = this.decodeObject(v2.props);
+      let decoded = propsDecoded.target.bind(propsDecoded.thisArg, ...propsDecoded.boundedArgs);
       this.BY_TAG[v2.tag] = decoded;
       return decoded;
     }
@@ -109,6 +122,8 @@ var $apeiro = (() => {
         return this.BY_TAG[v2.tag];
       } else if (v2.type === "function") {
         return this.decodeFunction(v2);
+      } else if (v2.type === "function_bound") {
+        return this.decodeFunctionBound(v2);
       } else if (v2.type === "function_ref") {
         return this.BY_TAG[v2.tag];
       } else if (v2.type === "class_definition") {
@@ -156,14 +171,22 @@ var $apeiro = (() => {
       if (v2[TAG] === void 0) {
         v2[TAG] = this.id;
         this.id++;
-        if (v2.toString().indexOf(" [ native code ]") >= 0) {
+        if (v2.toString().indexOf(" [native code]") >= 0) {
           console.log("encountered native function at " + debug);
         }
-        return {
+        let res = {
           type: "function",
           tag: v2[TAG],
           src: v2.toString()
         };
+        if (Object.keys(v2).length > 0) {
+          res.props = this.encodeObject(v2, debug + ".props", false);
+        }
+        if (v2?.$bound) {
+          delete res.src;
+          res.type = "function_bound";
+        }
+        return res;
       } else {
         return {
           type: "function_ref",
@@ -180,19 +203,26 @@ var $apeiro = (() => {
         return false;
       }
     }
-    encodeObject(v2, debug) {
-      if (!this.assignTag(v2)) {
+    encodeObject(v2, debug, tag = true) {
+      if (tag && !this.assignTag(v2)) {
         return { type: "object_ref", tag: v2[TAG] };
       }
       const value = {};
       Object.keys(v2).forEach((k2) => {
         value[k2] = this.encodeValue(v2[k2], debug + "." + k2);
       });
-      return {
-        type: "object",
-        value,
-        tag: v2[TAG]
-      };
+      if (tag) {
+        return {
+          type: "object",
+          value,
+          tag: v2[TAG]
+        };
+      } else {
+        return {
+          type: "object",
+          value
+        };
+      }
     }
     encodeNumber(v2) {
       return { type: "number", value: v2 };
@@ -2481,5 +2511,19 @@ var $apeiro = (() => {
   function importFunction(namespace, fn) {
     return [namespace, fn];
   }
+
+  // index.ts
+  Function.prototype.$bind = Function.prototype.bind;
+  Function.prototype.bind = function(thisArg, ...boundedArgs) {
+    const fn = this;
+    const BoundFunction = (...args) => {
+      return fn.apply(thisArg, [...boundedArgs, ...args]);
+    };
+    BoundFunction.thisArg = thisArg;
+    BoundFunction.boundedArgs = boundedArgs;
+    BoundFunction.target = fn;
+    BoundFunction.$bound = true;
+    return BoundFunction;
+  };
   return __toCommonJS(ecmatime_exports);
 })();

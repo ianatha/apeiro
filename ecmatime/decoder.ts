@@ -11,7 +11,6 @@ export class Decoder {
       }
     }
 
-    console.log("eval:" + src);
     const evalFunction = () => {
       return eval(src);
     };
@@ -23,7 +22,9 @@ export class Decoder {
     Object.keys(v.value).forEach((k) => {
       decoded[k] = this.decodeValue(v.value[k]);
     });
-    this.BY_TAG[v.tag] = decoded;
+    if (v.tag) {
+      this.BY_TAG[v.tag] = decoded;
+    }
     return decoded;
   }
 
@@ -38,6 +39,19 @@ export class Decoder {
 
   private decodeFunction(v: any) {
     let decoded = this.evalInContext(`const fn = ${v.src}; fn`);
+    if (v.props) {
+      const propsDecoded = this.decodeObject(v.props);
+      for (const k in propsDecoded) {
+        decoded[k] = propsDecoded[k];
+      }
+    }
+    this.BY_TAG[v.tag] = decoded;
+    return decoded;
+  }
+
+  private decodeFunctionBound(v: any) {
+    let propsDecoded = this.decodeObject(v.props);
+    let decoded = propsDecoded.target.bind(propsDecoded.thisArg, ...propsDecoded.boundedArgs);
     this.BY_TAG[v.tag] = decoded;
     return decoded;
   }
@@ -81,6 +95,8 @@ export class Decoder {
       return this.BY_TAG[v.tag];
     } else if (v.type === "function") {
       return this.decodeFunction(v);
+    } else if (v.type === "function_bound") {
+      return this.decodeFunctionBound(v);
     } else if (v.type === "function_ref") {
       return this.BY_TAG[v.tag];
     } else if (v.type === "class_definition") {

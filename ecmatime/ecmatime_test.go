@@ -189,3 +189,58 @@ state.instance.sum()
 		assert.Equal(t, int64(11), val.Integer())
 	})
 }
+
+func TestSerializationBoundFunction(t *testing.T) {
+	serialized := SerializeState(t, `function add(a, b) { return a + b; }
+	const addTen = add.bind(null, 10);
+	var state = {
+		addTen,
+	};
+	(new $apeiro.Encoder()).encode(state)`)
+
+	WithEcmatime(t, func(ctx *v8go.Context) {
+		ctx.Global().Set("serialized", serialized)
+		val, err := ctx.RunScript(`
+var state = (new $apeiro.Decoder()).decode(serialized);
+state.addTen(1)
+`, "<test>")
+		if err != nil {
+			t.Error(JSErrorString(err))
+		}
+		assert.Equal(t, int64(11), val.Integer())
+	})
+}
+
+func TestDoubleSerializationBoundFunction(t *testing.T) {
+	serialized := SerializeState(t, `function add(a, b) { return a + b; }
+	const addTen = add.bind(null, 10);
+	var state = {
+		addTen,
+	};
+	(new $apeiro.Encoder()).encode(state)`)
+
+	var serialized2 string
+	WithEcmatime(t, func(ctx *v8go.Context) {
+		ctx.Global().Set("serialized", serialized)
+		val, err := ctx.RunScript(`
+var state = (new $apeiro.Decoder()).decode(serialized);
+(new $apeiro.Encoder()).encode(state)
+`, "<test>")
+		if err != nil {
+			t.Error(JSErrorString(err))
+		}
+		serialized2 = val.String()
+	})
+
+	WithEcmatime(t, func(ctx *v8go.Context) {
+		ctx.Global().Set("serialized2", serialized2)
+		val, err := ctx.RunScript(`
+var state = (new $apeiro.Decoder()).decode(serialized2);
+state.addTen(11)
+`, "<test>")
+		if err != nil {
+			t.Error(JSErrorString(err))
+		}
+		assert.Equal(t, int64(21), val.Integer())
+	})
+}

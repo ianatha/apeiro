@@ -22,14 +22,27 @@ export class Encoder {
     if (v[TAG] === undefined) {
       v[TAG] = this.id;
       this.id++;
-      if (v.toString().indexOf(" [ native code ]") >= 0) {
+      if (v.toString().indexOf(" [native code]") >= 0) {
         console.log("encountered native function at " + debug);
       }
-      return {
+
+
+      let res = {
         type: "function",
         tag: v[TAG],
         src: v.toString(),
-      };
+      };  
+
+      if (Object.keys(v).length > 0) {
+        res.props = this.encodeObject(v, debug+".props", false);
+      }
+
+      if (v?.$bound) {
+        delete res.src;
+        res.type = "function_bound";
+      }
+
+      return res;
     } else {
       return {
         type: "function_ref",
@@ -48,8 +61,8 @@ export class Encoder {
     }
   }
 
-  private encodeObject(v: Record<string | symbol, any>, debug: string) {
-    if (!this.assignTag(v)) {
+  private encodeObject(v: Record<string | symbol, any>, debug: string, tag = true) {
+    if (tag && !this.assignTag(v)) {
       return { type: "object_ref", tag: v[TAG] };
     }
 
@@ -57,11 +70,18 @@ export class Encoder {
     Object.keys(v).forEach((k) => {
       value[k] = this.encodeValue(v[k], debug + "." + k);
     });
-    return {
-      type: "object",
-      value,
-      tag: v[TAG],
-    };
+    if (tag) {
+      return {
+        type: "object",
+        value,
+        tag: v[TAG],
+      };  
+    } else {
+      return {
+        type: "object",
+        value,
+      };
+    }
   }
 
   private encodeNumber(v: number) {
