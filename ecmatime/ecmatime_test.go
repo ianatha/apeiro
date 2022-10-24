@@ -67,7 +67,7 @@ func TestEcmatimeExports(t *testing.T) {
 	if err != nil {
 		t.Error(JSErrorString(err))
 	}
-	assert.Equal(t, []string{"__esModule", "Decoder", "Encoder", "step"}, apeiroModule.GetOwnPropertyNames())
+	assert.Equal(t, []string{"__esModule", "Decoder", "Encoder", "importFunction", "step"}, apeiroModule.GetOwnPropertyNames())
 
 	ctx.Close()
 	ctx.Isolate().Dispose()
@@ -120,6 +120,26 @@ func TestSerializationSimpleObject(t *testing.T) {
 			t.Error(err)
 		}
 		assert.Equal(t, true, bool.Boolean())
+	})
+}
+
+func TestSerializationArray(t *testing.T) {
+	serialized := SerializeState(t, `(new $apeiro.Encoder()).encode({
+		arr: [0, 1, 2, 3, 4]
+	})`)
+
+	WithEcmatime(t, func(ctx *v8go.Context) {
+		ctx.Global().Set("serialized", serialized)
+		val, err := ctx.RunScript("var state = (new $apeiro.Decoder()).decode(serialized); state", "<test>")
+		if err != nil {
+			t.Error(JSErrorString(err))
+		}
+
+		stateJson, err := val.Object().MarshalJSON()
+		if err != nil {
+			t.Error(err)
+		}
+		assert.Equal(t, `{"arr":[0,1,2,3,4]}`, string(stateJson))
 	})
 }
 

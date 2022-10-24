@@ -16,9 +16,9 @@ var $apeiro = (() => {
   };
   var __copyProps = (to, from, except, desc) => {
     if (from && typeof from === "object" || typeof from === "function") {
-      for (let key2 of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key2) && key2 !== except)
-          __defProp(to, key2, { get: () => from[key2], enumerable: !(desc = __getOwnPropDesc(from, key2)) || desc.enumerable });
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
     }
     return to;
   };
@@ -29,6 +29,7 @@ var $apeiro = (() => {
   __export(ecmatime_exports, {
     Decoder: () => Decoder,
     Encoder: () => Encoder,
+    importFunction: () => importFunction,
     step: () => step
   });
 
@@ -39,6 +40,12 @@ var $apeiro = (() => {
       this.BY_TAG = {};
     }
     evalInContext(src) {
+      if (src.indexOf(" [native code] ") >= 0) {
+        return function() {
+          throw new Error("cannot deserialize native function");
+        };
+      }
+      console.log("eval:" + src);
       const evalFunction = () => {
         return eval(src);
       };
@@ -48,6 +55,14 @@ var $apeiro = (() => {
       let decoded = {};
       Object.keys(v2.value).forEach((k2) => {
         decoded[k2] = this.decodeValue(v2.value[k2]);
+      });
+      this.BY_TAG[v2.tag] = decoded;
+      return decoded;
+    }
+    decodeArray(v2) {
+      const decoded = [];
+      Object.keys(v2.value).forEach((k2) => {
+        decoded.push(this.decodeValue(v2.value[k2]));
       });
       this.BY_TAG[v2.tag] = decoded;
       return decoded;
@@ -75,10 +90,14 @@ var $apeiro = (() => {
       return decoded;
     }
     decodeValue(v2) {
-      if (v2 === void 0) {
+      if (v2 === void 0 || v2 === null || v2.type === void 0) {
         throw new Error("attempting to decode undefined");
       }
-      if (v2.type === "number") {
+      if (v2.type === "undefined") {
+        return void 0;
+      } else if (v2.type === "null") {
+        return null;
+      } else if (v2.type === "number") {
         return v2.value;
       } else if (v2.type === "string") {
         return v2.value;
@@ -97,6 +116,10 @@ var $apeiro = (() => {
       } else if (v2.type === "class_instance") {
         return this.decodeClassInstance(v2);
       } else if (v2.type === "class_definition_ref") {
+        return this.BY_TAG[v2.tag];
+      } else if (v2.type === "array") {
+        return this.decodeArray(v2);
+      } else if (v2.type === "array_ref") {
         return this.BY_TAG[v2.tag];
       } else {
         throw new Error("cannot decode " + v2);
@@ -129,10 +152,13 @@ var $apeiro = (() => {
         tag: v2[TAG]
       };
     }
-    encodeFunction(v2) {
+    encodeFunction(v2, debug) {
       if (v2[TAG] === void 0) {
         v2[TAG] = this.id;
         this.id++;
+        if (v2.toString().indexOf(" [ native code ]") >= 0) {
+          console.log("encountered native function at " + debug);
+        }
         return {
           type: "function",
           tag: v2[TAG],
@@ -154,13 +180,13 @@ var $apeiro = (() => {
         return false;
       }
     }
-    encodeObject(v2) {
+    encodeObject(v2, debug) {
       if (!this.assignTag(v2)) {
         return { type: "object_ref", tag: v2[TAG] };
       }
       const value = {};
       Object.keys(v2).forEach((k2) => {
-        value[k2] = this.encodeValue(v2[k2]);
+        value[k2] = this.encodeValue(v2[k2], debug + "." + k2);
       });
       return {
         type: "object",
@@ -177,10 +203,10 @@ var $apeiro = (() => {
     encodeBoolean(v2) {
       return { type: "boolean", value: v2 };
     }
-    encodeClassInstance(v2) {
+    encodeClassInstance(v2, debug) {
       const value = {};
       Object.keys(v2).forEach((k2) => {
-        value[k2] = this.encodeValue(v2[k2]);
+        value[k2] = this.encodeValue(v2[k2], debug + "." + k2);
       });
       return {
         type: "class_instance",
@@ -188,29 +214,47 @@ var $apeiro = (() => {
         value
       };
     }
-    encodeValue(v2) {
-      if (typeof v2 === "number") {
+    encodeArray(v2, debug) {
+      if (!this.assignTag(v2)) {
+        return { type: "array_ref", tag: v2[TAG] };
+      }
+      let value = [];
+      Object.keys(v2).forEach((k2) => {
+        value.push(this.encodeValue(v2[k2], debug + "." + k2));
+      });
+      return {
+        type: "array",
+        value,
+        tag: v2[TAG]
+      };
+    }
+    encodeValue(v2, debug) {
+      if (v2 === null) {
+        return { type: "null" };
+      } else if (typeof v2 === "undefined") {
+        return { type: "undefined" };
+      } else if (typeof v2 === "number") {
         return this.encodeNumber(v2);
       } else if (typeof v2 === "string") {
         return this.encodeString(v2);
       } else if (typeof v2 === "boolean") {
         return this.encodeBoolean(v2);
       } else if (isObject(v2)) {
-        return this.encodeObject(v2);
+        return this.encodeObject(v2, debug);
       } else if (isFunction(v2)) {
-        return this.encodeFunction(v2);
+        return this.encodeFunction(v2, debug);
       } else if (isClassInstance(v2)) {
-        return this.encodeClassInstance(v2);
+        return this.encodeClassInstance(v2, debug);
       } else if (isClassDefinition(v2)) {
         return this.encodeClassDefinition(v2);
-      } else if (typeof v2 === "undefined") {
-        return { type: "undefined" };
+      } else if (isArray(v2)) {
+        return this.encodeArray(v2, debug);
       } else {
-        throw new Error("unsupported type " + typeof v2 + " at key " + key);
+        throw new Error("unsupported type " + typeof v2);
       }
     }
     cleanValue(v2) {
-      if (typeof v2 === "object" || typeof v2 === "function") {
+      if (v2 !== null && v2 !== void 0 && (typeof v2 === "object" || typeof v2 === "function")) {
         delete v2[TAG];
         Object.keys(v2).forEach((k2) => {
           this.cleanValue(v2[k2]);
@@ -222,16 +266,19 @@ var $apeiro = (() => {
       if (typeof v2 !== "object") {
         throw new Error("root must be an object");
       }
-      const result = this.encodeValue(v2);
+      const result = this.encodeValue(v2, "");
       this.cleanValue(v2);
       return JSON.stringify(result);
     }
   };
   function isObject(v2) {
-    return typeof v2 === "object" && v2.constructor === Object;
+    return typeof v2 === "object" && v2 !== null && v2.constructor === Object;
+  }
+  function isArray(v2) {
+    return typeof v2 === "object" && v2.constructor === Array;
   }
   function isClassInstance(v2) {
-    return typeof v2 === "object" && !(v2.constructor === Object);
+    return typeof v2 === "object" && !(v2.constructor === Object) && !(v2.constructor === Array);
   }
   function isFunction(v2) {
     return typeof v2 === "function" && !(v2.toString().substring(0, 5) === "class");
@@ -2286,14 +2333,14 @@ var $apeiro = (() => {
       return val;
     }
     serialize() {
-      return encode({
+      return {
         s: this.s,
         pc: this.pc,
         ch: this.ch.map((f2) => f2.serialize()),
         aw: this.aw,
         logs: this.logs,
         res: this.res
-      });
+      };
     }
   };
 
@@ -2311,15 +2358,14 @@ var $apeiro = (() => {
   };
   function serializeSuspension(e) {
     if (e instanceof SuspensionUntilInput) {
-      return { until_input: e.serialize(), idx: e.idx };
+      return { until_input: e.serialize() };
     } else {
       return true;
     }
   }
   var SuspensionUntilInput = class extends Suspension {
-    constructor(idx, schema) {
-      super(idx);
-      this.idx = idx;
+    constructor(schema) {
+      super();
       this.schema = schema;
     }
     serialize() {
@@ -2335,23 +2381,16 @@ var $apeiro = (() => {
     return fn?.constructor?.name === "GeneratorFunction";
   }
   var InternalPristineContext = class {
-    constructor(f2, serialized_state) {
-      this.f = f2;
+    constructor() {
       this._counter = 0;
-      this._state = [];
-      this._data = {};
       this._lastSuspension = void 0;
       this._frame = void 0;
-      if (serialized_state) {
-        this._state = serialized_state?.s;
-        this._data = serialized_state?.d;
-        this._lastSuspension = serialized_state?.suspended;
-      }
+      this.msgToSupply = void 0;
     }
-    run_fn() {
+    run_fn(fn) {
       try {
         let res = null;
-        res = this.f(this);
+        res = fn(this);
         this._frame.res = res;
       } catch (e) {
         if (e instanceof Suspension) {
@@ -2362,10 +2401,10 @@ var $apeiro = (() => {
       }
       return this._frame;
     }
-    run_generator() {
+    run_generator(fn) {
       try {
         let res = null;
-        const generator_instance = this.f(this);
+        const generator_instance = fn(this);
         res = generator_instance.next().value;
         this._frame.res = res;
         generator_instance.next().value;
@@ -2378,34 +2417,26 @@ var $apeiro = (() => {
       }
       return this._frame;
     }
-    run() {
-      if (isGenerator(this.f)) {
-        return this.run_generator();
+    run(fn) {
+      if (isGenerator(fn)) {
+        return this.run_generator(fn);
       } else {
-        return this.run_fn();
+        return this.run_fn(fn);
       }
-    }
-    setData(data) {
-      this._data = data;
-    }
-    getData() {
-      return {
-        ...this._data
-      };
-    }
-    newSuspensionUntilInput(schema) {
-      return new SuspensionUntilInput(this._counter - 1, schema);
-    }
-    recv(spec) {
     }
     useUIInput(spec) {
       const schema = zodToSchema(spec);
-      if (this._frame.aw && this._frame.aw?.until_input === void 0) {
-        const res = this._frame.aw;
-        this._frame.aw = void 0;
-        return res;
+      if (this._frame.aw === void 0 || this._frame.aw === null) {
+        throw new SuspensionUntilInput(schema);
       } else {
-        throw this.newSuspensionUntilInput(schema);
+        if (this.msgToSupply != void 0) {
+          const res = this.msgToSupply;
+          this.msgToSupply = void 0;
+          this._frame.aw = void 0;
+          return res;
+        } else {
+          throw new Error("No message to supply");
+        }
       }
     }
     frame() {
@@ -2418,21 +2449,37 @@ var $apeiro = (() => {
       this._frame = new IPristineFrame(void 0, state);
     }
     supply(newMsg) {
-      this._frame.aw = newMsg;
+      this.msgToSupply = newMsg;
     }
     log(msg) {
       this._frame?.log(msg);
     }
+    getFunction([namespace, fn]) {
+      return (args) => {
+        this.useUIInput(args);
+      };
+    }
   };
-  function step(fn, state, newMsg) {
-    const ctx = new InternalPristineContext(fn, {});
-    if (state) {
-      ctx.loadFrame(state);
+  function step(fn, serializedPreviousFrame, newMsg) {
+    const ctx = new InternalPristineContext();
+    if (serializedPreviousFrame) {
+      const decoder = new Decoder();
+      const previousFrame = decoder.decode(serializedPreviousFrame, null);
+      ctx.loadFrame(previousFrame);
     }
     if (newMsg) {
-      ctx.supply(newMsg);
+      ctx.supply(JSON.parse(newMsg));
     }
-    return ctx.run();
+    const nextFrame = ctx.run(fn);
+    const encoder = new Encoder();
+    return [
+      encoder.encode(nextFrame.serialize()),
+      nextFrame.res,
+      nextFrame.aw
+    ];
+  }
+  function importFunction(namespace, fn) {
+    return [namespace, fn];
   }
   return __toCommonJS(ecmatime_exports);
 })();

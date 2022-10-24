@@ -5,6 +5,13 @@ export class Decoder {
   BY_TAG: Record<number, any> = {};
 
   private evalInContext(src: string): any {
+    if (src.indexOf(" [native code] ") >= 0) {
+      return function() {
+        throw new Error("cannot deserialize native function");
+      }
+    }
+
+    console.log("eval:" + src);
     const evalFunction = () => {
       return eval(src);
     };
@@ -15,6 +22,15 @@ export class Decoder {
     let decoded = {};
     Object.keys(v.value).forEach((k) => {
       decoded[k] = this.decodeValue(v.value[k]);
+    });
+    this.BY_TAG[v.tag] = decoded;
+    return decoded;
+  }
+
+  private decodeArray(v: any) {
+    const decoded = [];
+    Object.keys(v.value).forEach((k) => {
+      decoded.push(this.decodeValue(v.value[k]));
     });
     this.BY_TAG[v.tag] = decoded;
     return decoded;
@@ -39,17 +55,21 @@ export class Decoder {
     });
     let classDef = this.decodeValue(v.constructor);
     if (classDef === undefined) {
-      throw new Error("failed to deserialize " + JSON.stringify(v))
+      throw new Error("failed to deserialize " + JSON.stringify(v));
     }
     Object.setPrototypeOf(decoded, classDef.prototype);
     return decoded;
   }
 
   private decodeValue(v: any) {
-    if (v === undefined) {
+    if (v === undefined || v === null || v.type === undefined) {
       throw new Error("attempting to decode undefined");
     }
-    if (v.type === "number") {
+    if (v.type === "undefined") {
+      return undefined;
+    } else if (v.type === "null") {
+      return null;
+    } else if (v.type === "number") {
       return v.value;
     } else if (v.type === "string") {
       return v.value;
@@ -69,12 +89,16 @@ export class Decoder {
       return this.decodeClassInstance(v);
     } else if (v.type === "class_definition_ref") {
       return this.BY_TAG[v.tag];
+    } else if (v.type === "array") {
+      return this.decodeArray(v);
+    } else if (v.type === "array_ref") {
+      return this.BY_TAG[v.tag];
     } else {
       throw new Error("cannot decode " + v);
     }
   }
 
-  public decode(input: any, ctx: any) {
+  public decode(input: string, ctx: any) {
     this.ctx = ctx;
     this.BY_TAG = {};
     const v = JSON.parse(input);

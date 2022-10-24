@@ -18,10 +18,13 @@ export class Encoder {
     };
   }
 
-  private encodeFunction(v: any) {
+  private encodeFunction(v: any, debug: string) {
     if (v[TAG] === undefined) {
       v[TAG] = this.id;
       this.id++;
+      if (v.toString().indexOf(" [ native code ]") >= 0) {
+        console.log("encountered native function at " + debug);
+      }
       return {
         type: "function",
         tag: v[TAG],
@@ -45,14 +48,14 @@ export class Encoder {
     }
   }
 
-  private encodeObject(v: Record<string | symbol, any>) {
+  private encodeObject(v: Record<string | symbol, any>, debug: string) {
     if (!this.assignTag(v)) {
       return { type: "object_ref", tag: v[TAG] };
     }
 
     const value: Record<string, any> = {};
     Object.keys(v).forEach((k) => {
-      value[k] = this.encodeValue(v[k]);
+      value[k] = this.encodeValue(v[k], debug + "." + k);
     });
     return {
       type: "object",
@@ -73,10 +76,10 @@ export class Encoder {
     return { type: "boolean", value: v };
   }
 
-  private encodeClassInstance(v: any) {
+  private encodeClassInstance(v: any, debug: string) {
     const value: Record<string, any> = {};
     Object.keys(v).forEach((k) => {
-      value[k] = this.encodeValue(v[k]);
+      value[k] = this.encodeValue(v[k], debug + "." + k);
     });
 
     return {
@@ -86,30 +89,54 @@ export class Encoder {
     };
   }
 
-  private encodeValue(v: any) {
-    if (typeof v === "number") {
+  private encodeArray(v: any, debug: string) {
+    if (!this.assignTag(v)) {
+      return { type: "array_ref", tag: v[TAG] };
+    }
+
+    let value: any[] = []
+    Object.keys(v).forEach((k) => {
+      value.push(this.encodeValue(v[k], debug + "." + k));
+    });
+
+    return {
+      type: "array",
+      value,
+      tag: v[TAG],
+    };
+  }
+
+  private encodeValue(v: any, debug: string) {
+    if (v === null) {
+      return { type: "null" };
+    } else if (typeof v === "undefined") {
+      return { type: "undefined" };
+    } else if (typeof v === "number") {
       return this.encodeNumber(v);
     } else if (typeof v === "string") {
       return this.encodeString(v);
     } else if (typeof v === "boolean") {
       return this.encodeBoolean(v);
     } else if (isObject(v)) {
-      return this.encodeObject(v);
+      return this.encodeObject(v, debug);
     } else if (isFunction(v)) {
-      return this.encodeFunction(v);
+      return this.encodeFunction(v, debug);
     } else if (isClassInstance(v)) {
-      return this.encodeClassInstance(v);
+      return this.encodeClassInstance(v, debug);
     } else if (isClassDefinition(v)) {
       return this.encodeClassDefinition(v);
-    } else if (typeof v === "undefined") {
-      return { type: "undefined" };
+    } else if (isArray(v)) {
+      return this.encodeArray(v, debug);
     } else {
-      throw new Error("unsupported type " + typeof v + " at key " + key);
+      throw new Error("unsupported type " + typeof v);
     }
   }
 
   private cleanValue(v: any) {
-    if (typeof v === "object" || typeof v === "function") {
+    if (
+      v !== null && v !== undefined &&
+      (typeof v === "object" || typeof v === "function")
+    ) {
       delete v[TAG];
       Object.keys(v).forEach((k) => {
         this.cleanValue(v[k]);
@@ -117,23 +144,27 @@ export class Encoder {
     }
   }
 
-  public encode(v: any) {
+  public encode(v: any): string {
     this.id = 0;
     if (typeof v !== "object") {
       throw new Error("root must be an object");
     }
-    const result = this.encodeValue(v);
+    const result = this.encodeValue(v, "");
     this.cleanValue(v);
     return JSON.stringify(result);
   }
 }
 
 function isObject(v: any): boolean {
-  return typeof v === "object" && v.constructor === Object;
+  return typeof v === "object" && v !== null && v.constructor === Object;
+}
+
+function isArray(v: any): boolean {
+  return typeof v === "object" && v.constructor === Array;
 }
 
 function isClassInstance(v: any): boolean {
-  return typeof v === "object" && !(v.constructor === Object);
+  return typeof v === "object" && !(v.constructor === Object) && !(v.constructor === Array);
 }
 
 function isFunction(v: any): boolean {
