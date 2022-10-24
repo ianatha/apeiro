@@ -1,5 +1,3 @@
-import { encode as msgpackEncode } from "https://deno.land/x/msgpack@v1.4/mod.ts";
-
 const TAG = Symbol("APEIRO_TAG");
 
 export class Encoder {
