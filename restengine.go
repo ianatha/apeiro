@@ -4,16 +4,19 @@ import (
 	"io"
 	"net/http"
 
+	ginzerolog "github.com/dn365/gin-zerolog"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 )
 
 type SpawnRequest struct {
-	Mid  string `json:"mid" xml:"mid"  binding:"required"`
-	Wait bool   `json:"wait"`
+	Mid string `json:"mid" xml:"mid"  binding:"required"`
 }
 
 func RESTRouter(a *ApeiroRuntime) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(ginzerolog.Logger("gin"))
+	// r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -50,7 +53,7 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 			return
 		}
 
-		if req.Wait {
+		if c.Request.Header.Get("Apeiro-Wait") == "true" {
 			pid, watcher, err := a.SpawnAndWatch(req.Mid)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
@@ -59,7 +62,8 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 				return
 			}
 
-			<-watcher
+			msg := <-watcher
+			log.Info().Str("pid", pid).Msgf("process response %v", msg)
 
 			val, err := a.GetProcessValue(pid)
 			if err != nil {
@@ -68,10 +72,7 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 				})
 			}
 
-			c.JSON(http.StatusOK, gin.H{
-				"pid": pid,
-				"val": val,
-			})
+			c.JSON(http.StatusOK, val)
 		} else {
 			pid, err := a.Spawn(req.Mid)
 			if err != nil {
@@ -97,8 +98,22 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 			return
 		}
 
-		c.Render(http.StatusOK, CustomResponse{val})
-		// c.JSON(http.StatusOK, val)
+		c.JSON(http.StatusOK, val)
+	})
+
+	r.POST("/process/:pid", func(c *gin.Context) {
+		pid := c.Param("pid")
+
+		// _ := c.Request.Header.Get("Apeiro-Wait") == "true"
+		val, err := a.GetProcessValue(pid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, val)
 	})
 
 	r.GET("/process/:pid/watch", SSEHeadersMiddleware(), func(c *gin.Context) {
@@ -126,8 +141,7 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 			return
 		}
 
-		c.Render(http.StatusOK, CustomResponse{val})
-		// c.JSON(http.StatusOK, val)
+		c.JSON(http.StatusOK, val)
 	})
 
 	return r

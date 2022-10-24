@@ -2,6 +2,7 @@ package apeiro
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -10,6 +11,12 @@ import (
 	"github.com/apeiromont/apeiro/ecmatime"
 	"github.com/goccy/go-json"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog/log"
+	"go.kuoruan.net/v8go-polyfills/base64"
+	"go.kuoruan.net/v8go-polyfills/console"
+	"go.kuoruan.net/v8go-polyfills/fetch"
+	"go.kuoruan.net/v8go-polyfills/timers"
+	"go.kuoruan.net/v8go-polyfills/url"
 	"rogchap.com/v8go"
 )
 
@@ -19,6 +26,7 @@ type ApeiroRuntime struct {
 	scheduleForExecution chan string
 	terminate            chan bool
 	watchers             *sync.Map
+	ecmatimeCodeCache    []byte
 }
 
 func NewApeiroRuntime(database string) (*ApeiroRuntime, error) {
@@ -52,6 +60,7 @@ func (a *ApeiroRuntime) Start() {
 		for {
 			select {
 			case pid := <-a.scheduleForExecution:
+				log.Debug().Str("pid", pid).Msg("executing")
 				a.execute(pid)
 			case <-a.terminate:
 				return
@@ -77,9 +86,10 @@ func (a *ApeiroRuntime) execute(pid string) error {
 	case sql.ErrNoRows:
 		return fmt.Errorf("no process with pid %s", pid)
 	case nil:
-		err := a.stepProcess(pid, src)
+		err := a.stepProcess(pid, src, "", "")
 		if err != nil {
 			a.triggerWatchers(pid)
+			log.Error().Str("pid", pid).Msgf("error %v", err)
 			return err
 		}
 		a.triggerWatchers(pid)
@@ -95,7 +105,7 @@ func initializeDatabase(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS process (pid INTEGER PRIMARY KEY, mid INTEGER, val BLOB)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS process (pid INTEGER PRIMARY KEY, mid INTEGER, frame BLOB, result BLOB, awaiting BLOB)")
 	if err != nil {
 		return err
 	}
@@ -116,6 +126,7 @@ func (a *ApeiroRuntime) Close() error {
 
 func (a *ApeiroRuntime) Mount(src []byte) (string, error) {
 	compiledSource, err := compiler.CompileTypescript(src)
+	log.Info().Str("compiledSource", string(compiledSource))
 	if err != nil {
 		return "", err
 	}
@@ -165,15 +176,31 @@ func (a *ApeiroRuntime) spawn(mid string, watch bool) (string, chan *WatchEvent,
 	return pid, watcher, nil
 }
 
-func (a *ApeiroRuntime) GetProcessValue(pid string) (string, error) {
-	row := a.db.QueryRow("SELECT val FROM process WHERE pid = ?", strings.TrimPrefix(pid, "pid_"))
-	var res []byte
+type ProcessExternalState struct {
+	Pid     string      `json:"pid,omitempty"`
+	Val     interface{} `json:"val,omitempty"`
+	Waiting interface{} `json:"waiting,omitempty"`
+	Fin     bool        `json:"fin,omitempty"`
+}
 
-	switch err := row.Scan(&res); err {
+func (a *ApeiroRuntime) GetProcessValue(pid string) (*ProcessExternalState, error) {
+	row := a.db.QueryRow("SELECT result, awaiting FROM process WHERE pid = ?", strings.TrimPrefix(pid, "pid_"))
+	var resBytes []byte
+	var awaitingBytes []byte
+
+	switch err := row.Scan(&resBytes, &awaitingBytes); err {
 	case sql.ErrNoRows:
-		return "", fmt.Errorf("no process with pid %s", pid)
+		return nil, fmt.Errorf("no process with pid %s", pid)
 	case nil:
-		return string(res), nil
+		var res interface{}
+		var awaiting interface{}
+		json.Unmarshal(resBytes, &res)
+		json.Unmarshal(awaitingBytes, &awaiting)
+		return &ProcessExternalState{
+			Pid:     pid,
+			Val:     res,
+			Waiting: awaiting,
+		}, nil
 	default:
 		panic(err)
 	}
@@ -196,34 +223,82 @@ type EventProcessMeta struct {
 	log string
 }
 
+func (a *ApeiroRuntime) InstallEcmatime(ctx *v8go.Context) error {
+	iso := ctx.Isolate()
+	if a.ecmatimeCodeCache == nil {
+		unboundScript, _ := iso.CompileUnboundScript(ecmatime.ECMATIME, "<apeiro>", v8go.CompileOptions{})
+		cachedData := unboundScript.CreateCodeCache()
+		if cachedData.Rejected {
+			return errors.New("failed to create code cache")
+		}
+		a.ecmatimeCodeCache = cachedData.Bytes
+	}
+
+	script, err := iso.CompileUnboundScript(ecmatime.ECMATIME, "<apeiro>", v8go.CompileOptions{
+		CachedData: &v8go.CompilerCachedData{
+			Bytes:    a.ecmatimeCodeCache,
+			Rejected: false,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = script.Run(ctx)
+	return err
+}
+
+func (a *ApeiroRuntime) InstallEcmatimeUncached(ctx *v8go.Context) error {
+	_, err := ctx.RunScript(ecmatime.ECMATIME, "<apeiro>")
+	return err
+}
+
+type WriterToZerolog struct {
+	pid string
+}
+
+func (w WriterToZerolog) Write(p []byte) (n int, err error) {
+	log.Info().Str("pid", w.pid).Msg(string(p))
+	return len(p), nil
+}
+
 /*
 Returns a new context at has:
 * the PristineRuntime at $apeiro
 * the process at $fn
 */
-func (a *ApeiroRuntime) newProcessContext(iso *v8go.Isolate, src string) (*v8go.Context, chan *EventProcessMeta, error) {
+func (a *ApeiroRuntime) newProcessContext(iso *v8go.Isolate, pid string, src string) (*v8go.Context, chan *EventProcessMeta, error) {
 	metaChan := make(chan *EventProcessMeta, 1)
 
-	printfn := v8go.NewFunctionTemplate(iso, func(info *v8go.FunctionCallbackInfo) *v8go.Value {
-
-		// metaChan <- &EventProcessMeta{
-		// 	log: info.Args()[0].String(),
-		// }
-
-		return nil
-	})
-
 	global := v8go.NewObjectTemplate(iso)
-	global.Set("print", printfn)
+	if err := base64.InjectTo(iso, global); err != nil {
+		panic(err)
+	}
+	if err := fetch.InjectTo(iso, global); err != nil {
+		panic(err)
+	}
+	if err := timers.InjectTo(iso, global); err != nil {
+		panic(err)
+	}
 
 	ctx := v8go.NewContext(iso, global)
+	if err := console.InjectTo(ctx, console.WithOutput(WriterToZerolog{
+		pid: pid,
+	})); err != nil {
+		panic(err)
+	}
+	if err := url.InjectTo(ctx); err != nil {
+		panic(err)
+	}
 
-	_, err := ctx.RunScript(ecmatime.ECMATIME, "pristine_runner.js")
+	// 4312724 ns/op without cache
+	// 4331443 ns/op with cache
+	// 5239115 with serialization
+	err := a.InstallEcmatimeUncached(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	_, err = ctx.RunScript(src, "pristine_runner.js")
+	_, err = ctx.RunScript(src, "your_function.js")
 	if err != nil {
 		return nil, nil, err
 	}

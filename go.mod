@@ -3,11 +3,14 @@ module github.com/apeiromont/apeiro
 go 1.19
 
 require (
+	github.com/dn365/gin-zerolog v0.0.0-20171227063204-b43714b00db1
 	github.com/evanw/esbuild v0.15.11
 	github.com/gin-gonic/gin v1.8.1
 	github.com/goccy/go-json v0.9.7
 	github.com/mattn/go-sqlite3 v1.14.15
+	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.7.1
+	go.kuoruan.net/v8go-polyfills v0.5.0
 	rogchap.com/v8go v0.7.0
 )
 
@@ -19,6 +22,7 @@ require (
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect

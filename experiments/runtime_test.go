@@ -18,7 +18,7 @@ package main
 // }
 
 // func BenchmarkRuntime(b *testing.B) {
-// 	source := `print('hi'); export default function one() { print('hello from one'); let a = 100 + 10 + 1; let b = a*10; return b; }`
+// 	source := `console.log('hi'); export default function one() { console.log('hello from one'); let a = 100 + 10 + 1; let b = a*10; return b; }`
 
 // 	tempdir, err := os.MkdirTemp("", "benchmark*.db")
 // 	if err != nil {
