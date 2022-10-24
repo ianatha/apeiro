@@ -83,6 +83,8 @@ export class Decoder {
       return undefined;
     } else if (v.type === "null") {
       return null;
+    } else if (v.type === "ref") {
+      return this.BY_TAG[v.tag];
     } else if (v.type === "number") {
       return v.value;
     } else if (v.type === "string") {
@@ -91,24 +93,16 @@ export class Decoder {
       return v.value;
     } else if (v.type === "object") {
       return this.decodeObject(v);
-    } else if (v.type === "object_ref") {
-      return this.BY_TAG[v.tag];
     } else if (v.type === "function") {
       return this.decodeFunction(v);
     } else if (v.type === "function_bound") {
       return this.decodeFunctionBound(v);
-    } else if (v.type === "function_ref") {
-      return this.BY_TAG[v.tag];
     } else if (v.type === "class_definition") {
       return this.decodeClassDefinition(v);
     } else if (v.type === "class_instance") {
       return this.decodeClassInstance(v);
-    } else if (v.type === "class_definition_ref") {
-      return this.BY_TAG[v.tag];
     } else if (v.type === "array") {
       return this.decodeArray(v);
-    } else if (v.type === "array_ref") {
-      return this.BY_TAG[v.tag];
     } else {
       throw new Error("cannot decode " + v);
     }

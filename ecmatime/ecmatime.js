@@ -110,6 +110,8 @@ var $apeiro = (() => {
         return void 0;
       } else if (v2.type === "null") {
         return null;
+      } else if (v2.type === "ref") {
+        return this.BY_TAG[v2.tag];
       } else if (v2.type === "number") {
         return v2.value;
       } else if (v2.type === "string") {
@@ -118,24 +120,16 @@ var $apeiro = (() => {
         return v2.value;
       } else if (v2.type === "object") {
         return this.decodeObject(v2);
-      } else if (v2.type === "object_ref") {
-        return this.BY_TAG[v2.tag];
       } else if (v2.type === "function") {
         return this.decodeFunction(v2);
       } else if (v2.type === "function_bound") {
         return this.decodeFunctionBound(v2);
-      } else if (v2.type === "function_ref") {
-        return this.BY_TAG[v2.tag];
       } else if (v2.type === "class_definition") {
         return this.decodeClassDefinition(v2);
       } else if (v2.type === "class_instance") {
         return this.decodeClassInstance(v2);
-      } else if (v2.type === "class_definition_ref") {
-        return this.BY_TAG[v2.tag];
       } else if (v2.type === "array") {
         return this.decodeArray(v2);
-      } else if (v2.type === "array_ref") {
-        return this.BY_TAG[v2.tag];
       } else {
         throw new Error("cannot decode " + v2);
       }
@@ -158,9 +152,7 @@ var $apeiro = (() => {
       this.id = 0;
     }
     encodeClassDefinition(v2) {
-      if (!this.assignTag(v2)) {
-        return { type: "class_definition_ref", tag: v2[TAG] };
-      }
+      this.assignTag(v2);
       return {
         type: "class_definition",
         src: v2.toString(),
@@ -168,31 +160,23 @@ var $apeiro = (() => {
       };
     }
     encodeFunction(v2, debug) {
-      if (v2[TAG] === void 0) {
-        v2[TAG] = this.id;
-        this.id++;
-        if (v2.toString().indexOf(" [native code]") >= 0) {
-          console.log("encountered native function at " + debug);
-        }
-        let res = {
-          type: "function",
-          tag: v2[TAG],
-          src: v2.toString()
-        };
-        if (Object.keys(v2).length > 0) {
-          res.props = this.encodeObject(v2, debug + ".props", false);
-        }
-        if (v2?.$bound) {
-          delete res.src;
-          res.type = "function_bound";
-        }
-        return res;
-      } else {
-        return {
-          type: "function_ref",
-          tag: v2[TAG]
-        };
+      this.assignTag(v2);
+      if (v2.toString().indexOf(" [native code]") >= 0) {
+        console.log("encountered native function at " + debug);
       }
+      let res = {
+        type: "function",
+        tag: v2[TAG],
+        src: v2.toString()
+      };
+      if (Object.keys(v2).length > 0) {
+        res.props = this.encodeObject(v2, debug + ".props", false);
+      }
+      if (v2?.$bound) {
+        delete res.src;
+        res.type = "function_bound";
+      }
+      return res;
     }
     assignTag(v2) {
       if (v2[TAG] === void 0) {
@@ -203,26 +187,17 @@ var $apeiro = (() => {
         return false;
       }
     }
-    encodeObject(v2, debug, tag = true) {
-      if (tag && !this.assignTag(v2)) {
-        return { type: "object_ref", tag: v2[TAG] };
-      }
+    encodeObject(v2, debug) {
+      this.assignTag(v2);
       const value = {};
       Object.keys(v2).forEach((k2) => {
         value[k2] = this.encodeValue(v2[k2], debug + "." + k2);
       });
-      if (tag) {
-        return {
-          type: "object",
-          value,
-          tag: v2[TAG]
-        };
-      } else {
-        return {
-          type: "object",
-          value
-        };
-      }
+      return {
+        type: "object",
+        value,
+        tag: v2[TAG]
+      };
     }
     encodeNumber(v2) {
       return { type: "number", value: v2 };
@@ -234,6 +209,7 @@ var $apeiro = (() => {
       return { type: "boolean", value: v2 };
     }
     encodeClassInstance(v2, debug) {
+      this.assignTag(v2);
       const value = {};
       Object.keys(v2).forEach((k2) => {
         value[k2] = this.encodeValue(v2[k2], debug + "." + k2);
@@ -241,13 +217,12 @@ var $apeiro = (() => {
       return {
         type: "class_instance",
         constructor: this.encodeClassDefinition(v2.constructor),
-        value
+        value,
+        tag: v2[TAG]
       };
     }
     encodeArray(v2, debug) {
-      if (!this.assignTag(v2)) {
-        return { type: "array_ref", tag: v2[TAG] };
-      }
+      this.assignTag(v2);
       let value = [];
       Object.keys(v2).forEach((k2) => {
         value.push(this.encodeValue(v2[k2], debug + "." + k2));
@@ -263,6 +238,8 @@ var $apeiro = (() => {
         return { type: "null" };
       } else if (typeof v2 === "undefined") {
         return { type: "undefined" };
+      } else if (v2[TAG]) {
+        return { type: "ref", tag: v2[TAG] };
       } else if (typeof v2 === "number") {
         return this.encodeNumber(v2);
       } else if (typeof v2 === "string") {
@@ -297,7 +274,6 @@ var $apeiro = (() => {
         throw new Error("root must be an object");
       }
       const result = this.encodeValue(v2, "");
-      this.cleanValue(v2);
       return JSON.stringify(result);
     }
   };

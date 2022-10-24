@@ -4,9 +4,7 @@ export class Encoder {
   id = 0;
 
   private encodeClassDefinition(v: any) {
-    if (!this.assignTag(v)) {
-      return { type: "class_definition_ref", tag: v[TAG] };
-    }
+    this.assignTag(v);
 
     // TODO: encode parent
     return {
@@ -17,36 +15,28 @@ export class Encoder {
   }
 
   private encodeFunction(v: any, debug: string) {
-    if (v[TAG] === undefined) {
-      v[TAG] = this.id;
-      this.id++;
-      if (v.toString().indexOf(" [native code]") >= 0) {
+    this.assignTag(v);
+
+    if (v.toString().indexOf(" [native code]") >= 0) {
         console.log("encountered native function at " + debug);
       }
 
+    let res = {
+      type: "function",
+      tag: v[TAG],
+      src: v.toString(),
+    };
 
-      let res = {
-        type: "function",
-        tag: v[TAG],
-        src: v.toString(),
-      };  
-
-      if (Object.keys(v).length > 0) {
-        res.props = this.encodeObject(v, debug+".props", false);
-      }
-
-      if (v?.$bound) {
-        delete res.src;
-        res.type = "function_bound";
-      }
-
-      return res;
-    } else {
-      return {
-        type: "function_ref",
-        tag: v[TAG],
-      };
+    if (Object.keys(v).length > 0) {
+      res.props = this.encodeObject(v, debug+".props", false);
     }
+
+    if (v?.$bound) {
+      delete res.src;
+      res.type = "function_bound";
+    }
+
+    return res;
   }
 
   private assignTag(v: any): boolean {
@@ -59,27 +49,19 @@ export class Encoder {
     }
   }
 
-  private encodeObject(v: Record<string | symbol, any>, debug: string, tag = true) {
-    if (tag && !this.assignTag(v)) {
-      return { type: "object_ref", tag: v[TAG] };
-    }
+  private encodeObject(v: Record<string | symbol, any>, debug: string) {
+    this.assignTag(v);
 
     const value: Record<string, any> = {};
     Object.keys(v).forEach((k) => {
       value[k] = this.encodeValue(v[k], debug + "." + k);
     });
-    if (tag) {
-      return {
-        type: "object",
-        value,
-        tag: v[TAG],
-      };  
-    } else {
-      return {
-        type: "object",
-        value,
-      };
-    }
+
+    return {
+      type: "object",
+      value,
+      tag: v[TAG],
+    };
   }
 
   private encodeNumber(v: number) {
@@ -95,6 +77,8 @@ export class Encoder {
   }
 
   private encodeClassInstance(v: any, debug: string) {
+    this.assignTag(v);
+
     const value: Record<string, any> = {};
     Object.keys(v).forEach((k) => {
       value[k] = this.encodeValue(v[k], debug + "." + k);
@@ -104,13 +88,12 @@ export class Encoder {
       type: "class_instance",
       constructor: this.encodeClassDefinition(v.constructor),
       value,
+      tag: v[TAG],
     };
   }
 
   private encodeArray(v: any, debug: string) {
-    if (!this.assignTag(v)) {
-      return { type: "array_ref", tag: v[TAG] };
-    }
+    this.assignTag(v)
 
     let value: any[] = []
     Object.keys(v).forEach((k) => {
@@ -129,6 +112,8 @@ export class Encoder {
       return { type: "null" };
     } else if (typeof v === "undefined") {
       return { type: "undefined" };
+    } else if (v[TAG]) {
+      return { type: "ref", tag: v[TAG] };
     } else if (typeof v === "number") {
       return this.encodeNumber(v);
     } else if (typeof v === "string") {
@@ -168,7 +153,7 @@ export class Encoder {
       throw new Error("root must be an object");
     }
     const result = this.encodeValue(v, "");
-    this.cleanValue(v);
+    // TODO: this.cleanValue(v);
     return JSON.stringify(result);
   }
 }
