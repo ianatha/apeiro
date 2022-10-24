@@ -1,13 +1,22 @@
 package apeiro
 
-import "fmt"
-
 type WatchEvent struct {
 	pid string
 }
 
+func SafeSend(ch chan *WatchEvent, value *WatchEvent) (closed bool) {
+	defer func() {
+		if recover() != nil {
+			closed = true
+		}
+	}()
+
+	ch <- value  // panic if ch is closed
+	return false // <=> closed = false; return
+}
+
 func (a *ApeiroRuntime) Watch(pid string) (chan *WatchEvent, error) {
-	watchChan := make(chan *WatchEvent, 1)
+	watchChan := make(chan *WatchEvent, 4)
 	// TODO: lock
 	prevWatchers, exists := a.watchers.Load(pid)
 	if !exists {
@@ -23,11 +32,7 @@ func (a *ApeiroRuntime) triggerWatchers(pid string) {
 	watchers, exist := a.watchers.Load(pid)
 	if exist {
 		for _, watcher := range watchers.([]chan *WatchEvent) {
-			select {
-			case watcher <- &WatchEvent{pid}:
-			default:
-				fmt.Printf("watcher for %s is blocked\n", pid)
-			}
+			SafeSend(watcher, &WatchEvent{pid: pid})
 		}
 	}
 }

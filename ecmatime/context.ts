@@ -1,5 +1,3 @@
-import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
-import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
 import { Decoder } from "./decoder.ts";
 import { Encoder } from "./encoder.ts";
 import { IPristineFrame, PristineFrame } from "./frame.ts";
@@ -11,9 +9,7 @@ import {
 } from "./suspension.ts";
 
 export interface PristineContext {
-  useUIInput<T extends z.ZodRawShape>(
-    spec: z.ZodObject<T>,
-  ): z.infer<typeof spec>;
+  useUIInput<T>(schema: any): T;
   frame(): PristineFrame;
 }
 
@@ -21,10 +17,6 @@ interface PendingUIInputState {
   t: string;
   pending: boolean;
   schema: Record<string, any>;
-}
-
-function zodToSchema(spec: any) {
-  return zodToJsonSchema(spec, "$");
 }
 
 const STATE_TYPE_EXTERNAL = "$ext";
@@ -82,10 +74,7 @@ class InternalPristineContext implements PristineContext {
     }
   }
 
-  public useUIInput<T extends z.ZodRawShape>(
-    spec: z.ZodObject<T>,
-  ): z.infer<typeof spec> {
-    const schema = zodToSchema(spec);
+  public useUIInput(schema: any) {
     if (this._frame!.aw === undefined || this._frame!.aw === null) {
       throw new SuspensionUntilInput(schema);
     } else {
@@ -124,7 +113,7 @@ class InternalPristineContext implements PristineContext {
 
   getFunction([namespace, fn]: [string, string]) {
     return (args) => {
-      this.useUIInput(args);
+      return this.useUIInput(args);
     };
   }
 }
@@ -144,12 +133,12 @@ export function step(
   newMsg?: string,
 ): StepResult {
   const ctx = new InternalPristineContext();
-  if (serializedPreviousFrame) {
+  if (serializedPreviousFrame && serializedPreviousFrame != "") {
     const decoder = new Decoder();
-    const previousFrame = decoder.decode(serializedPreviousFrame, null);
+    const previousFrame = decoder.decode(serializedPreviousFrame, fn);
     ctx.loadFrame(previousFrame);
   }
-  if (newMsg) {
+  if (newMsg && newMsg != "") {
     ctx.supply(JSON.parse(newMsg));
   }
 

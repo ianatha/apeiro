@@ -64,6 +64,7 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 
 			msg := <-watcher
 			log.Info().Str("pid", pid).Msgf("process response %v", msg)
+			close(watcher)
 
 			val, err := a.GetProcessValue(pid)
 			if err != nil {
@@ -104,13 +105,31 @@ func RESTRouter(a *ApeiroRuntime) *gin.Engine {
 	r.POST("/process/:pid", func(c *gin.Context) {
 		pid := c.Param("pid")
 
-		// _ := c.Request.Header.Get("Apeiro-Wait") == "true"
-		val, err := a.GetProcessValue(pid)
+		supplyMsg, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
 			return
+		}
+
+		watcher, err := a.SupplyAndWatch(pid, string(supplyMsg))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		resultMsg := <-watcher
+		log.Info().Str("pid", pid).Msgf("process response %v", resultMsg)
+		close(watcher)
+
+		val, err := a.GetProcessValue(pid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
 		}
 
 		c.JSON(http.StatusOK, val)

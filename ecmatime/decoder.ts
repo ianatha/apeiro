@@ -10,7 +10,12 @@ export class Decoder {
     }
 
     const evalFunction = () => {
-      return eval(src);
+      console.log("evaluating " + src);
+      try {
+        return (0, eval)(src);
+      } catch(e) {
+        return () => { throw new Error("couldn't deserialize function " + src)}
+      }
     };
     return evalFunction.call(this.ctx);
   }
@@ -35,7 +40,23 @@ export class Decoder {
     return decoded;
   }
 
+  private isFunctionMissingKeyword(src: string): boolean {
+    if (src.substring(0, 9) === "function ") {
+      return false;
+    }
+    const reClosure1 = /^\(([a-zA-Z0-9_$]+,?)*\)=>/
+    const reClosure2 = /^[a-zA-Z0-9_$]+=>/
+    if (src.match(reClosure1) || src.match(reClosure2)) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+
   private decodeFunction(v: any) {
+    if (this.isFunctionMissingKeyword(v.src)) {
+      v.src = "function _" + v.src;
+    }
     let decoded = this.evalInContext(`const fn = ${v.src}; fn`);
     if (v.props) {
       const propsDecoded = this.decodeObject(v.props);
@@ -69,7 +90,11 @@ export class Decoder {
     if (classDef === undefined) {
       throw new Error("failed to deserialize " + JSON.stringify(v));
     }
-    Object.setPrototypeOf(decoded, classDef.prototype);
+    if (classDef.prototype != undefined) {
+      Object.setPrototypeOf(decoded, classDef.prototype);
+    } else {
+      console.log("TODO prototype undefined")
+    }
     return decoded;
   }
 

@@ -2,7 +2,6 @@ package apeiro
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,6 +10,8 @@ import (
 	"github.com/apeiromont/apeiro/ecmatime"
 	"github.com/goccy/go-json"
 	_ "github.com/mattn/go-sqlite3"
+
+	// ulid "github.com/oklog/ulid/v2"
 	"github.com/rs/zerolog/log"
 	"rogchap.com/v8go"
 )
@@ -18,9 +19,14 @@ import (
 type ApeiroRuntime struct {
 	isolates             *sync.Pool
 	db                   *sql.DB
-	scheduleForExecution chan string
+	scheduleForExecution chan *ForExecution
 	terminate            chan bool
 	watchers             *sync.Map
+}
+
+type ForExecution struct {
+	pid string
+	msg *string
 }
 
 func NewApeiroRuntime(database string) (*ApeiroRuntime, error) {
@@ -43,7 +49,7 @@ func NewApeiroRuntime(database string) (*ApeiroRuntime, error) {
 	return &ApeiroRuntime{
 		isolates:             isolates,
 		db:                   db,
-		scheduleForExecution: make(chan string, 100),
+		scheduleForExecution: make(chan *ForExecution, 100),
 		terminate:            make(chan bool),
 		watchers:             &sync.Map{},
 	}, nil
@@ -53,9 +59,12 @@ func (a *ApeiroRuntime) Start() {
 	go func() {
 		for {
 			select {
-			case pid := <-a.scheduleForExecution:
-				log.Debug().Str("pid", pid).Msg("executing")
-				a.execute(pid)
+			case forExecution := <-a.scheduleForExecution:
+				log.Debug().
+					Str("pid", forExecution.pid).
+					Str("msg", fmt.Sprintf("%v", nullString(forExecution.msg))).
+					Msg("executing")
+				a.execute(forExecution.pid, forExecution.msg)
 			case <-a.terminate:
 				return
 			}
@@ -71,21 +80,35 @@ func (a *ApeiroRuntime) Stop() {
 	a.terminate <- true
 }
 
-func (a *ApeiroRuntime) execute(pid string) error {
-	row := a.db.QueryRow("SELECT src FROM mount RIGHT JOIN process ON process.mid = mount.mid WHERE process.pid = ?", strings.TrimPrefix(pid, "pid_"))
+func nullString(s *string) string {
+	if s == nil {
+		return ""
+	} else {
+		return *s
+	}
+}
+
+func (a *ApeiroRuntime) execute(pid string, msg *string) error {
+	row := a.db.QueryRow("SELECT mount.src, process.frame FROM mount RIGHT JOIN process ON process.mid = mount.mid WHERE process.pid = ?", strings.TrimPrefix(pid, "pid_"))
 
 	var src string
+	var previousFrame *string
 
-	switch err := row.Scan(&src); err {
+	// id := ulid.Make()
+
+	switch err := row.Scan(&src, &previousFrame); err {
 	case sql.ErrNoRows:
 		return fmt.Errorf("no process with pid %s", pid)
 	case nil:
-		err := a.stepProcess(pid, src, "", "")
+		// fmt.Printf("executing %s\n", id)
+		err := a.stepProcess(pid, src, nullString(previousFrame), nullString(msg))
 		if err != nil {
 			a.triggerWatchers(pid)
+			// fmt.Printf("error %s\n", id)
 			log.Error().Str("pid", pid).Msgf("error %v", err)
 			return err
 		}
+		// fmt.Printf("success %s\n", id)
 		a.triggerWatchers(pid)
 	default:
 		panic(err)
@@ -145,6 +168,34 @@ func (a *ApeiroRuntime) Spawn(mid string) (string, error) {
 	return pid, err
 }
 
+func (a *ApeiroRuntime) Supply(pid string, msg string) error {
+	_, err := a.run(pid, &msg, false)
+	return err
+}
+
+func (a *ApeiroRuntime) SupplyAndWatch(pid string, msg string) (chan *WatchEvent, error) {
+	watcher, err := a.run(pid, &msg, true)
+	return watcher, err
+}
+
+func (a *ApeiroRuntime) run(pid string, msg *string, watch bool) (chan *WatchEvent, error) {
+	var watcher chan *WatchEvent
+	if watch {
+		var err error
+		watcher, err = a.Watch(pid)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	a.scheduleForExecution <- &ForExecution{
+		pid: pid,
+		msg: msg,
+	}
+
+	return watcher, nil
+}
+
 func (a *ApeiroRuntime) spawn(mid string, watch bool) (string, chan *WatchEvent, error) {
 	mountId := strings.TrimPrefix(mid, "fn_")
 	res, err := a.db.Exec("INSERT INTO process (mid) VALUES (?)", mountId)
@@ -157,17 +208,8 @@ func (a *ApeiroRuntime) spawn(mid string, watch bool) (string, chan *WatchEvent,
 	}
 	pid := fmt.Sprintf("pid_%d", lastInsertId)
 
-	var watcher chan *WatchEvent
-	if watch {
-		watcher, err = a.Watch(pid)
-		if err != nil {
-			return "", nil, err
-		}
-	}
-
-	a.scheduleForExecution <- pid
-
-	return pid, watcher, nil
+	watcher, err := a.run(pid, nil, watch)
+	return pid, watcher, err
 }
 
 type ProcessExternalState struct {
@@ -248,6 +290,50 @@ type StepResult struct {
 	awaiting []byte
 }
 
+func stepResultFromV8Value(jsStepResult *v8go.Value) *StepResult {
+	stepResult, err := jsStepResult.AsObject()
+	if err != nil {
+		panic(err)
+	}
+
+	// frame
+	jsFrame, err := stepResult.GetIdx(0)
+	if err != nil {
+		panic(err)
+	}
+	frame := jsFrame.String()
+
+	// result
+	jsResult, err := stepResult.GetIdx(1)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := jsResult.MarshalJSON()
+	if err != nil {
+		panic(err)
+	}
+
+	// awaiting
+	jsAwaiting, err := stepResult.GetIdx(2)
+	if err != nil {
+		panic(err)
+	}
+	var awaiting []byte
+	if jsAwaiting.IsObject() {
+		awaiting, err = jsAwaiting.Object().MarshalJSON()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return &StepResult{
+		frame:    frame,
+		result:   result,
+		awaiting: awaiting,
+	}
+}
+
 func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string, newMsg string) error {
 	iso := a.isolates.Get().(*v8go.Isolate)
 	defer a.isolates.Put(iso)
@@ -286,46 +372,10 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			apeiroRunErrorChan <- err.(*v8go.JSError)
 			return
 		}
-		stepResult, err := jsStepResult.AsObject()
-		if err != nil {
-			panic(err)
-		}
-		// frame
-		jsFrame, err := stepResult.GetIdx(0)
-		if err != nil {
-			panic(err)
-		}
-		frame := jsFrame.String()
 
-		// result
-		jsResult, err := stepResult.GetIdx(1)
-		if err != nil {
-			panic(err)
-		}
-
-		result, err := jsResult.MarshalJSON()
-		if err != nil {
-			panic(err)
-		}
-
-		// awaiting
-		jsAwaiting, err := stepResult.GetIdx(2)
-		if err != nil {
-			panic(err)
-		}
-		var awaiting []byte
-		if jsAwaiting.IsObject() {
-			awaiting, err = jsAwaiting.Object().MarshalJSON()
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		apeiroRunResultChan <- &StepResult{
-			frame:    frame,
-			result:   result,
-			awaiting: awaiting,
-		}
+		debug, _ := jsStepResult.MarshalJSON()
+		fmt.Printf("val: %v\n\n\n", string(debug))
+		apeiroRunResultChan <- stepResultFromV8Value(jsStepResult)
 	}()
 
 	// TODO: add timer
@@ -345,9 +395,9 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			return err
 		case result := <-apeiroRunResultChan:
 			log.Info().
-				Str("frame", result.frame).
-				Str("result", string(result.result)).
-				Str("awaiting", string(result.awaiting)).
+				Int("FrameSize", len(result.frame)).
+				Str("Result", string(result.result)).
+				Str("Awaiting", string(result.awaiting)).
 				Msg("apeiro step result")
 			update, err := a.db.Exec(
 				"UPDATE process SET result = $1, frame = $2, awaiting = $3 WHERE pid = $4",

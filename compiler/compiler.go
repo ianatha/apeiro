@@ -141,12 +141,13 @@ func CompileTypescriptWithFlags(input []byte, flags CompileOptions) ([]byte, err
 	var finalResult []byte
 	if flags.Minify {
 		finalResults := api.Transform(string(thirdStep), api.TransformOptions{
-			Loader:            api.LoaderJS,
+			Loader:            api.LoaderTS,
 			Format:            api.FormatIIFE,
 			MinifySyntax:      true,
 			MinifyWhitespace:  true,
 			MinifyIdentifiers: true,
 			GlobalName:        flags.GlobalName,
+			Target:            api.ES2016,
 		})
 		if finalResults.Errors != nil {
 			fmt.Printf("%s\n", thirdStep)

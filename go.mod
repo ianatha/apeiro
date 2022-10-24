@@ -8,6 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.8.1
 	github.com/goccy/go-json v0.9.7
 	github.com/mattn/go-sqlite3 v1.14.15
+	github.com/oklog/ulid/v2 v2.1.0
 	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.7.1
 	go.kuoruan.net/v8go-polyfills v0.5.0
