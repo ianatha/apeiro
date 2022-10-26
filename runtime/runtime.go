@@ -1,4 +1,4 @@
-package apeiro
+package runtime
 
 import (
 	"database/sql"
@@ -201,7 +201,9 @@ type MountOverview struct {
 }
 
 func (a *ApeiroRuntime) GetMountOverview(mid string) (*MountOverview, error) {
-	row, err := a.db.Query("SELECT mount.name, mount.mid, original_src, process.pid, mount.src FROM mount LEFT JOIN process ON process.mid = mount.mid WHERE mount.mid = ?", strings.TrimPrefix(mid, "mid_"))
+	mid = strings.TrimPrefix(mid, "mid_")
+
+	row, err := a.db.Query("SELECT mount.name, mount.mid, original_src, process.pid, mount.src FROM mount LEFT JOIN process ON process.mid = mount.mid WHERE mount.mid = ?", mid)
 	if err != nil {
 		return nil, err
 	}
@@ -237,6 +239,49 @@ func (a *ApeiroRuntime) Processes() ([]string, error) {
 		result = append(result, r)
 	}
 	return result, nil
+}
+
+func (a *ApeiroRuntime) MountUpdate(mid string, src *string, name *string) (string, error) {
+	mid = strings.TrimPrefix(mid, "mid_")
+
+	previousState, err := a.GetMountOverview(mid)
+	if err != nil {
+		return "", err
+	}
+
+	var newSrc []byte
+	var newRunSrc []byte
+	if src != nil {
+		compiledSource, err := compiler.CompileTypescript([]byte(*src))
+		log.Info().Str("compiledSource", string(compiledSource))
+		if err != nil {
+			return "", err
+		}
+		newSrc = []byte(*src)
+		newRunSrc = compiledSource
+	} else {
+		newSrc = []byte(previousState.Src)
+		newRunSrc = []byte(previousState.RunSrc)
+	}
+
+	var newName string
+	if name != nil {
+		newName = *name
+	} else {
+		newName = previousState.Name
+	}
+
+	_, err = a.db.Exec("UPDATE mount SET original_src = ?, src = ?, name = ? WHERE mid = ?", newSrc, newRunSrc, newName, mid)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = a.db.Exec("UPDATE process SET frame=NULL, result=NULL, awaiting=NULL WHERE mid = ?", mid)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("mid_%s", mid), nil
 }
 
 func (a *ApeiroRuntime) Mount(src []byte, name string) (string, error) {

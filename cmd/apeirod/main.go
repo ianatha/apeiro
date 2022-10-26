@@ -1,19 +1,20 @@
 package main
 
 import (
-	"github.com/apeiromont/apeiro"
+	"github.com/apeiromont/apeiro/restengine"
+	"github.com/apeiromont/apeiro/runtime"
 	"github.com/rs/zerolog"
 )
 
 func main() {
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 
-	a, err := apeiro.NewApeiroRuntime("world.db")
+	a, err := runtime.NewApeiroRuntime("world.db")
 	if err != nil {
 		panic(err)
 	}
 
-	r := apeiro.NewApeiroRestAPI(a)
+	r := restengine.NewApeiroRestAPI(a)
 	a.Start()
 
 	r.Run()

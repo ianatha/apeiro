@@ -1,4 +1,4 @@
-package apeiro
+package runtime
 
 type WatchEvent struct {
 	pid string

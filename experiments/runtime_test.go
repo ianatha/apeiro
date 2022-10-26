@@ -1,4 +1,4 @@
-package main
+package experiments
 
 // func TestRuntime(t *testing.T) {
 // 	source := `export default function one() { return 1; }`

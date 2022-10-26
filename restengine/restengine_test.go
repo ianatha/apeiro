@@ -1,4 +1,4 @@
-package apeiro
+package restengine
 
 import (
 	"bytes"
@@ -14,13 +14,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apeiromont/apeiro/runtime"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func SetupApp() (*ApeiroRestAPI, *ApeiroRuntime) {
+func SetupApp() (*ApeiroRestAPI, *runtime.ApeiroRuntime) {
 	gin.SetMode(gin.TestMode)
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 
@@ -29,7 +30,7 @@ func SetupApp() (*ApeiroRestAPI, *ApeiroRuntime) {
 		panic(err)
 	}
 
-	a, err := NewApeiroRuntime(path.Join(tmp, "test.db"))
+	a, err := runtime.NewApeiroRuntime(path.Join(tmp, "test.db"))
 	if err != nil {
 		panic(err)
 	}
