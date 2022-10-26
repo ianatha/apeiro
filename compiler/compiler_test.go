@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -185,4 +186,73 @@ export default function simple($ctx, a, b) {
   $f0.end();
 }
 simple.$apeiro_func = true;`, strings.TrimSpace(string(output)))
+}
+
+func TestCompileYield(t *testing.T) {
+	output, err := ApeiroTransform(`import { inputRest } from "pristine://$";
+
+export default function *email_responder() {
+	let last_email = {};
+	while (true) {
+		yield last_email;
+		last_email = inputRest({
+			email: {}
+		});
+		console.log(JSON.stringify(last_email));
+	}
+	throw new Error("Should not reach here");
+}`)
+
+	fmt.Printf("\n\n%s\n\n", output)
+	assert.Nil(t, err)
+	assert.Equal(t, `const inputRest = $apeiro.importFunction("$", "inputRest");
+export default function* email_responder($ctx) {
+  const $f0 = $ctx.frame();
+
+  switch ($f0.pc) {
+    case 0:
+      $f0.s.last_email = {};
+      $f0.pc++;
+
+    case 1:
+      while (true) {
+        const $f1 = $f0.subframe();
+
+        switch ($f1.pc) {
+          case 0:
+            yield $f0.s.last_email;
+            $f1.pc++;
+
+          case 1:
+            $f0.s.last_email = $ctx.call($ctx.getFunction(inputRest), {
+              email: {}
+            });
+            $f1.pc++;
+
+          case 2:
+            $f0.s._JSON$stringify = $ctx.call(JSON.stringify, $f0.s.last_email);
+            $f1.pc++;
+
+          case 3:
+            $ctx.call(console.log, $f0.s._JSON$stringify);
+            $f1.pc++;
+
+          case 4:
+            delete $f0.s._JSON$stringify;
+            $f1.pc++;
+        }
+
+        $f1.end();
+      }
+
+      $f0.pc++;
+
+    case 2:
+      throw new Error("Should not reach here");
+      $f0.pc++;
+  }
+
+  $f0.end();
+}
+email_responder.$apeiro_func = true;`, strings.TrimSpace(string(output)))
 }

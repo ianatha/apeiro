@@ -2,6 +2,8 @@ import babel, {
   NodePath,
   types as t,
 } from "https://esm.sh/@babel/core@7.18.13";
+import generate from "https://esm.sh/@babel/generator@7.18.13";
+
 import { Expression } from "https://esm.sh/v92/@babel/types@7.18.13/lib/index-legacy.d.ts";
 import {
   BlockStatement,
@@ -139,12 +141,12 @@ function frameEndDeclaration(path: NodePath<Statement>) {
 }
 
 function rewriteBindingsToFrameState(
-  path: NodePath<Statement>,
+  path: NodePath<BlockStatement>,
   frameIdentifier: Identifier,
 ) {
   for (const binding of Object.values(path.scope.bindings)) {
     if (binding.path.isVariableDeclarator()) {
-      binding.path.parentPath.insertBefore(
+      binding.path.parentPath.replaceWith(
         t.expressionStatement(
           t.assignmentExpression(
             "=",
@@ -155,20 +157,61 @@ function rewriteBindingsToFrameState(
           ),
         ),
       );
-      binding.referencePaths.forEach((refPath) => {
-        refPath.replaceWith(
-          t.identifier(frameIdentifier.name + ".s." + binding.identifier.name),
-        );
-        // TODO: workaround
-        if (refPath.parentPath?.parentPath?.isAssignmentExpression()) {
-          refPath.parentPath.parentPath.node.left = t.identifier(
-            frameIdentifier.name + ".s." + binding.identifier.name,
-          );
-        }
-      });
-      binding.path.remove();
+      path.scope.rename(binding.identifier.name, frameIdentifier.name + ".s." + binding.identifier.name);
+
+      // binding.referencePaths.forEach((refPath) => {
+      //   refPath.replaceWith(
+      //     t.identifier(frameIdentifier.name + ".s." + binding.identifier.name),
+      //   );
+      //   // TODO: workaround
+      //   if (refPath.parentPath?.parentPath?.isAssignmentExpression()) {
+      //     refPath.parentPath.parentPath.node.left = t.identifier(
+      //       frameIdentifier.name + ".s." + binding.identifier.name,
+      //     );
+      //   }
+      // });
+      // binding.path.remove();
     }
   }
+}
+
+const importDeclarationVisitor = {
+  ImportDeclaration(path: NodePath<ImportDeclaration>) {
+    if (path.node.source.value.indexOf("pristine://") != 0) {
+      return;
+    }
+    
+    const [ _, pristinePath ] = path.node.source.value.split("pristine://");
+    path.replaceWithMultiple(
+      path.node.specifiers.map((specifier) => {
+        const binding = path.scope.getBinding(specifier.local.name);
+        if (binding) {
+          binding.referencePaths.forEach((refPath) => {
+            refPath.replaceWith(
+              t.callExpression(
+                t.identifier("$ctx.getFunction"),
+                [
+                  t.identifier(specifier.local.name)
+                ]
+              )
+            );
+          });
+        }
+        return t.variableDeclaration("const", [
+          t.variableDeclarator(
+            t.identifier(specifier.local.name),
+            t.callExpression(
+              t.identifier("$apeiro.importFunction"),
+              [
+                t.stringLiteral(pristinePath),
+                t.stringLiteral(specifier.imported.name)
+              ],
+            )
+          ),
+        ]);
+      })
+    );
+  },
 }
 
 function transform(code) {
@@ -178,42 +221,7 @@ function transform(code) {
         return {
           visitor: {
             ...introduceContext,
-            ImportDeclaration(path: NodePath<ImportDeclaration>) {
-              if (path.node.source.value.indexOf("pristine://") != 0) {
-                return;
-              }
-              
-              const [ _, pristinePath ] = path.node.source.value.split("pristine://");
-              path.replaceWithMultiple(
-                path.node.specifiers.map((specifier) => {
-                  const binding = path.scope.getBinding(specifier.local.name);
-                  if (binding) {
-                    binding.referencePaths.forEach((refPath) => {
-                      refPath.replaceWith(
-                        t.callExpression(
-                          t.identifier("$ctx.getFunction"),
-                          [
-                            t.identifier(specifier.local.name)
-                          ]
-                        )
-                      );
-                    });
-                  }
-                  return t.variableDeclaration("const", [
-                    t.variableDeclarator(
-                      t.identifier(specifier.local.name),
-                      t.callExpression(
-                        t.identifier("$apeiro.importFunction"),
-                        [
-                          t.stringLiteral(pristinePath),
-                          t.stringLiteral(specifier.imported.name)
-                        ],
-                      )
-                    ),
-                  ]);
-                })
-              );
-            },
+            ...importDeclarationVisitor,
             BlockStatement(path: NodePath<BlockStatement>) {
               const frameIndex = assignFrameIndex(path);
               path.traverse(explodeFunctionCalls(frameIndex));
