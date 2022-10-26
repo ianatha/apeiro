@@ -13,7 +13,7 @@ func main() {
 		panic(err)
 	}
 
-	r := apeiro.RESTRouter(a)
+	r := apeiro.NewApeiroRestAPI(a)
 	a.Start()
 
 	r.Run()

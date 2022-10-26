@@ -13,8 +13,22 @@ export class Suspension extends PristineSignal {
 export function serializeSuspension(e: Suspension) {
   if (e instanceof SuspensionUntilInput) {
     return { until_input: e.serialize() };
+  } if (e instanceof SuspensionUntilTime) {
+    return { until_time: e.serialize() };
   } else {
     return true;
+  }
+}
+
+export class SuspensionUntilTime extends Suspension {
+  constructor(
+    private readonly time: any,
+  ) {
+    super();
+  }
+
+  serialize() {
+    return this.time;
   }
 }
 

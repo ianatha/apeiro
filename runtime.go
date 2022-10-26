@@ -121,7 +121,7 @@ func (a *ApeiroRuntime) execute(pid string, msg *string) error {
 }
 
 func initializeDatabase(db *sql.DB) error {
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS mount (mid INTEGER PRIMARY KEY, original_src TEXT, src TEXT, compiled_src BLOB)")
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS mount (mid INTEGER PRIMARY KEY, original_src TEXT, src TEXT, compiled_src BLOB, name TEXT)")
 	if err != nil {
 		return err
 	}
@@ -144,14 +144,107 @@ func (a *ApeiroRuntime) Close() error {
 	return err
 }
 
-func (a *ApeiroRuntime) Mount(src []byte) (string, error) {
+type Overview struct {
+	NumMounts    int
+	NumInstances int
+	NumAlerts    int
+}
+
+func GetSingleNumber(db *sql.DB, query string, args ...interface{}) int {
+	row := db.QueryRow(query, args...)
+	var r int
+	err := row.Scan(&r)
+	if err != nil {
+		return 0
+	}
+	return r
+}
+
+func (a *ApeiroRuntime) GetOverview() *Overview {
+	return &Overview{
+		NumMounts:    GetSingleNumber(a.db, "SELECT COUNT(*) FROM mount"),
+		NumInstances: GetSingleNumber(a.db, "SELECT COUNT(*) FROM process"),
+		NumAlerts:    0,
+	}
+}
+
+type MountListEntry struct {
+	Mid  string
+	Name string
+}
+
+func (a *ApeiroRuntime) Mounts() ([]MountListEntry, error) {
+	rows, err := a.db.Query("SELECT mid, name FROM mount")
+	if err != nil {
+		return []MountListEntry{}, err
+	}
+	defer rows.Close()
+
+	result := []MountListEntry{}
+	for rows.Next() {
+		var r MountListEntry
+		err = rows.Scan(&r.Mid, &r.Name)
+		if err != nil {
+			return []MountListEntry{}, err
+		}
+		result = append(result, r)
+	}
+	return result, nil
+}
+
+type MountOverview struct {
+	Mid   string   `json:"mid,omitempty"`
+	Src   string   `json:"src,omitempty"`
+	Procs []string `json:"procs,omitempty"`
+}
+
+func (a *ApeiroRuntime) GetMountOverview(mid string) (*MountOverview, error) {
+	row, err := a.db.Query("SELECT mount.mid, original_src, process.pid FROM mount LEFT JOIN process ON process.mid = mount.mid WHERE mount.mid = ?", strings.TrimPrefix(mid, "mid_"))
+	if err != nil {
+		return nil, err
+	}
+
+	var r MountOverview
+	for row.Next() {
+		var pid *string
+		err = row.Scan(&r.Mid, &r.Src, &pid)
+		if err != nil {
+			return nil, err
+		}
+		if pid != nil {
+			r.Procs = append(r.Procs, *pid)
+		}
+	}
+	return &r, nil
+}
+
+func (a *ApeiroRuntime) Processes() ([]string, error) {
+	rows, err := a.db.Query("SELECT pid FROM process")
+	if err != nil {
+		return []string{}, err
+	}
+	defer rows.Close()
+
+	result := []string{}
+	for rows.Next() {
+		var r string
+		err = rows.Scan(&r)
+		if err != nil {
+			return []string{}, err
+		}
+		result = append(result, r)
+	}
+	return result, nil
+}
+
+func (a *ApeiroRuntime) Mount(src []byte, name string) (string, error) {
 	compiledSource, err := compiler.CompileTypescript(src)
 	log.Info().Str("compiledSource", string(compiledSource))
 	if err != nil {
 		return "", err
 	}
 
-	res, err := a.db.Exec("INSERT INTO mount (original_src, src) VALUES (?, ?)", src, compiledSource)
+	res, err := a.db.Exec("INSERT INTO mount (original_src, src, name) VALUES (?, ?, ?)", src, compiledSource, name)
 	if err != nil {
 		return "", err
 	}
@@ -217,17 +310,19 @@ func (a *ApeiroRuntime) spawn(mid string, watch bool) (string, chan *WatchEvent,
 
 type ProcessExternalState struct {
 	Pid     string      `json:"pid,omitempty"`
+	Mid     string      `json:"mid,omitempty"`
 	Val     interface{} `json:"val,omitempty"`
 	Waiting interface{} `json:"waiting,omitempty"`
 	Fin     bool        `json:"fin,omitempty"`
 }
 
 func (a *ApeiroRuntime) GetProcessValue(pid string) (*ProcessExternalState, error) {
-	row := a.db.QueryRow("SELECT result, awaiting FROM process WHERE pid = ?", strings.TrimPrefix(pid, "pid_"))
+	row := a.db.QueryRow("SELECT mid, result, awaiting FROM process WHERE pid = ?", strings.TrimPrefix(pid, "pid_"))
 	var resBytes []byte
 	var awaitingBytes []byte
+	var mid string
 
-	switch err := row.Scan(&resBytes, &awaitingBytes); err {
+	switch err := row.Scan(&mid, &resBytes, &awaitingBytes); err {
 	case sql.ErrNoRows:
 		return nil, fmt.Errorf("no process with pid %s", pid)
 	case nil:
@@ -237,6 +332,7 @@ func (a *ApeiroRuntime) GetProcessValue(pid string) (*ProcessExternalState, erro
 		json.Unmarshal(awaitingBytes, &awaiting)
 		return &ProcessExternalState{
 			Pid:     pid,
+			Mid:     "mid_" + mid,
 			Val:     res,
 			Waiting: awaiting,
 		}, nil

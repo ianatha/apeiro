@@ -121,7 +121,13 @@ class InternalPristineContext implements PristineContext {
 
   getFunction([namespace, fn]: [string, string]) {
     return (args) => {
-      return this.useUIInput(args);
+      if (fn === "inputUI" || fn === "inputRest") {
+        return this.useUIInput(args);
+      } else if (fn === "recv") {
+        return this.useUIInput(args);
+      } else {
+        throw new Error("unknown function " + fn);
+      }
     };
   }
 }

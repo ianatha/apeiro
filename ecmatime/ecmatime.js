@@ -391,10 +391,22 @@ var $apeiro = (() => {
   function serializeSuspension(e) {
     if (e instanceof SuspensionUntilInput) {
       return { until_input: e.serialize() };
+    }
+    if (e instanceof SuspensionUntilTime) {
+      return { until_time: e.serialize() };
     } else {
       return true;
     }
   }
+  var SuspensionUntilTime = class extends Suspension {
+    constructor(time) {
+      super();
+      this.time = time;
+    }
+    serialize() {
+      return this.time;
+    }
+  };
   var SuspensionUntilInput = class extends Suspension {
     constructor(schema) {
       super();
@@ -491,7 +503,13 @@ var $apeiro = (() => {
     }
     getFunction([namespace, fn]) {
       return (args) => {
-        return this.useUIInput(args);
+        if (fn === "inputUI" || fn === "inputRest") {
+          return this.useUIInput(args);
+        } else if (fn === "recv") {
+          return this.useUIInput(args);
+        } else {
+          throw new Error("unknown function " + fn);
+        }
       };
     }
   };
