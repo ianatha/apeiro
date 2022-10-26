@@ -246,7 +246,6 @@ function Body() {
       // IE 10-11 can't handle a DataView body.
       this._bodyInit = new Blob([this._bodyArrayBuffer])
     } else if (support.arrayBuffer && (ArrayBuffer.prototype.isPrototypeOf(body) || isArrayBufferView(body))) {
-      console.log("body is array buffer");
       this._bodyArrayBuffer = bufferClone(body)
     } else {
       this._bodyText = body = Object.prototype.toString.call(body)
@@ -283,7 +282,6 @@ function Body() {
   }
 
     this.arrayBuffer = function() {
-      console.log("request.arraybuffer called");
       if (this._bodyArrayBuffer) {
         var isConsumed = consumed(this)
         if (isConsumed) {
@@ -347,7 +345,6 @@ export function Request(input, options) {
   if (!(this instanceof Request)) {
     throw new TypeError('Please use the "new" operator, this DOM object constructor cannot be called as a function.')
   }
-  console.log("new Request", JSON.stringify({input, options}))
 
   options = options || {}
   var body = options.body
@@ -416,8 +413,6 @@ export function Request(input, options) {
   if (this._bodyInit && !this.body) {
     this.body = readArrayBufferAsText(options._bodyInit);
   }
-
-  console.log("Returning REQUEST " + JSON.stringify(this));
 }
 
 Request.prototype.clone = function() {

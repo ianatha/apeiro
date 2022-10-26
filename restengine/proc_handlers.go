@@ -117,7 +117,7 @@ func (api *ApeiroRestAPI) procSendHandler(c *gin.Context) {
 
 func (api *ApeiroRestAPI) procWatchHandler(c *gin.Context) {
 	pid := c.Param("pid")
-	events, err := api.a.Watch(pid)
+	events, err := api.a.Watch(c.Request.Context(), pid)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),

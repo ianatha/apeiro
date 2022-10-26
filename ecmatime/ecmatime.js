@@ -2413,12 +2413,14 @@ ${canonicalRequestDigest}`;
     return fn?.constructor?.name === "GeneratorFunction";
   }
   var InternalPristineContext = class {
-    constructor() {
+    constructor(_pid) {
+      this._pid = _pid;
       this._counter = 0;
       this._lastSuspension = void 0;
       this._frame = void 0;
       this.msgToSupply = void 0;
       this.promises = [];
+      console.log("new context " + _pid);
     }
     run_fn(fn) {
       try {
@@ -2457,9 +2459,9 @@ ${canonicalRequestDigest}`;
       } else {
         res = this.run_fn(fn);
       }
-      console.log("awaiting on all promises: " + this.promises.length);
+      console.log("Awaiting on queued promises: " + this.promises.length);
       await Promise.all(this.promises);
-      console.log("promises ok");
+      console.log("Promises resolved");
       return res;
     }
     call(fn, ...args) {
@@ -2499,15 +2501,18 @@ ${canonicalRequestDigest}`;
       this._frame?.log(msg);
     }
     getFunction([namespace, fn]) {
-      return (...args) => {
-        if (fn === "inputUI" || fn === "inputRest" || fn === "recvEmail") {
-          return this.useUIInput(args[0]);
+      console.log("in GetFunction " + JSON.stringify([namespace, fn]) + " my pid is " + this._pid);
+      const ctx = this;
+      return function(...args) {
+        if (fn === "inputUI" || fn === "inputRest") {
+          return ctx.useUIInput(args[0]);
+        } else if (fn == "recvEmail") {
+          return ctx.useUIInput(args[0]).mail;
         } else if (fn === "recv") {
-          return this.useUIInput(args[0]);
+          return ctx.useUIInput(args[0]);
         } else if (fn == "sendEmail") {
-          console.log("before sendEmail");
-          this.promises.push(sendEmail(args[0], args[1], args[2]));
-          console.log("after sendEmail promise push");
+          console.log("enqueueing email from " + ctx._pid);
+          ctx.promises.push(sendEmail(ctx._pid, args[0], args[1], args[2]));
           return { $ext: "sendEmail" };
         } else {
           throw new Error("unknown function " + fn);
@@ -2515,8 +2520,9 @@ ${canonicalRequestDigest}`;
       };
     }
   };
-  async function step(fn, serializedPreviousFrame, newMsg) {
-    const ctx = new InternalPristineContext();
+  async function step(pid, fn, serializedPreviousFrame, newMsg) {
+    console.log("stepping " + pid);
+    const ctx = new InternalPristineContext(pid);
     if (serializedPreviousFrame && serializedPreviousFrame != "") {
       const decoder = new Decoder();
       const previousFrame = decoder.decode(serializedPreviousFrame, fn);
@@ -2533,14 +2539,7 @@ ${canonicalRequestDigest}`;
       nextFrame.aw
     ];
   }
-  async function sendEmail(to, subject, body) {
-    console.log(JSON.stringify({
-      sendEmail: {
-        to,
-        subject,
-        body
-      }
-    }));
+  async function sendEmail(pid, to, subject, body) {
     const ses = new ApiFactory2({
       region: "us-east-1",
       credentials: {
@@ -2548,11 +2547,13 @@ ${canonicalRequestDigest}`;
         awsSecretKey: "***REMOVED***"
       }
     }).makeNew(SESV2);
-    const myip = await fetch("https://api.ipify.org?format=json");
-    const myipjson = await myip.json();
-    console.log(JSON.stringify(myipjson));
+    console.log(JSON.stringify({
+      func: "send_email",
+      pid,
+      subject
+    }));
     const res = await ses.sendEmail({
-      FromEmailAddress: "demo@test.apeiromont.com",
+      FromEmailAddress: pid + "@test.apeiromont.com",
       Content: {
         Simple: {
           Body: {
@@ -2569,7 +2570,6 @@ ${canonicalRequestDigest}`;
         ToAddresses: [to]
       }
     });
-    console.log(JSON.stringify({ res }));
     return res;
   }
   function importFunction(namespace, fn) {
@@ -2917,7 +2917,6 @@ ${canonicalRequestDigest}`;
         this._bodyArrayBuffer = bufferClone(body.buffer);
         this._bodyInit = new Blob([this._bodyArrayBuffer]);
       } else if (support.arrayBuffer && (ArrayBuffer.prototype.isPrototypeOf(body) || isArrayBufferView(body))) {
-        console.log("body is array buffer");
         this._bodyArrayBuffer = bufferClone(body);
       } else {
         this._bodyText = body = Object.prototype.toString.call(body);
@@ -2950,7 +2949,6 @@ ${canonicalRequestDigest}`;
       };
     }
     this.arrayBuffer = function() {
-      console.log("request.arraybuffer called");
       if (this._bodyArrayBuffer) {
         var isConsumed = consumed(this);
         if (isConsumed) {
@@ -3004,7 +3002,6 @@ ${canonicalRequestDigest}`;
     if (!(this instanceof Request2)) {
       throw new TypeError('Please use the "new" operator, this DOM object constructor cannot be called as a function.');
     }
-    console.log("new Request", JSON.stringify({ input, options }));
     options = options || {};
     var body = options.body;
     if (input instanceof Request2) {
@@ -3058,7 +3055,6 @@ ${canonicalRequestDigest}`;
     if (this._bodyInit && !this.body) {
       this.body = readArrayBufferAsText(options._bodyInit);
     }
-    console.log("Returning REQUEST " + JSON.stringify(this));
   }
   Request2.prototype.clone = function() {
     return new Request2(this, { body: this._bodyInit });

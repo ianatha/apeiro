@@ -28,7 +28,7 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH"},
-		AllowHeaders:     []string{"Origin", "Apeiro-Wait", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Apeiro-Wait", "Content-Type", "Accept"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		AllowOriginFunc: func(origin string) bool {
@@ -50,13 +50,15 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 	r.POST("/src", api.mountNewHandler)
 	r.GET("/src", api.mountListHandler)
 	r.GET("/src/:mid", api.mountGetHandler)
-	r.GET("/src/:mid", api.mountUpdateHandler)
+	r.PUT("/src/:mid", api.mountUpdateHandler)
 
 	r.POST("/proc", api.procNewHandler)
 	r.GET("/proc", api.procListHandler)
 	r.GET("/proc/:pid", api.procGetHandler)
 	r.POST("/proc/:pid", api.procSendHandler)
 	r.GET("/proc/:pid/watch", SSEHeadersMiddleware(), api.procWatchHandler)
+
+	r.POST("/ext/aws/ses", api.externalAWSSESHandler)
 
 	api.a = a
 	api.r = r

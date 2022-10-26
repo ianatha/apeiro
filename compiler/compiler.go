@@ -4,12 +4,12 @@ import (
 	"bytes"
 	_ "embed"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/k0kubun/pp"
 )
 
 const TEMPDIR_PATTERN = "apeiro_compiler"
@@ -66,38 +66,27 @@ func (t *externalTransformer) Close() error {
 	return os.RemoveAll(t.dir)
 }
 
-func denoBundle(input []byte) ([]byte, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	tmpfile, err := os.CreateTemp(wd, "*.js")
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(tmpfile.Name())
+// func bundle(input []byte) ([]byte, error) {
+// 	buildResult := api.Build(api.BuildOptions{
+// 		EntryPoints:       []string{"ENTRYPOINT"},
+// 		Format:            api.FormatIIFE,
+// 		Bundle:            true,
+// 		MinifyWhitespace:  false,
+// 		MinifyIdentifiers: false,
+// 		MinifySyntax:      false,
+// 		GlobalName:        ecmatime.OBJECT_NAME,
+// 		Plugins: []api.Plugin{
+// 			StaticEntryPointPlugin(input),
+// 			ModuleLoaderPlugin(),
+// 		},
+// 	})
 
-	_, err = tmpfile.Write(input)
-	if err != nil {
-		return nil, err
-	}
+// 	if buildResult.Errors != nil {
+// 		return nil, errors.New("while bundling: " + buildResult.Errors[0].Text)
+// 	}
 
-	err = tmpfile.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	denoBundleOutput, err := exec.Command("/usr/bin/env", "deno", "bundle", "--no-check", tmpfile.Name()).Output()
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("deno bundle failed: %s", exitError.Stderr)
-		} else {
-			return nil, fmt.Errorf("deno bundle failed: %w", err)
-		}
-	}
-
-	return denoBundleOutput, nil
-}
+// 	return buildResult.OutputFiles[0].Contents, nil
+// }
 
 type CompileOptions struct {
 	ApeiroCompilation bool
@@ -133,30 +122,26 @@ func CompileTypescriptWithFlags(input []byte, flags CompileOptions) ([]byte, err
 		secondStep = firstStep.Code
 	}
 
-	thirdStep, err := denoBundle(secondStep)
-	if err != nil {
-		return nil, fmt.Errorf("while bundling: %w", err)
+	finalResults := api.Build(api.BuildOptions{
+		// Loader:            api.LoaderTS,
+		EntryPoints:       []string{"ENTRYPOINT"},
+		Format:            api.FormatIIFE,
+		Bundle:            true,
+		MinifySyntax:      flags.Minify,
+		MinifyWhitespace:  flags.Minify,
+		MinifyIdentifiers: flags.Minify,
+		GlobalName:        flags.GlobalName,
+		Target:            api.ES2016,
+		Plugins: []api.Plugin{
+			StaticEntryPointPlugin(secondStep),
+			ModuleLoaderPlugin(),
+		},
+	})
+	if finalResults.Errors != nil {
+		pp.Print(finalResults.Errors)
+		return nil, errors.New("while converting js to IFFE: " + finalResults.Errors[0].Text)
 	}
-
-	var finalResult []byte
-	if flags.Minify {
-		finalResults := api.Transform(string(thirdStep), api.TransformOptions{
-			Loader:            api.LoaderTS,
-			Format:            api.FormatIIFE,
-			MinifySyntax:      false,
-			MinifyWhitespace:  false,
-			MinifyIdentifiers: false,
-			GlobalName:        flags.GlobalName,
-			Target:            api.ES2016,
-		})
-		if finalResults.Errors != nil {
-			fmt.Printf("%s\n", thirdStep)
-			return nil, errors.New("while converting js to IFFE: " + finalResults.Errors[0].Text)
-		}
-		finalResult = finalResults.Code
-	} else {
-		finalResult = thirdStep
-	}
+	finalResult := finalResults.OutputFiles[0].Contents
 
 	return finalResult, nil
 }

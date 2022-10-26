@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -281,6 +282,13 @@ func (a *ApeiroRuntime) MountUpdate(mid string, src *string, name *string) (stri
 		return "", err
 	}
 
+	for _, pid := range previousState.Procs {
+		_, err := a.run(pid, nil, false)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	return fmt.Sprintf("mid_%s", mid), nil
 }
 
@@ -299,7 +307,7 @@ func (a *ApeiroRuntime) Mount(src []byte, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("fn_%d", lastInsertId), nil
+	return fmt.Sprintf("src_%d", lastInsertId), nil
 }
 
 func (a *ApeiroRuntime) SpawnAndWatch(mid string) (string, chan *WatchEvent, error) {
@@ -312,20 +320,24 @@ func (a *ApeiroRuntime) Spawn(mid string) (string, error) {
 }
 
 func (a *ApeiroRuntime) Supply(pid string, msg string) error {
+	pid = strings.TrimPrefix(pid, "pid_")
+	log.Debug().Str("pid", pid).Str("msg", msg).Msg("Supplying")
 	_, err := a.run(pid, &msg, false)
 	return err
 }
 
 func (a *ApeiroRuntime) SupplyAndWatch(pid string, msg string) (chan *WatchEvent, error) {
+	pid = strings.TrimPrefix(pid, "pid_")
 	watcher, err := a.run(pid, &msg, true)
 	return watcher, err
 }
 
 func (a *ApeiroRuntime) run(pid string, msg *string, watch bool) (chan *WatchEvent, error) {
+	pid = strings.TrimPrefix(pid, "pid_")
 	var watcher chan *WatchEvent
 	if watch {
 		var err error
-		watcher, err = a.Watch(pid)
+		watcher, err = a.Watch(context.Background(), pid)
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +352,7 @@ func (a *ApeiroRuntime) run(pid string, msg *string, watch bool) (chan *WatchEve
 }
 
 func (a *ApeiroRuntime) spawn(mid string, watch bool) (string, chan *WatchEvent, error) {
-	mountId := strings.TrimPrefix(mid, "fn_")
+	mountId := strings.TrimPrefix(mid, "src_")
 	res, err := a.db.Exec("INSERT INTO process (mid) VALUES (?)", mountId)
 	if err != nil {
 		return "", nil, err
@@ -481,6 +493,9 @@ func (a *ApeiroRuntime) stepResultFromV8Value(jsStepResult *v8go.Value) *StepRes
 }
 
 func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string, newMsg string) error {
+	pid = strings.TrimPrefix(pid, "pid_")
+	pid = "pid_" + pid
+
 	iso := a.isolates.Get().(*v8go.Isolate)
 
 	ctx, _, err := a.newProcessContext(iso, pid, src)
@@ -511,7 +526,15 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			panic(err)
 		}
 
-		jsStepResult, err := apeiroStep.Call(v8go.Null(iso), function, jsPreviousFrame, jsNewMsg)
+		log.Debug().Str("pid", pid).Msg("running step")
+		jsPid, err := v8go.NewValue(iso, pid)
+		if err != nil {
+			log.Debug().Str("pid", pid).Msg("coudln't create pid value in JS")
+			apeiroRunErrorChan <- err.(*v8go.JSError)
+			return
+		}
+
+		jsStepResult, err := apeiroStep.Call(v8go.Null(iso), jsPid, function, jsPreviousFrame, jsNewMsg)
 		if err != nil {
 			apeiroRunErrorChan <- err.(*v8go.JSError)
 			return
@@ -523,33 +546,24 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			return
 		}
 
-		fmt.Printf("goland awaiting on promise\n")
+		log.Debug().Str("pid", pid).Msg("waiting for step result promise")
 		jsStepResultPromise.Then(func(info *v8go.FunctionCallbackInfo) *v8go.Value {
-			fmt.Printf("inside step result promise\n")
+			log.Debug().Str("pid", pid).Msg("step promise, succeeded")
 			apeiroRunResultChan <- a.stepResultFromV8Value(info.Args()[0])
 			return v8go.Undefined(info.Context().Isolate())
 		}, func(info *v8go.FunctionCallbackInfo) *v8go.Value {
-			fmt.Printf("step result promise rejected\n")
 			e := info.Args()[0]
 			es, _ := e.Object().MethodCall("toString")
 			stack, _ := e.Object().Get("stack")
 
-			fmt.Printf("%s %s\n", string(es.String()), string(stack.String()))
+			log.Debug().Str("pid", pid).Str("errorToString", es.String()).Str("errorStack", stack.String()).Msg("step promise, rejected")
+
 			return v8go.Undefined(info.Context().Isolate())
 		})
 
 		ctx.PerformMicrotaskCheckpoint()
+		log.Debug().Str("pid", pid).Msg("PerformMicrotaskCheckpoint")
 		fmt.Printf("goland done with microtask checkpoint\n")
-		ctx.PerformMicrotaskCheckpoint()
-		fmt.Printf("goland done with microtask checkpoint\n")
-		ctx.PerformMicrotaskCheckpoint()
-		fmt.Printf("goland done with microtask checkpoint\n")
-		// if err != nil {
-		// 	apeiroRunErrorChan <- err.(*v8go.JSError)
-		// 	return
-		// }
-
-		// _, _ := jsStepResult.MarshalJSON()
 	}()
 
 	// TODO: add timer

@@ -37,7 +37,6 @@ func (api *ApeiroRestAPI) mountNewHandler(c *gin.Context) {
 }
 
 type MountUpdateReq struct {
-	Mid  string  `json:"mid" xml:"mid"  binding:"required"`
 	Src  *string `json:"src" xml:"src"`
 	Name *string `json:"name" xml:"name"`
 }
@@ -49,7 +48,7 @@ func (api *ApeiroRestAPI) mountUpdateHandler(c *gin.Context) {
 		return
 	}
 
-	mid, err := api.a.MountUpdate(req.Mid, req.Src, req.Name)
+	mid, err := api.a.MountUpdate(c.Param("mid"), req.Src, req.Name)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),

@@ -98,10 +98,10 @@ func TestSpawn(t *testing.T) {
 	})
 
 	responseData, _ := io.ReadAll(w.Body)
-	assert.Equal(t, `{"mid":"fn_1"}`, string(responseData))
+	assert.Equal(t, `{"mid":"src_1"}`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	w = r.testReq("POST", "/proc", []byte(`{"mid":"fn_1"}`))
+	w = r.testReq("POST", "/proc", []byte(`{"mid":"src_1"}`))
 	responseData, _ = io.ReadAll(w.Body)
 	assert.Equal(t, `{"pid":"pid_1"}`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -126,15 +126,15 @@ func TestSpawnAndWait(t *testing.T) {
 		Name: "hello_world_wait",
 	})
 	responseData, _ := io.ReadAll(w.Body)
-	assert.Equal(t, `{"mid":"fn_1"}`, string(responseData))
+	assert.Equal(t, `{"mid":"src_1"}`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	w = r.testReqWait("POST", "/proc", []byte(`{"mid":"fn_1"}`), true)
+	w = r.testReqWait("POST", "/proc", []byte(`{"mid":"src_1"}`), true)
 	responseData, _ = io.ReadAll(w.Body)
 	assert.Equal(t, `{"pid":"pid_1","mid":"mid_1","val":"Hello, world!"}`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	w = r.testReq("GET", "/proc/pid_1", []byte(`{"mid":"fn_1"}`))
+	w = r.testReq("GET", "/proc/pid_1", []byte(`{"mid":"src_1"}`))
 	responseData, _ = io.ReadAll(w.Body)
 	assert.Equal(t, `{"pid":"pid_1","mid":"mid_1","val":"Hello, world!"}`, string(responseData))
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -161,10 +161,10 @@ export default function sum() {
 	})
 
 	responseData, _ := io.ReadAll(w.Body)
-	require.Equal(t, `{"mid":"fn_1"}`, string(responseData))
+	require.Equal(t, `{"mid":"src_1"}`, string(responseData))
 	require.Equal(t, http.StatusOK, w.Code)
 
-	w = r.testReqWait("POST", "/proc", []byte(`{"mid":"fn_1"}`), true)
+	w = r.testReqWait("POST", "/proc", []byte(`{"mid":"src_1"}`), true)
 
 	const waitingSchema1 = `{"until_input":{"$ref":"#/definitions/$","$schema":"http://json-schema.org/draft-07/schema#","definitions":{"$":{"additionalProperties":false,"properties":{"val1":{"type":"number"}},"required":["val1"],"type":"object"}}}}`
 	const waitingSchema2 = `{"until_input":{"$ref":"#/definitions/$","$schema":"http://json-schema.org/draft-07/schema#","definitions":{"$":{"additionalProperties":false,"properties":{"val2":{"type":"number"}},"required":["val2"],"type":"object"}}}}`
@@ -216,10 +216,10 @@ export default function sum() {
 // 	r.ServeHTTP(w, req)
 
 // 	responseData, _ := io.ReadAll(w.Body)
-// 	require.Equal(t, `{"mid":"fn_1"}`, string(responseData))
+// 	require.Equal(t, `{"mid":"src_1"}`, string(responseData))
 // 	require.Equal(t, http.StatusOK, w.Code)
 
-// 	req, _ = http.NewRequest("POST", "/spawn", bytes.NewBuffer([]byte(`{"mid":"fn_1"}`)))
+// 	req, _ = http.NewRequest("POST", "/spawn", bytes.NewBuffer([]byte(`{"mid":"src_1"}`)))
 // 	req.Header.Set("Apeiro-Wait", "true")
 // 	w = httptest.NewRecorder()
 // 	r.ServeHTTP(w, req)

@@ -27,6 +27,8 @@ function isGenerator(fn) {
   return fn?.constructor?.name === "GeneratorFunction";
 }
 
+var pid: string = "workspace";
+
 class InternalPristineContext implements PristineContext {
   private _counter: number = 0;
   private readonly _lastSuspension?: Record<string, any> = undefined;
@@ -76,9 +78,9 @@ class InternalPristineContext implements PristineContext {
       res = this.run_fn(fn);
     }
 
-    console.log("awaiting on all promises: " + this.promises.length);
+    console.log("Awaiting on queued promises: " + this.promises.length);
     await Promise.all(this.promises);
-    console.log("promises ok");
+    console.log("Promises resolved");
 
     return res;
   }
@@ -125,23 +127,25 @@ class InternalPristineContext implements PristineContext {
     this._frame?.log(msg);
   }
 
-  constructor() {
+  constructor(public readonly _pid: string) {
+    console.log("new context " + _pid);
   }
 
   promises: Promise<any>[] = [];
 
   getFunction([namespace, fn]: [string, string]) {
-    return (...args: any[]) => {
+    console.log("in GetFunction " + JSON.stringify([namespace, fn]) + " my pid is " + this._pid);
+    const ctx = this;
+    return function (...args: any[]) {
       if (fn === "inputUI" || fn === "inputRest") {
-        return this.useUIInput(args[0]);
+        return ctx.useUIInput(args[0]);
       } else if (fn == "recvEmail") {
-        return this.useUIInput(args[0]).mail;
+        return ctx.useUIInput(args[0]).mail;
       } else if (fn === "recv") {
-        return this.useUIInput(args[0]);
+        return ctx.useUIInput(args[0]);
       } else if (fn == "sendEmail") {
-        console.log("before sendEmail");
-        this.promises.push(sendEmail(args[0], args[1], args[2]));
-        console.log("after sendEmail promise push");
+        console.log("enqueueing email from " + ctx._pid);
+        ctx.promises.push(sendEmail(ctx._pid, args[0], args[1], args[2]));
         return { $ext: "sendEmail" };
       } else {
         throw new Error("unknown function " + fn);
@@ -160,11 +164,13 @@ export type StepResult = [
 ];
 
 export async function step(
+  pid: string,
   fn: any,
   serializedPreviousFrame?: string,
   newMsg?: string,
 ): Promise<StepResult> {
-  const ctx = new InternalPristineContext();
+  console.log("stepping " + pid)
+  const ctx = new InternalPristineContext(pid);
   if (serializedPreviousFrame && serializedPreviousFrame != "") {
     const decoder = new Decoder();
     const previousFrame = decoder.decode(serializedPreviousFrame, fn);
@@ -185,14 +191,7 @@ export async function step(
 }
 
 
-export async function sendEmail(to: string, subject: string, body: string) {
-  console.log(JSON.stringify({
-    sendEmail: {
-      to,
-      subject,
-      body
-    }
-  }))
+export async function sendEmail(pid: string, to: string, subject: string, body: string) {
   const ses = new ApiFactory({
     region: 'us-east-1',
     credentials: {
@@ -200,13 +199,15 @@ export async function sendEmail(to: string, subject: string, body: string) {
       awsSecretKey: "***REMOVED***",
     },
   }).makeNew(SESV2);
-  
-  const myip = await fetch("https://api.ipify.org?format=json");
-  const myipjson = await myip.json();
-  console.log(JSON.stringify(myipjson));
+
+  console.log(JSON.stringify({
+    func: "send_email",
+    pid,
+    subject,
+  }));
   
   const res = await ses.sendEmail({
-    FromEmailAddress: "demo@test.apeiromont.com",
+    FromEmailAddress: pid + "@test.apeiromont.com",
     Content: {
       Simple: {
         Body: {
@@ -223,7 +224,6 @@ export async function sendEmail(to: string, subject: string, body: string) {
       ToAddresses: [to],
     }
   });
-  console.log(JSON.stringify({ res }))
   return res;
 }
 

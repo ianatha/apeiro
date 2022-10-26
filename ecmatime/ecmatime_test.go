@@ -66,7 +66,26 @@ func TestEcmatimeExports(t *testing.T) {
 	if err != nil {
 		t.Error(JSErrorString(err))
 	}
-	assert.Equal(t, []string{"__esModule", "Decoder", "Encoder", "importFunction", "step"}, apeiroModule.GetOwnPropertyNames())
+	assert.Equal(t, []string{
+		"__esModule",
+		"Decoder",
+		"Encoder",
+		"Headers",
+		"Request",
+		"Response",
+		"flattenHeadersList",
+		"flattenHeadersObject",
+		"headersToList",
+		"headersToObject",
+		"headersToString",
+		"importFunction",
+		"listToHeaders",
+		"objectToHeaders",
+		"reduceHeadersObject",
+		"sendEmail",
+		"step",
+		"stringToHeaders",
+	}, apeiroModule.GetOwnPropertyNames())
 
 	ctx.Close()
 	ctx.Isolate().Dispose()
