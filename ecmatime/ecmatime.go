@@ -53,6 +53,15 @@ func NewEcmatimeWithOptionalEcmatime(iso *v8go.Isolate, pid string, includeEcmat
 		if err != nil {
 			panic(err)
 		}
+		_, err = ctx.RunScript("Headers = $apeiro.Headers", "<ecmatime>")
+		if err != nil {
+			panic(err)
+		}
+		_, err = ctx.RunScript("Request = $apeiro.Request", "<ecmatime>")
+		if err != nil {
+			panic(err)
+		}
+
 	}
 
 	return ctx

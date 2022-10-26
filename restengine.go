@@ -240,7 +240,7 @@ func NewApeiroRestAPI(a *ApeiroRuntime) *ApeiroRestAPI {
 		})
 	})
 
-	r.GET("/", func(c *gin.Context) {
+	r.GET("/_dashboard", func(c *gin.Context) {
 		c.JSON(http.StatusOK, a.GetOverview())
 	})
 

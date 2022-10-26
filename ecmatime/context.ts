@@ -7,6 +7,8 @@ import {
   Suspension,
   SuspensionUntilInput,
 } from "./suspension.ts";
+import { SESV2 } from "https://aws-api.deno.dev/v0.3/services/sesv2.ts?actions=SendEmail&docs=";
+import { ApiFactory } from "https://deno.land/x/aws_api@v0.6.0/client/mod.ts";
 
 export interface PristineContext {
   useUIInput<T>(schema: any): T;
@@ -66,12 +68,19 @@ class InternalPristineContext implements PristineContext {
     return this._frame;
   }
 
-  run(fn: any): PristineFrame {
+  async run(fn: any): Promise<PristineFrame> {
+    let res;
     if (isGenerator(fn)) {
-      return this.run_generator(fn);
+      res = this.run_generator(fn);
     } else {
-      return this.run_fn(fn);
+      res = this.run_fn(fn);
     }
+
+    console.log("awaiting on all promises: " + this.promises.length);
+    await Promise.all(this.promises);
+    console.log("promises ok");
+
+    return res;
   }
 
   call(fn: any, ...args: any[]): any {
@@ -119,12 +128,19 @@ class InternalPristineContext implements PristineContext {
   constructor() {
   }
 
+  promises: Promise<any>[] = [];
+
   getFunction([namespace, fn]: [string, string]) {
-    return (args) => {
-      if (fn === "inputUI" || fn === "inputRest") {
-        return this.useUIInput(args);
+    return (...args: any[]) => {
+      if (fn === "inputUI" || fn === "inputRest" || fn === "recvEmail") {
+        return this.useUIInput(args[0]);
       } else if (fn === "recv") {
-        return this.useUIInput(args);
+        return this.useUIInput(args[0]);
+      } else if (fn == "sendEmail") {
+        console.log("before sendEmail");
+        this.promises.push(sendEmail(args[0], args[1], args[2]));
+        console.log("after sendEmail promise push");
+        return { $ext: "sendEmail" };
       } else {
         throw new Error("unknown function " + fn);
       }
@@ -141,11 +157,11 @@ export type StepResult = [
   Record<string, any>,
 ];
 
-export function step(
+export async function step(
   fn: any,
   serializedPreviousFrame?: string,
   newMsg?: string,
-): StepResult {
+): Promise<StepResult> {
   const ctx = new InternalPristineContext();
   if (serializedPreviousFrame && serializedPreviousFrame != "") {
     const decoder = new Decoder();
@@ -156,7 +172,7 @@ export function step(
     ctx.supply(JSON.parse(newMsg));
   }
 
-  const nextFrame = ctx.run(fn);
+  const nextFrame = await ctx.run(fn);
 
   const encoder = new Encoder();
   return [
@@ -164,6 +180,49 @@ export function step(
     nextFrame.res,
     nextFrame.aw,
   ];
+}
+
+
+export async function sendEmail(to: string, subject: string, body: string) {
+  console.log(JSON.stringify({
+    sendEmail: {
+      to,
+      subject,
+      body
+    }
+  }))
+  const ses = new ApiFactory({
+    region: 'us-east-1',
+    credentials: {
+      awsAccessKeyId: "***REMOVED***",
+      awsSecretKey: "***REMOVED***",
+    },
+  }).makeNew(SESV2);
+  
+  const myip = await fetch("https://api.ipify.org?format=json");
+  const myipjson = await myip.json();
+  console.log(JSON.stringify(myipjson));
+  
+  const res = await ses.sendEmail({
+    FromEmailAddress: "demo@test.apeiromont.com",
+    Content: {
+      Simple: {
+        Body: {
+          Text: {
+            Data: body,
+          },
+        },
+        Subject: {
+          Data: subject,
+        },
+      },
+    },
+    Destination: {
+      ToAddresses: [to],
+    }
+  });
+  console.log(JSON.stringify({ res }))
+  return res;
 }
 
 export function importFunction(

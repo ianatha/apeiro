@@ -39,4 +39,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
+replace go.kuoruan.net/v8go-polyfills v0.5.0 => ../v8go-polyfills
+
 replace rogchap.com/v8go v0.7.0 => github.com/ianatha/v8go v0.0.0-20221023183758-2e9fa851a5b2

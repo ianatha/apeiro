@@ -193,13 +193,15 @@ func (a *ApeiroRuntime) Mounts() ([]MountListEntry, error) {
 }
 
 type MountOverview struct {
-	Mid   string   `json:"mid,omitempty"`
-	Src   string   `json:"src,omitempty"`
-	Procs []string `json:"procs,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	Mid    string   `json:"mid,omitempty"`
+	Src    string   `json:"src,omitempty"`
+	Procs  []string `json:"procs,omitempty"`
+	RunSrc string   `json:"src_run,omitempty"`
 }
 
 func (a *ApeiroRuntime) GetMountOverview(mid string) (*MountOverview, error) {
-	row, err := a.db.Query("SELECT mount.mid, original_src, process.pid FROM mount LEFT JOIN process ON process.mid = mount.mid WHERE mount.mid = ?", strings.TrimPrefix(mid, "mid_"))
+	row, err := a.db.Query("SELECT mount.name, mount.mid, original_src, process.pid, mount.src FROM mount LEFT JOIN process ON process.mid = mount.mid WHERE mount.mid = ?", strings.TrimPrefix(mid, "mid_"))
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +209,7 @@ func (a *ApeiroRuntime) GetMountOverview(mid string) (*MountOverview, error) {
 	var r MountOverview
 	for row.Next() {
 		var pid *string
-		err = row.Scan(&r.Mid, &r.Src, &pid)
+		err = row.Scan(&r.Name, &r.Mid, &r.Src, &pid, &r.RunSrc)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +391,7 @@ type StepResult struct {
 	awaiting []byte
 }
 
-func stepResultFromV8Value(jsStepResult *v8go.Value) *StepResult {
+func (a *ApeiroRuntime) stepResultFromV8Value(jsStepResult *v8go.Value) *StepResult {
 	stepResult, err := jsStepResult.AsObject()
 	if err != nil {
 		panic(err)
@@ -435,13 +437,11 @@ func stepResultFromV8Value(jsStepResult *v8go.Value) *StepResult {
 
 func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string, newMsg string) error {
 	iso := a.isolates.Get().(*v8go.Isolate)
-	defer a.isolates.Put(iso)
 
 	ctx, _, err := a.newProcessContext(iso, pid, src)
 	if err != nil {
 		return fmt.Errorf("couldn't create process context: %v", err)
 	}
-	defer ctx.Close()
 
 	global := ctx.Global()
 	function, err := getModuleFunction(global, "$fn", "default")
@@ -472,8 +472,39 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			return
 		}
 
+		jsStepResultPromise, err := jsStepResult.AsPromise()
+		if err != nil {
+			apeiroRunErrorChan <- err.(*v8go.JSError)
+			return
+		}
+
+		fmt.Printf("goland awaiting on promise\n")
+		jsStepResultPromise.Then(func(info *v8go.FunctionCallbackInfo) *v8go.Value {
+			fmt.Printf("inside step result promise\n")
+			apeiroRunResultChan <- a.stepResultFromV8Value(info.Args()[0])
+			return v8go.Undefined(info.Context().Isolate())
+		}, func(info *v8go.FunctionCallbackInfo) *v8go.Value {
+			fmt.Printf("step result promise rejected\n")
+			e := info.Args()[0]
+			es, _ := e.Object().MethodCall("toString")
+			stack, _ := e.Object().Get("stack")
+
+			fmt.Printf("%s %s\n", string(es.String()), string(stack.String()))
+			return v8go.Undefined(info.Context().Isolate())
+		})
+
+		ctx.PerformMicrotaskCheckpoint()
+		fmt.Printf("goland done with microtask checkpoint\n")
+		ctx.PerformMicrotaskCheckpoint()
+		fmt.Printf("goland done with microtask checkpoint\n")
+		ctx.PerformMicrotaskCheckpoint()
+		fmt.Printf("goland done with microtask checkpoint\n")
+		// if err != nil {
+		// 	apeiroRunErrorChan <- err.(*v8go.JSError)
+		// 	return
+		// }
+
 		// _, _ := jsStepResult.MarshalJSON()
-		apeiroRunResultChan <- stepResultFromV8Value(jsStepResult)
 	}()
 
 	// TODO: add timer
@@ -487,6 +518,11 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 				Str("loc", err.Location).
 				Str("trace", err.StackTrace).
 				Msg("error in apeiro step")
+
+			fmt.Printf("closing isolate\n")
+			ctx.Close()
+			a.isolates.Put(iso)
+
 			// fmt.Printf("error: %v\n", err)
 			// fmt.Printf("error: %v\n", err.Location)
 			// fmt.Printf("error: %v\n", err.StackTrace)
@@ -514,6 +550,12 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 			if rowsAffected != 1 {
 				return fmt.Errorf("updated %d rows while setting %s's result", rowsAffected, pid)
 			}
+
+			fmt.Printf("closing isolate\n")
+
+			ctx.Close()
+			a.isolates.Put(iso)
+
 			return nil
 
 			// if err == nil {
