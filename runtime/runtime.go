@@ -223,23 +223,29 @@ func (a *ApeiroRuntime) GetMountOverview(mid string) (*MountOverview, error) {
 	return &r, nil
 }
 
-func (a *ApeiroRuntime) Processes() ([]string, error) {
-	rows, err := a.db.Query("SELECT pid FROM process")
+type ProcessStatus struct {
+	Pid     string `json:"pid,omitempty"`
+	Mid     string `json:"mid,omitempty"`
+	MidName string `json:"mid_name,omitempty"`
+}
+
+func (a *ApeiroRuntime) Processes() (*[]ProcessStatus, error) {
+	rows, err := a.db.Query("SELECT pid, mount.mid, mount.name FROM process RIGHT JOIN mount ON process.mid = mount.mid")
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	result := []string{}
+	result := []ProcessStatus{}
 	for rows.Next() {
-		var r string
-		err = rows.Scan(&r)
+		var r ProcessStatus
+		err = rows.Scan(&r.Pid, &r.Mid, &r.MidName)
 		if err != nil {
-			return []string{}, err
+			return nil, err
 		}
 		result = append(result, r)
 	}
-	return result, nil
+	return &result, nil
 }
 
 func (a *ApeiroRuntime) MountUpdate(mid string, src *string, name *string) (string, error) {
