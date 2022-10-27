@@ -9,6 +9,8 @@ import {
 } from "./suspension.ts";
 import { SESV2 } from "https://aws-api.deno.dev/v0.3/services/sesv2.ts?actions=SendEmail&docs=";
 import { ApiFactory } from "https://deno.land/x/aws_api@v0.6.0/client/mod.ts";
+import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
+import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
 
 export interface PristineContext {
   useUIInput<T>(schema: any): T;
@@ -136,6 +138,52 @@ class InternalPristineContext implements PristineContext {
   getFunction([namespace, fn]: [string, string]) {
     console.log("in GetFunction " + JSON.stringify([namespace, fn]) + " my pid is " + this._pid);
     const ctx = this;
+
+    if (namespace == "$.io" && fn === "number") {
+      return z.number;
+    }
+
+    if (namespace == "$.io" && fn === "string") {
+      return z.string;
+    }
+
+    if (namespace == "$.io" && fn === "boolean") {
+      return (desc) => {
+        return z.boolean().describe(desc);
+      }
+    }
+  
+    if (fn === "io") {
+      const obj = {
+        ...z,
+        number(...args) {
+          return {
+            ...z.number(...args),
+            $from_apeiro_ctx: ["$.io", "number"],
+          }
+        },
+        boolean({ desc }) {
+          return {
+            ...z.boolean().describe(desc),
+            $from_apeiro_ctx: ["$.io", "boolean"],
+          }
+        },
+        string(...args) {
+          return {
+            ...z.string(...args),
+            $from_apeiro_ctx: ["$.io", "string"],
+          }
+        },
+        input(arg: any) {
+          return ctx.useUIInput(zodToJsonSchema(
+            z.object(arg), "$"
+          ),);
+        },
+        $from_apeiro_ctx: ["$", "io"],
+      }
+      return obj;
+    }
+
     return function (...args: any[]) {
       if (fn === "inputUI" || fn === "inputRest") {
         return ctx.useUIInput(args[0]);

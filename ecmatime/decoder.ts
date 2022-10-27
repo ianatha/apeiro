@@ -114,6 +114,8 @@ export class Decoder {
       return v.value;
     } else if (v.type === "boolean") {
       return v.value;
+    } else if (v.type == "object_from_ctx") {
+      return this.ctx.getFunction(v.value);
     } else if (v.type === "object") {
       return this.decodeObject(v);
     } else if (v.type === "function") {

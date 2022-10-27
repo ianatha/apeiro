@@ -41,8 +41,12 @@ export class Encoder {
 
   private assignTag(v: any): boolean {
     if (v[TAG] === undefined) {
-      v[TAG] = this.id;
-      this.id++;
+      try {
+        v[TAG] = this.id;
+        this.id++;
+      } catch (e) {
+        console.log("failed tagging ", JSON.stringify(v));
+      }
       return true;
     } else {
       return false;
@@ -50,6 +54,13 @@ export class Encoder {
   }
 
   private encodeObject(v: Record<string | symbol, any>, debug: string) {
+    if (v.$from_apeiro_ctx) {
+      return {
+        type: "object_from_ctx",
+        value: v.$from_apeiro_ctx,
+      }
+    }
+
     this.assignTag(v);
 
     const value: Record<string, any> = {};
