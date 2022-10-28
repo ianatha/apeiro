@@ -221,7 +221,7 @@ export async function step(
   const ctx = new InternalPristineContext(pid);
   if (serializedPreviousFrame && serializedPreviousFrame != "") {
     const decoder = new Decoder();
-    const previousFrame = decoder.decode(serializedPreviousFrame, fn);
+    const previousFrame = decoder.decode(serializedPreviousFrame, ctx);
     ctx.loadFrame(previousFrame);
   }
   if (newMsg && newMsg != "") {

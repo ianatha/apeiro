@@ -7319,7 +7319,6 @@ ${canonicalRequestDigest}`;
       return res;
     }
     call(fn, ...args) {
-      console.log("Attempting to call fn " + typeof fn);
       if (fn.$apeiro_func) {
         return fn(this, ...args);
       } else {
@@ -7422,7 +7421,7 @@ ${canonicalRequestDigest}`;
     const ctx = new InternalPristineContext(pid);
     if (serializedPreviousFrame && serializedPreviousFrame != "") {
       const decoder = new Decoder();
-      const previousFrame = decoder.decode(serializedPreviousFrame, fn);
+      const previousFrame = decoder.decode(serializedPreviousFrame, ctx);
       ctx.loadFrame(previousFrame);
     }
     if (newMsg && newMsg != "") {

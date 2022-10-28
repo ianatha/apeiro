@@ -150,6 +150,6 @@ func CompileTypescript(input []byte) ([]byte, error) {
 	return CompileTypescriptWithFlags(input, CompileOptions{
 		ApeiroCompilation: true,
 		GlobalName:        "$fn",
-		Minify:            true,
+		Minify:            false,
 	})
 }
