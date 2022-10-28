@@ -7419,11 +7419,10 @@ ${canonicalRequestDigest}`;
   };
   async function step(pid, fn, serializedPreviousFrame, newMsg) {
     console.log("stepping " + pid);
-    console.log(fn.toString());
     const ctx = new InternalPristineContext(pid);
     if (serializedPreviousFrame && serializedPreviousFrame != "") {
       const decoder = new Decoder();
-      const previousFrame = decoder.decode(serializedPreviousFrame, ctx);
+      const previousFrame = decoder.decode(serializedPreviousFrame, fn);
       ctx.loadFrame(previousFrame);
     }
     if (newMsg && newMsg != "") {

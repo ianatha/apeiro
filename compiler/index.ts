@@ -177,11 +177,11 @@ function rewriteBindingsToFrameState(
 
 const importDeclarationVisitor = {
   ImportDeclaration(path: NodePath<ImportDeclaration>) {
-    if (path.node.source.value.indexOf("pristine://") != 0) {
+    if (path.node.source.value.indexOf("apeiro://") != 0) {
       return;
     }
     
-    const [ _, pristinePath ] = path.node.source.value.split("pristine://");
+    const [ _, pristinePath ] = path.node.source.value.split("apeiro://");
     path.replaceWithMultiple(
       path.node.specifiers.map((specifier) => {
         const binding = path.scope.getBinding(specifier.local.name);

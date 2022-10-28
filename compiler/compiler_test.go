@@ -62,7 +62,7 @@ simple.$apeiro_func = true;`, result)
 }
 
 func TestApeiroMultipleFunctions(t *testing.T) {
-	result, err := ApeiroTransform(`import { input } from "pristine://$";
+	result, err := ApeiroTransform(`import { input } from "apeiro://$";
 function number() {
   return 100;
 }
@@ -150,7 +150,7 @@ func TestCompileTypescript(t *testing.T) {
 }
 
 func TestCompileImport(t *testing.T) {
-	output, err := ApeiroTransform(`import { receive } from "pristine://$";
+	output, err := ApeiroTransform(`import { receive } from "apeiro://$";
 
 export default function simple(a, b) {
 	let c = a + b;
@@ -189,7 +189,7 @@ simple.$apeiro_func = true;`, strings.TrimSpace(string(output)))
 }
 
 func TestCompileYield(t *testing.T) {
-	output, err := ApeiroTransform(`import { inputRest } from "pristine://$";
+	output, err := ApeiroTransform(`import { inputRest } from "apeiro://$";
 
 export default function *email_responder() {
 	let last_email = {};

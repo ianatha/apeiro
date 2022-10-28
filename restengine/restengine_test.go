@@ -144,7 +144,7 @@ func TestSpawnAndSupplySimpleFunction(t *testing.T) {
 	script := strings.TrimSpace(`
 import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
 import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
-import { inputRest } from "pristine://$"
+import { inputRest } from "apeiro://$"
 
 export default function sum() {
 	const x = inputRest(zodToJsonSchema(z.object({ val1: z.number() }), "$"));
@@ -196,7 +196,7 @@ export default function sum() {
 // 	script := strings.TrimSpace(`
 // import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
 // import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
-// import { inputRest } from "pristine://$"
+// import { inputRest } from "apeiro://$"
 
 // export default function *hello() {
 // 	let sum = 0;
