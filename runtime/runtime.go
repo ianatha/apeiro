@@ -92,7 +92,7 @@ func nullString(s *string) string {
 	}
 }
 
-func (a *ApeiroRuntime) execute(pid string, msg *string) error {
+func (a *ApeiroRuntime) execute(pid string, msg *string) {
 	row := a.db.QueryRow("SELECT mount.src, process.frame FROM mount RIGHT JOIN process ON process.mid = mount.mid WHERE process.pid = ?", strings.TrimPrefix(pid, "pid_"))
 
 	var src string
@@ -102,23 +102,24 @@ func (a *ApeiroRuntime) execute(pid string, msg *string) error {
 
 	switch err := row.Scan(&src, &previousFrame); err {
 	case sql.ErrNoRows:
-		return fmt.Errorf("no process with pid %s", pid)
+		log.Error().Str("pid", pid).Msg("no process with pid")
+		return
 	case nil:
 		// fmt.Printf("executing %s\n", id)
 		err := a.stepProcess(pid, src, nullString(previousFrame), nullString(msg))
 		if err != nil {
-			a.triggerWatchers(pid)
+			a.triggerWatchersError(pid, err)
 			// fmt.Printf("error %s\n", id)
 			log.Error().Str("pid", pid).Msgf("error %v", err)
-			return err
+			return
 		}
 		// fmt.Printf("success %s\n", id)
-		a.triggerWatchers(pid)
+		a.triggerWatchersSuccess(pid)
 	default:
 		panic(err)
 	}
 
-	return nil
+	return
 }
 
 func initializeDatabase(db *sql.DB) error {
@@ -202,7 +203,7 @@ type MountOverview struct {
 }
 
 func (a *ApeiroRuntime) GetMountOverview(mid string) (*MountOverview, error) {
-	mid = strings.TrimPrefix(mid, "mid_")
+	mid = strings.TrimPrefix(strings.TrimPrefix(mid, "mid_"), "src_")
 
 	row, err := a.db.Query("SELECT mount.name, mount.mid, original_src, process.pid, mount.src FROM mount LEFT JOIN process ON process.mid = mount.mid WHERE mount.mid = ?", mid)
 	if err != nil {
@@ -498,7 +499,20 @@ func (a *ApeiroRuntime) stepResultFromV8Value(jsStepResult *v8go.Value) *StepRes
 	}
 }
 
-func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string, newMsg string) error {
+type ApeiroStepError struct {
+	Message           string
+	Location          string
+	StackTrace        string
+	LastFetchReq      string
+	LastFetchRespJson string
+}
+
+func apeiroerror(format string, a ...any) *ApeiroStepError {
+	return &ApeiroStepError{
+		Message: fmt.Sprintf(format, a...),
+	}
+}
+func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string, newMsg string) *ApeiroStepError {
 	pid = strings.TrimPrefix(pid, "pid_")
 	pid = "pid_" + pid
 
@@ -506,21 +520,21 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 
 	ctx, _, err := a.newProcessContext(iso, pid, src)
 	if err != nil {
-		return fmt.Errorf("couldn't create process context: %v", err)
+		return apeiroerror("couldn't create process context: %v", err)
 	}
 
 	global := ctx.Global()
 	function, err := getModuleFunction(global, "$fn", "default")
 	if err != nil {
-		return fmt.Errorf("couldn't find $fn.default: %v", err)
+		return apeiroerror("couldn't find $fn.default: %v", err)
 	}
 	apeiroStep, err := getModuleFunction(global, ecmatime.OBJECT_NAME, "step")
 	if err != nil {
-		return fmt.Errorf("couldn't find $apeiro.step: %v", err)
+		return apeiroerror("couldn't find $apeiro.step: %v", err)
 	}
 
 	apeiroRunResultChan := make(chan *StepResult, 1)
-	apeiroRunErrorChan := make(chan *v8go.JSError, 1)
+	apeiroRunErrorChan := make(chan *ApeiroStepError, 1)
 
 	go func() {
 		jsPreviousFrame, err := v8go.NewValue(iso, previousFrame)
@@ -536,19 +550,25 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 		jsPid, err := v8go.NewValue(iso, pid)
 		if err != nil {
 			log.Debug().Str("pid", pid).Msg("coudln't create pid value in JS")
-			apeiroRunErrorChan <- err.(*v8go.JSError)
+			apeiroRunErrorChan <- &ApeiroStepError{
+				Message: "could not create PID value in JS",
+			}
 			return
 		}
 
 		jsStepResult, err := apeiroStep.Call(v8go.Null(iso), jsPid, function, jsPreviousFrame, jsNewMsg)
 		if err != nil {
-			apeiroRunErrorChan <- err.(*v8go.JSError)
+			apeiroRunErrorChan <- &ApeiroStepError{
+				Message: err.Error(),
+			}
 			return
 		}
 
 		jsStepResultPromise, err := jsStepResult.AsPromise()
 		if err != nil {
-			apeiroRunErrorChan <- err.(*v8go.JSError)
+			apeiroRunErrorChan <- &ApeiroStepError{
+				Message: err.Error(),
+			}
 			return
 		}
 
@@ -564,6 +584,18 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 
 			log.Debug().Str("pid", pid).Str("errorToString", es.String()).Str("errorStack", stack.String()).Msg("step promise, rejected")
 
+			v1, _ := e.Context().Global().Get("$last_fetch_req")
+			v2, _ := e.Context().Global().Get("$last_fetch_resp")
+
+			errobj := &ApeiroStepError{
+				Message:           es.String(),
+				Location:          stack.String(),
+				StackTrace:        stack.String(),
+				LastFetchReq:      v1.String(),
+				LastFetchRespJson: v2.String(),
+			}
+
+			apeiroRunErrorChan <- errobj
 			return v8go.Undefined(info.Context().Isolate())
 		})
 
@@ -582,7 +614,11 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 				Str("error", err.Message).
 				Str("loc", err.Location).
 				Str("trace", err.StackTrace).
+				Str("last_fetch_req", err.LastFetchReq).
+				Str("last_fetch_resp", err.LastFetchRespJson).
 				Msg("error in apeiro step")
+
+			// TODO: set the error in the database
 
 			fmt.Printf("closing isolate\n")
 			ctx.Close()
@@ -606,14 +642,14 @@ func (a *ApeiroRuntime) stepProcess(pid string, src string, previousFrame string
 				strings.TrimPrefix(pid, "pid_"),
 			)
 			if err != nil {
-				return err
+				return apeiroerror("%v", err.Error())
 			}
 			rowsAffected, err := update.RowsAffected()
 			if err != nil {
-				return err
+				return apeiroerror("%v", err.Error())
 			}
 			if rowsAffected != 1 {
-				return fmt.Errorf("updated %d rows while setting %s's result", rowsAffected, pid)
+				return apeiroerror("updated %d rows while setting %s's result", rowsAffected, pid)
 			}
 
 			fmt.Printf("closing isolate\n")

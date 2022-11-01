@@ -9,7 +9,8 @@ import (
 )
 
 type SpawnRequest struct {
-	Mid string `json:"mid" xml:"mid"  binding:"required"`
+	Mid     string `json:"mid" xml:"mid"  binding:"required"`
+	FromAIA bool   `json:"fromAIA"`
 }
 
 func (api *ApeiroRestAPI) procNewHandler(c *gin.Context) {
@@ -32,14 +33,34 @@ func (api *ApeiroRestAPI) procNewHandler(c *gin.Context) {
 		log.Info().Str("pid", pid).Msgf("process response %v", msg)
 		close(watcher)
 
-		val, err := api.a.GetProcessValue(pid)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
+		if msg.Err != nil {
+			if req.FromAIA {
+				// TODO
+				log.Info().Str("pid", pid).Msg("attempting to fix")
+				c.JSON(http.StatusOK, gin.H{
+					"status":               "attempting_to_fix",
+					"mid":                  req.Mid,
+					"last_fetch_req":       msg.Err.LastFetchReq,
+					"last_fetch_resp_json": msg.Err.LastFetchRespJson,
+				})
+				return
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"status": "error",
+				})
+				return
+			}
+		} else {
+			val, err := api.a.GetProcessValue(pid)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error(),
+				})
+			}
 
-		c.JSON(http.StatusOK, val)
+			c.JSON(http.StatusOK, val)
+			return
+		}
 	} else {
 		pid, err := api.a.Spawn(req.Mid)
 		if err != nil {

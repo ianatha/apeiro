@@ -7,7 +7,8 @@ import (
 )
 
 type WatchEvent struct {
-	pid string
+	Pid string
+	Err *ApeiroStepError
 }
 
 func SafeSend(ch chan *WatchEvent, value *WatchEvent) (closed bool) {
@@ -55,13 +56,20 @@ func (a *ApeiroRuntime) Watch(ctx context.Context, pid string) (chan *WatchEvent
 	return watchChan, nil
 }
 
-func (a *ApeiroRuntime) triggerWatchers(pid string) {
+func (a *ApeiroRuntime) triggerWatchersSuccess(pid string) {
+	a.triggerWatchersError(pid, nil)
+}
+
+func (a *ApeiroRuntime) triggerWatchersError(pid string, err *ApeiroStepError) {
 	watchers, exist := a.watchers.Load(pid)
 	if exist {
 		var validatedWatchers []chan *WatchEvent
 		log.Debug().Str("pid", pid).Int("len_watchers", len(watchers.([]chan *WatchEvent))).Msg("triggering")
 		for _, watcher := range watchers.([]chan *WatchEvent) {
-			if SafeSend(watcher, &WatchEvent{pid: pid}) {
+			if SafeSend(watcher, &WatchEvent{
+				Pid: pid,
+				Err: err,
+			}) {
 				validatedWatchers = append(validatedWatchers, watcher)
 			}
 		}
