@@ -1,10 +1,8 @@
 package restengine
 
 import (
-	"io"
 	"net/http"
 
-	"github.com/apeiromont/apeiro/aia"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,37 +14,6 @@ type MountNewReq struct {
 type MountNewResp struct {
 	Mid   string `json:"mid" xml:"mid"`
 	Error string `json:"error" xml:"error"`
-}
-
-func (api *ApeiroRestAPI) codeGeneration(c *gin.Context) {
-	prompt := c.Query("prompt")
-	if prompt == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "missing prompt",
-		})
-		return
-	}
-
-	events, err := aia.CodeCompletionWithKnowledge(c.Request.Context(), prompt)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-	}
-	c.Stream(func(w io.Writer) bool {
-		if newWord, ok := <-events; ok {
-			c.SSEvent("message", gin.H{
-				"w": newWord,
-			})
-			return true
-		}
-		return false
-	})
-
-	c.JSON(http.StatusOK, gin.H{
-		"ok": true,
-	})
 }
 
 func (api *ApeiroRestAPI) mountNewHandler(c *gin.Context) {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/r3labs/sse/v2"
 	sitter "github.com/smacker/go-tree-sitter"
@@ -49,6 +51,63 @@ func TreeContainsFunction(node *sitter.Node) bool {
 		}
 	}
 	return false
+}
+
+type OAIEditRequest struct {
+	Model       string `json:"model"`
+	Input       string `json:"input"`
+	Instruction string `json:"instruction"`
+	N           int    `json:"n"`
+	Temperature int    `json:"temperature"`
+}
+
+type OAIEditResponse struct {
+	Object  string      `json:"object"`
+	Created int         `json:"created"`
+	Choices []OAIChoice `json:"choices"`
+}
+
+func CodeEdit(ctx context.Context, existing_code string, prompt string) (string, error) {
+	body, err := json.Marshal(&OAIEditRequest{
+		Model:       "code-davinci-edit-001",
+		Input:       existing_code,
+		Instruction: prompt,
+		N:           2,
+		Temperature: 0,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("%s\n", string(body))
+
+	bodyReader := bytes.NewBuffer(body)
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/edits", bodyReader)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+OAI_KEY)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("%s\n", string(respBytes))
+
+	var response OAIEditResponse
+	err = json.Unmarshal(respBytes, &response)
+	if err != nil {
+		return "", err
+	}
+
+	return response.Choices[0].Text, nil
 }
 
 func CodeCompletion(ctx context.Context, prompt string) (chan string, error) {

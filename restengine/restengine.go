@@ -48,6 +48,7 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 	})
 
 	r.GET("/aia", SSEHeadersMiddleware(), api.codeGeneration)
+	r.POST("/aia/fix", api.codeGenerationFix)
 
 	r.POST("/src", api.mountNewHandler)
 	r.GET("/src", api.mountListHandler)
