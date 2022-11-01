@@ -10,7 +10,10 @@ require (
 	github.com/goccy/go-json v0.9.7
 	github.com/k0kubun/pp v3.0.1+incompatible
 	github.com/mattn/go-sqlite3 v1.14.15
+	github.com/r3labs/sse/v2 v2.8.1
 	github.com/rs/zerolog v1.28.0
+	github.com/slack-go/slack v0.11.3
+	github.com/smacker/go-tree-sitter v0.0.0-20221031025734-03a9c97d8039
 	github.com/stretchr/testify v1.8.0
 	go.kuoruan.net/v8go-polyfills v0.5.0
 	rogchap.com/v8go v0.7.0
@@ -22,6 +25,7 @@ require (
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
@@ -37,6 +41,7 @@ require (
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.3.6 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
+	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
@@ -44,3 +49,5 @@ require (
 replace go.kuoruan.net/v8go-polyfills v0.5.0 => ../v8go-polyfills
 
 replace rogchap.com/v8go v0.7.0 => github.com/ianatha/v8go v0.0.0-20221023183758-2e9fa851a5b2
+
+replace github.com/r3labs/sse/v2 v2.8.1 => ../sse

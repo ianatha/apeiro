@@ -60,6 +60,7 @@ var $apeiro = (() => {
     objectToHeaders: () => w2,
     reduceHeadersObject: () => f2,
     sendEmail: () => sendEmail,
+    sendSlackMessage: () => sendSlackMessage,
     step: () => step,
     stringToHeaders: () => A2
   });
@@ -7402,10 +7403,22 @@ ${canonicalRequestDigest}`;
       return function(...args) {
         if (fn === "inputUI" || fn === "inputRest") {
           return ctx.useUIInput(args[0]);
+        } else if (fn == "secret") {
+          return ctx.useUIInput(Hr(
+            external_exports.object({
+              "secret": external_exports.string()
+            }),
+            "$"
+          )).secret;
+        } else if (fn == "recvMessage") {
+          return ctx.useUIInput(args[0]);
         } else if (fn == "recvEmail") {
           return ctx.useUIInput(args[0]).mail;
         } else if (fn === "recv") {
           return ctx.useUIInput(args[0]);
+        } else if (fn == "respondToMessage") {
+          ctx.promises.push(sendSlackMessage(ctx._pid, args[0], args[1]));
+          return { $ext: "sendEmail" };
         } else if (fn == "sendEmail") {
           console.log("enqueueing email from " + ctx._pid);
           ctx.promises.push(sendEmail(ctx._pid, args[0], args[1], args[2]));
@@ -7434,6 +7447,32 @@ ${canonicalRequestDigest}`;
       nextFrame.res,
       nextFrame.aw
     ];
+  }
+  var SLACK_TOKEN = "***REMOVED***";
+  async function sendSlackMessage(pid, {
+    channel,
+    thread_ts
+  }, text) {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + SLACK_TOKEN
+      },
+      body: JSON.stringify({
+        channel,
+        thread_ts,
+        text
+      })
+    });
+    console.log(JSON.stringify({
+      token: SLACK_TOKEN,
+      channel,
+      thread_ts,
+      text
+    }));
+    console.log(JSON.stringify(await res.json()));
+    return res;
   }
   async function sendEmail(pid, to, subject, body) {
     const ses = new ApiFactory2({

@@ -187,10 +187,21 @@ class InternalPristineContext implements PristineContext {
     return function (...args: any[]) {
       if (fn === "inputUI" || fn === "inputRest") {
         return ctx.useUIInput(args[0]);
+      } else if (fn == "secret") {
+        return ctx.useUIInput(zodToJsonSchema(
+          z.object({
+            "secret": z.string(),
+          }), "$"
+        )).secret;
+      } else if (fn == "recvMessage") {
+        return ctx.useUIInput(args[0]);
       } else if (fn == "recvEmail") {
         return ctx.useUIInput(args[0]).mail;
       } else if (fn === "recv") {
         return ctx.useUIInput(args[0]);
+      } else if (fn == "respondToMessage") {
+        ctx.promises.push(sendSlackMessage(ctx._pid, args[0], args[1]));
+        return { $ext: "sendEmail" };
       } else if (fn == "sendEmail") {
         console.log("enqueueing email from " + ctx._pid);
         ctx.promises.push(sendEmail(ctx._pid, args[0], args[1], args[2]));
@@ -238,6 +249,36 @@ export async function step(
   ];
 }
 
+const SLACK_TOKEN = "***REMOVED***";
+
+export async function sendSlackMessage(pid: string, {
+  channel,
+  thread_ts,
+}: {
+  channel: string,
+  thread_ts: string,
+}, text: string) {
+  const res = await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + SLACK_TOKEN
+    },
+    body: JSON.stringify({
+      channel,
+      thread_ts,
+      text,
+    })
+  });
+  console.log(JSON.stringify({
+    token: SLACK_TOKEN,
+    channel,
+    thread_ts,
+    text,
+  }));
+  console.log(JSON.stringify(await res.json()));
+  return res;
+}
 
 export async function sendEmail(pid: string, to: string, subject: string, body: string) {
   const ses = new ApiFactory({
