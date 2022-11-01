@@ -111,30 +111,59 @@ func CodeCompletion(ctx context.Context, prompt string) (chan string, error) {
 	return result, nil
 }
 
+/*
+more content
+// a function that calls an API that needs an access key and emails me
+import { sendEmail } from "apeiro://$/emailbox";
+import { secret } from "apeiro://$";
+
+	export default function random_api_example() {
+		let api_response = fetchjson("https://api.example.com/v1/api_call?token=" + secret("EXAMPLE_COM_TOKEN"));
+		sendEmail("you@example.com", "API Response", JSON.stringify(api_response));
+	}
+*/
+
 func CodeCompletionWithKnowledge(ctx context.Context, prompt string) (chan string, error) {
 	return CodeCompletion(ctx, `// a function that asks for a number and displays it
 import { io } from "apeiro://$";
 
-export default function number_input_example() {
+export default function sum_of_two_numbers() {
 		const n = io.input({
-			val: io.number(),
+			number1: io.number(),
+			number2: io.number(),
 		});
 
-		io.display("The number you inputed is " + n.val);
-		return n.val;
+		return n.number1 + n.number2;
+}
+
+// a function that responds with a random quote everytime I message it
+import { recvMessage, respondToMessage } from "apeiro://$/slack";
+
+export default function main() {
+	while (true) {
+		const msg = recvMessage();
+		const quoteResponse = fetchjson("https://zenquotes.io/api/random");
+		const quote = quoteResponse[0].q;
+		const author = quoteResponse[0].a;
+		respondToMessage(msg, "You say " + msg.text + ", but " + author + " said " + quote);
+	}
+	return "Hello, world!";
 }
 
 // a function that emails me a random quote every morning
-import { sendEmail } from "apeiro://$/emailbox"
+import { sendEmail } from "apeiro://$/emailbox";
+import { time } from "apeiro://$/time";
 
-export default function daily_good_morning_with_quote() {
+export default function send_me_good_morning_every_morning() {
 	let me = "you@example.com";
 	while (true) {
-		let quote = fetchjson("https://api.quotable.io/random");
-		sendEmail(me, "Good Morning", quote.content);
-		time.waitUntil(time.NextMorning());
+		sendEmail(me, "Good Morning", "Just wanted to say good morning!);
+		waitUntil(time.NextMorning());
 	}
 }
+
+// To query Yahoo Finance for SYMB you must call https://query1.finance.yahoo.com/v7/finance/quote?symbols=SYMB
+// let price = response.quoteResponse.result[0].regularMarketPrice
 
 // a function that responds with a random quote when it gets an email
 import { recvEmail, sendEmail } from "apeiro://$/emailbox"
@@ -146,7 +175,7 @@ export default function respond_to_email_with_quote() {
 		let subject = new_email.commonHeaders.subject;
 		let sender = new_email.commonHeaders.from[0];
 
-		let quote = fetchjson("https://api.quotable.io/random");
+		let quote = fetchjson("https://api.random_quote_api.com");
 		
 		sendEmail(
 			sender,
