@@ -26,6 +26,11 @@ func (a *ApeiroRestAPI) externalSlack(c *gin.Context) {
 
 	if evt["type"] == "event_callback" {
 		event := evt["event"].(map[string]interface{})
+		if eventType, ok := event["type"]; !ok || eventType != "message" {
+			fmt.Printf("unhandled event: %v\n", evt)
+			return
+		}
+
 		if _, ok := event["app_id"]; ok {
 			// ignore message from a bot (myself or other)
 			return

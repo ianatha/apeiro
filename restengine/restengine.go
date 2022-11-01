@@ -26,7 +26,7 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 	r.Use(ginzerolog.Logger("gin"), gin.Recovery())
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH"},
 		AllowHeaders:     []string{"Origin", "Apeiro-Wait", "Content-Type", "Accept"},
 		ExposeHeaders:    []string{"Content-Length"},
