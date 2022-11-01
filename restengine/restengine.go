@@ -47,6 +47,8 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 		c.JSON(http.StatusOK, a.GetOverview())
 	})
 
+	r.GET("/aia", SSEHeadersMiddleware(), api.codeGeneration)
+
 	r.POST("/src", api.mountNewHandler)
 	r.GET("/src", api.mountListHandler)
 	r.GET("/src/:mid", api.mountGetHandler)
