@@ -32,6 +32,9 @@ func NewEcmatimeWithOptionalEcmatime(iso *v8go.Isolate, pid string, includeEcmat
 	if err := timers.InjectTo(iso, global); err != nil {
 		panic(err)
 	}
+	if err := secretsInjectTo(iso, global); err != nil {
+		panic(err)
+	}
 
 	ctx := v8go.NewContext(iso, global)
 	if err := console.InjectTo(ctx, console.WithOutput(WriterToZerolog{

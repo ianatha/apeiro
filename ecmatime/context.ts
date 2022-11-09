@@ -188,11 +188,20 @@ class InternalPristineContext implements PristineContext {
       if (fn === "inputUI" || fn === "inputRest") {
         return ctx.useUIInput(args[0]);
       } else if (fn == "secret") {
-        return ctx.useUIInput(zodToJsonSchema(
-          z.object({
-            "secret": z.string(),
-          }), "$"
-        )).secret;
+        let stored_secret = getSecret(args[0]);
+        console.log(JSON.stringify({
+          stored_secret
+        }));
+        if (stored_secret === "") {
+          const new_secret_val = ctx.useUIInput(zodToJsonSchema(
+            z.object({
+              "secret": z.string().describe("Secret for " + args[0]),
+            }), "$"
+          )).secret;
+          stored_secret = new_secret_val;
+          setSecret(args[0], new_secret_val);
+        }
+        return stored_secret;
       } else if (fn == "recvMessage") {
         return ctx.useUIInput(args[0]);
       } else if (fn == "recvEmail") {
