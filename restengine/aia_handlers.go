@@ -63,7 +63,7 @@ func (api *ApeiroRestAPI) codeGenerationFix(c *gin.Context) {
 		return
 	}
 
-	edit, err := aia.CodeEdit(context.Background(), mount.Src, `Knowing that secret is imported from "apeiro://$", fix the following error using secret() to access any secrets, such as API keys or API tokens. `+req.AccessError)
+	edit, err := aia.CodeEdit(context.Background(), mount.Src, `Knowing that secret is imported from "pristine://$", fix the following error using secret() to access any secrets, such as API keys or API tokens. `+req.AccessError, 0.10)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -73,7 +73,7 @@ func (api *ApeiroRestAPI) codeGenerationFix(c *gin.Context) {
 	if strings.Index(edit, "secret(\"") > 0 {
 		lines := strings.Split(edit, "\n")
 		lines = append(lines[:2+1], lines[2:]...)
-		lines[2] = "import { secret } from \"apeiro://$\";"
+		lines[2] = "import { secret } from \"pristine://$\";"
 		edit = strings.Join(lines, "\n")
 	}
 

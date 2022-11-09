@@ -2,7 +2,6 @@ import babel, {
   NodePath,
   types as t,
 } from "https://esm.sh/@babel/core@7.18.13";
-import generate from "https://esm.sh/@babel/generator@7.18.13";
 
 import { Expression } from "https://esm.sh/v92/@babel/types@7.18.13/lib/index-legacy.d.ts";
 import {
@@ -177,11 +176,11 @@ function rewriteBindingsToFrameState(
 
 const importDeclarationVisitor = {
   ImportDeclaration(path: NodePath<ImportDeclaration>) {
-    if (path.node.source.value.indexOf("apeiro://") != 0) {
+    if (path.node.source.value.indexOf("pristine://") != 0) {
       return;
     }
     
-    const [ _, pristinePath ] = path.node.source.value.split("apeiro://");
+    const [ _, pristinePath ] = path.node.source.value.split("pristine://");
     path.replaceWithMultiple(
       path.node.specifiers.map((specifier) => {
         const binding = path.scope.getBinding(specifier.local.name);

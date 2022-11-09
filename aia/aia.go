@@ -184,7 +184,7 @@ import { secret } from "apeiro://$";
 
 func CodeCompletionWithKnowledge(ctx context.Context, prompt string) (chan string, error) {
 	return CodeCompletion(ctx, `// a function that asks for a number and displays it
-import { io } from "apeiro://$";
+import { io } from "pristine://$";
 
 export default function sum_of_two_numbers() {
 		const n = io.input({
@@ -196,7 +196,7 @@ export default function sum_of_two_numbers() {
 }
 
 // a function that responds with a random quote everytime I message it
-import { recvMessage, respondToMessage } from "apeiro://$/slack";
+import { recvMessage, respondToMessage } from "pristine://$/slack";
 
 export default function main() {
 	while (true) {
@@ -210,8 +210,8 @@ export default function main() {
 }
 
 // a function that emails me a random quote every morning
-import { sendEmail } from "apeiro://$/emailbox";
-import { time } from "apeiro://$/time";
+import { sendEmail } from "pristine://$/emailbox";
+import { nextMorning, waitUntil } from "pristine://$/time";
 
 export default function send_me_good_morning_every_morning() {
 	let me = "you@example.com";
@@ -225,7 +225,7 @@ export default function send_me_good_morning_every_morning() {
 // let price = response.quoteResponse.result[0].regularMarketPrice
 
 // a function that responds with a random quote when it gets an email
-import { recvEmail, sendEmail } from "apeiro://$/emailbox"
+import { recvEmail, sendEmail } from "pristine://$/emailbox"
 
 export default function respond_to_email_with_quote() {
 	while (true) {
