@@ -3,14 +3,59 @@ package restengine
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/slack-go/slack"
+	stripeWebhook "github.com/stripe/stripe-go/webhook"
 )
 
 var slackApi = slack.New("***REMOVED***")
+
+const STRIPE_ENDPOINT_SECRET = "***REMOVED***"
+
+func (a *ApeiroRestAPI) externalStripe(c *gin.Context) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "could not read body",
+		})
+		return
+	}
+
+	sigHeaders, ok := c.Request.Header["Stripe-Signature"]
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "missing stripe signature",
+		})
+		return
+	}
+	event, err := stripeWebhook.ConstructEvent(body, sigHeaders[0], STRIPE_ENDPOINT_SECRET)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "incorrect stripe signature",
+		})
+		return
+	}
+
+	matchingPids, err := a.a.FilterProcsAwaiting("stripe")
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "pid matcher failed",
+		})
+		return
+	}
+
+	eventJson := jsonStringify(event)
+	for _, pid := range matchingPids {
+		a.a.Supply(pid, eventJson)
+	}
+
+	c.Status(http.StatusOK)
+}
 
 func (a *ApeiroRestAPI) externalSlack(c *gin.Context) {
 	var evt map[string]interface{}
@@ -27,6 +72,10 @@ func (a *ApeiroRestAPI) externalSlack(c *gin.Context) {
 	if evt["type"] == "event_callback" {
 		event := evt["event"].(map[string]interface{})
 		if eventType, ok := event["type"]; !ok || eventType != "message" {
+			fmt.Printf("unhandled event: %v\n", evt)
+			return
+		}
+		if _, ok := event["subtype"]; ok {
 			fmt.Printf("unhandled event: %v\n", evt)
 			return
 		}

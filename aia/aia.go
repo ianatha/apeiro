@@ -185,6 +185,8 @@ import { secret } from "apeiro://$";
 func CodeCompletionWithKnowledge(ctx context.Context, prompt string) (chan string, error) {
 	return CodeCompletion(ctx, `// a function that asks for a number and displays it
 import { io } from "pristine://$";
+import { recvStripeEvent } from "pristine://$/stripe";
+// email's customer is in event.data["object"].email
 
 export default function sum_of_two_numbers() {
 		const n = io.input({
@@ -209,15 +211,16 @@ export default function main() {
 	return "Hello, world!";
 }
 
-// a function that emails me a random quote every morning
+// a function that emails good morning every morning
 import { sendEmail } from "pristine://$/emailbox";
 import { nextMorning, waitUntil } from "pristine://$/time";
+import { ownerEmail } from "pristine://$/workspace";
 
 export default function send_me_good_morning_every_morning() {
-	let me = "you@example.com";
+	let me = ownerEmail();
 	while (true) {
-		sendEmail(me, "Good Morning", "Just wanted to say good morning!);
-		waitUntil(time.NextMorning());
+		sendEmail(me, "Good Morning", "Just wanted to say good morning!");
+		waitUntil(nextMorning());
 	}
 }
 

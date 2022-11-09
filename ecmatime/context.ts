@@ -6,6 +6,7 @@ import {
   serializeSuspension,
   Suspension,
   SuspensionUntilInput,
+  SuspensionGeneric
 } from "./suspension.ts";
 import { SESV2 } from "https://aws-api.deno.dev/v0.3/services/sesv2.ts?actions=SendEmail&docs=";
 import { ApiFactory } from "https://deno.land/x/aws_api@v0.6.0/client/mod.ts";
@@ -88,6 +89,9 @@ class InternalPristineContext implements PristineContext {
   }
 
   call(fn: any, ...args: any[]): any {
+    if (!fn) {
+      return null;
+    }
     if (fn.$apeiro_func) {
       return fn(this, ...args);
     } else {
@@ -108,6 +112,26 @@ class InternalPristineContext implements PristineContext {
         throw new Error("No message to supply");
       }
     }
+  }
+
+  public useGeneric(provider: string, schema: any) {
+    if (this._frame!.aw === undefined || this._frame!.aw === null) {
+      throw new SuspensionGeneric(provider, schema);
+    } else {
+      if (this.msgToSupply != undefined) {
+        const res = this.msgToSupply;
+        this.msgToSupply = undefined;
+        this._frame!.aw = undefined;
+        return res;
+      } else {
+        throw new Error("No message to supply");
+      }
+    }
+  }
+
+
+  public suspend() {
+    throw new SuspensionUntilInput({ wait_forever: true });
   }
 
   frame() {
@@ -140,11 +164,15 @@ class InternalPristineContext implements PristineContext {
     const ctx = this;
 
     if (namespace == "$.io" && fn === "number") {
-      return z.number;
+      return (desc) => {
+        return z.number().describe(desc);
+      }
     }
 
     if (namespace == "$.io" && fn === "string") {
-      return z.string;
+      return (desc) => {
+        return z.string().describe(desc);
+      }
     }
 
     if (namespace == "$.io" && fn === "boolean") {
@@ -202,6 +230,14 @@ class InternalPristineContext implements PristineContext {
           setSecret(args[0], new_secret_val);
         }
         return stored_secret;
+      } else if (fn == "recvStripeEvent") {
+        return ctx.useGeneric("stripe", {});
+      } else if (fn == "ownerEmail") {
+        return "ian@apeiromont.com";
+      } else if (fn == "waitUntil") {
+        return ctx.suspend();
+      } else if (fn == "nextMorning") {
+        return { next_morning: true };
       } else if (fn == "recvMessage") {
         return ctx.useUIInput(args[0]);
       } else if (fn == "recvEmail") {
