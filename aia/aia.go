@@ -16,12 +16,12 @@ import (
 const OAI_KEY = "***REMOVED***"
 
 type OAICompletionRequest struct {
-	Model       string `json:"model"`
-	Prompt      string `json:"prompt"`
-	N           int    `json:"n"`
-	MaxToken    int    `json:"max_tokens"`
-	Stream      bool   `json:"stream"`
-	Temperature int    `json:"temperature"`
+	Model       string  `json:"model"`
+	Prompt      string  `json:"prompt"`
+	N           int     `json:"n"`
+	MaxToken    int     `json:"max_tokens"`
+	Stream      bool    `json:"stream"`
+	Temperature float64 `json:"temperature"`
 }
 
 type OAIChoice struct {
@@ -54,11 +54,11 @@ func TreeContainsFunction(node *sitter.Node) bool {
 }
 
 type OAIEditRequest struct {
-	Model       string `json:"model"`
-	Input       string `json:"input"`
-	Instruction string `json:"instruction"`
-	N           int    `json:"n"`
-	Temperature int    `json:"temperature"`
+	Model       string  `json:"model"`
+	Input       string  `json:"input"`
+	Instruction string  `json:"instruction"`
+	N           int     `json:"n"`
+	Temperature float64 `json:"temperature"`
 }
 
 type OAIEditResponse struct {
@@ -67,13 +67,13 @@ type OAIEditResponse struct {
 	Choices []OAIChoice `json:"choices"`
 }
 
-func CodeEdit(ctx context.Context, existing_code string, prompt string) (string, error) {
+func CodeEdit(ctx context.Context, existing_code string, prompt string, temperature float64) (string, error) {
 	body, err := json.Marshal(&OAIEditRequest{
 		Model:       "code-davinci-edit-001",
 		Input:       existing_code,
 		Instruction: prompt,
 		N:           2,
-		Temperature: 0,
+		Temperature: temperature,
 	})
 	if err != nil {
 		return "", err
@@ -117,7 +117,7 @@ func CodeCompletion(ctx context.Context, prompt string) (chan string, error) {
 		N:           1,
 		MaxToken:    512,
 		Stream:      true,
-		Temperature: 0,
+		Temperature: 0.01,
 	})
 	if err != nil {
 		return nil, err

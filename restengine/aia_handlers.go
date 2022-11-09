@@ -80,5 +80,36 @@ func (api *ApeiroRestAPI) codeGenerationFix(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"edit": edit,
 	})
-	return
+}
+
+type CodeFixBugRequest struct {
+	Mid       string `json:"mid"`
+	FixPrompt string `json:"fixPrompt"`
+}
+
+func (api *ApeiroRestAPI) codeGenerationFixBug(c *gin.Context) {
+	var req CodeFixBugRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	mount, err := api.a.GetMountOverview(req.Mid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "mount not found",
+		})
+		return
+	}
+
+	edit, err := aia.CodeEdit(context.Background(), mount.Src, req.FixPrompt, 0.7)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": edit,
+	})
 }

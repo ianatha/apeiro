@@ -59,6 +59,7 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 	r.GET("/proc", api.procListHandler)
 	r.GET("/proc/:pid", api.procGetHandler)
 	r.POST("/proc/:pid", api.procSendHandler)
+	r.POST("/aia/fix_bug", jwtRequired, api.codeGenerationFixBug)
 	r.GET("/proc/:pid/watch", SSEHeadersMiddleware(), api.procWatchHandler)
 
 	r.POST("/ext/slack", api.externalSlack)
