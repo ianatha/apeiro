@@ -16,8 +16,10 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/slack-go/slack v0.11.3
 	github.com/smacker/go-tree-sitter v0.0.0-20221031025734-03a9c97d8039
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.8.1
+	github.com/stripe/stripe-go v70.15.0+incompatible
 	go.kuoruan.net/v8go-polyfills v0.5.0
+	gopkg.in/yaml.v2 v2.4.0
 	rogchap.com/v8go v0.7.0
 )
 
@@ -36,15 +38,16 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
-	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
-	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110 // indirect
+	golang.org/x/crypto v0.0.0-20220518034528-6f7dac969898 // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.3.6 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 

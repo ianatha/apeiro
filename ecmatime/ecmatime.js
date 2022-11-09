@@ -442,13 +442,24 @@ var $apeiro = (() => {
   function serializeSuspension(e) {
     if (e instanceof SuspensionUntilInput) {
       return { until_input: e.serialize() };
-    }
-    if (e instanceof SuspensionUntilTime) {
+    } else if (e instanceof SuspensionUntilTime) {
       return { until_time: e.serialize() };
+    } else if (e instanceof SuspensionGeneric) {
+      return { [e.provider]: e.serialize() };
     } else {
       return true;
     }
   }
+  var SuspensionGeneric = class extends Suspension {
+    constructor(provider, schema) {
+      super();
+      this.provider = provider;
+      this.schema = schema;
+    }
+    serialize() {
+      return this.schema;
+    }
+  };
   var SuspensionUntilTime = class extends Suspension {
     constructor(time) {
       super();
@@ -5270,7 +5281,7 @@ ${canonicalRequestDigest}`;
   var onumber = () => numberType().optional();
   var oboolean = () => booleanType().optional();
 
-  // web:https://esm.sh/v96/zod@3.19.1/es2015/zod.js
+  // web:https://esm.sh/v97/zod@3.19.1/es2015/zod.js
   var zod_exports = {};
   __export(zod_exports, {
     BRAND: () => Ue,
@@ -6723,7 +6734,7 @@ ${canonicalRequestDigest}`;
     return f;
   }, any: Ge, array: et, bigint: Je, boolean: Ne, date: Ye, discriminatedUnion: nt, effect: we, enum: ht, function: dt, instanceof: Be, intersection: at, lazy: lt, literal: pt, map: ct, nan: qe, nativeEnum: ft, never: Xe, null: He, nullable: vt, number: Oe, object: tt, oboolean: bt, onumber: xt, optional: yt, ostring: gt, preprocess: _t, promise: mt, record: ot, set: ut, strictObject: rt, string: Ee, transformer: we, tuple: it, undefined: Ke, union: st, unknown: Qe, void: Fe, NEVER: wt, ZodIssueCode: u, quotelessJson: Ae, ZodError: j });
 
-  // web:https://esm.sh/v96/zod-to-json-schema@3.17.0/es2015/zod-to-json-schema.js
+  // web:https://esm.sh/v97/zod-to-json-schema@3.17.0/es2015/zod-to-json-schema.js
   var __zod$ = Object.assign({ default: Tt }, zod_exports);
   var He2 = Object.create;
   var ue2 = Object.defineProperty;
@@ -7320,6 +7331,9 @@ ${canonicalRequestDigest}`;
       return res;
     }
     call(fn, ...args) {
+      if (!fn) {
+        return null;
+      }
       if (fn.$apeiro_func) {
         return fn(this, ...args);
       } else {
@@ -7340,6 +7354,23 @@ ${canonicalRequestDigest}`;
         }
       }
     }
+    useGeneric(provider, schema) {
+      if (this._frame.aw === void 0 || this._frame.aw === null) {
+        throw new SuspensionGeneric(provider, schema);
+      } else {
+        if (this.msgToSupply != void 0) {
+          const res = this.msgToSupply;
+          this.msgToSupply = void 0;
+          this._frame.aw = void 0;
+          return res;
+        } else {
+          throw new Error("No message to supply");
+        }
+      }
+    }
+    suspend() {
+      throw new SuspensionUntilInput({ wait_forever: true });
+    }
     frame() {
       if (!this._frame) {
         this._frame = new IPristineFrame(void 0);
@@ -7359,10 +7390,14 @@ ${canonicalRequestDigest}`;
       console.log("in GetFunction " + JSON.stringify([namespace, fn]) + " my pid is " + this._pid);
       const ctx = this;
       if (namespace == "$.io" && fn === "number") {
-        return external_exports.number;
+        return (desc) => {
+          return external_exports.number().describe(desc);
+        };
       }
       if (namespace == "$.io" && fn === "string") {
-        return external_exports.string;
+        return (desc) => {
+          return external_exports.string().describe(desc);
+        };
       }
       if (namespace == "$.io" && fn === "boolean") {
         return (desc) => {
@@ -7404,12 +7439,29 @@ ${canonicalRequestDigest}`;
         if (fn === "inputUI" || fn === "inputRest") {
           return ctx.useUIInput(args[0]);
         } else if (fn == "secret") {
-          return ctx.useUIInput(Hr(
-            external_exports.object({
-              "secret": external_exports.string()
-            }),
-            "$"
-          )).secret;
+          let stored_secret = getSecret(args[0]);
+          console.log(JSON.stringify({
+            stored_secret
+          }));
+          if (stored_secret === "") {
+            const new_secret_val = ctx.useUIInput(Hr(
+              external_exports.object({
+                "secret": external_exports.string().describe("Secret for " + args[0])
+              }),
+              "$"
+            )).secret;
+            stored_secret = new_secret_val;
+            setSecret(args[0], new_secret_val);
+          }
+          return stored_secret;
+        } else if (fn == "recvStripeEvent") {
+          return ctx.useGeneric("stripe", {});
+        } else if (fn == "ownerEmail") {
+          return "ian@apeiromont.com";
+        } else if (fn == "waitUntil") {
+          return ctx.suspend();
+        } else if (fn == "nextMorning") {
+          return { next_morning: true };
         } else if (fn == "recvMessage") {
           return ctx.useUIInput(args[0]);
         } else if (fn == "recvEmail") {
