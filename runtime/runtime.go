@@ -231,8 +231,9 @@ type ProcessStatus struct {
 }
 
 func (a *ApeiroRuntime) Processes() (*[]ProcessStatus, error) {
-	rows, err := a.db.Query("SELECT pid, mount.mid, mount.name FROM process RIGHT JOIN mount ON process.mid = mount.mid")
+	rows, err := a.db.Query("SELECT pid, mount.mid, mount.name FROM process LEFT JOIN mount ON process.mid = mount.mid")
 	if err != nil {
+		log.Error().AnErr("err", err).Msg("error")
 		return nil, err
 	}
 	defer rows.Close()
@@ -242,6 +243,7 @@ func (a *ApeiroRuntime) Processes() (*[]ProcessStatus, error) {
 		var r ProcessStatus
 		err = rows.Scan(&r.Pid, &r.Mid, &r.MidName)
 		if err != nil {
+			log.Error().AnErr("err", err).Msg("error")
 			return nil, err
 		}
 		result = append(result, r)
@@ -324,6 +326,34 @@ func (a *ApeiroRuntime) SpawnAndWatch(mid string) (string, chan *WatchEvent, err
 func (a *ApeiroRuntime) Spawn(mid string) (string, error) {
 	pid, _, err := a.spawn(mid, false)
 	return pid, err
+}
+
+func (a *ApeiroRuntime) FilterProcsAwaiting(filter string) ([]string, error) {
+	matchingPids := []string{}
+
+	// TODO: smarter
+	rows, err := a.db.Query("SELECT pid, awaiting FROM process WHERE awaiting IS NOT NULL")
+	if err != nil {
+		return matchingPids, err
+	}
+	defer rows.Close()
+
+	filterString := fmt.Sprintf(`{"%s":{}}`, filter)
+	for rows.Next() {
+		var pid string
+		var awaiting string
+		err = rows.Scan(&pid, &awaiting)
+		if err != nil {
+			return matchingPids, err
+		}
+		if awaiting == filterString {
+			matchingPids = append(matchingPids, pid)
+		} else {
+			fmt.Printf("not matching %s to %s\n", awaiting, filterString)
+		}
+	}
+
+	return matchingPids, nil
 }
 
 func (a *ApeiroRuntime) Supply(pid string, msg string) error {
