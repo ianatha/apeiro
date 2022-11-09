@@ -3,11 +3,13 @@ module github.com/apeiromont/apeiro
 go 1.19
 
 require (
+	github.com/auth0/go-jwt-middleware/v2 v2.1.0
 	github.com/dn365/gin-zerolog v0.0.0-20171227063204-b43714b00db1
 	github.com/evanw/esbuild v0.15.11
 	github.com/gin-contrib/cors v1.4.0
 	github.com/gin-gonic/gin v1.8.1
 	github.com/goccy/go-json v0.9.7
+	github.com/gwatts/gin-adapter v1.0.0
 	github.com/k0kubun/pp v3.0.1+incompatible
 	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/r3labs/sse/v2 v2.8.1
