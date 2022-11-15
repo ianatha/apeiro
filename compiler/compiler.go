@@ -52,7 +52,7 @@ func newExternalTransformer() (*externalTransformer, error) {
 }
 
 func (t *externalTransformer) ApeiroTransform(input []byte) ([]byte, error) {
-	babelTransformCmd := exec.Command("/usr/bin/env", "deno", "run", "--cached-only", "--no-check", "--allow-all", filepath.Join(t.dir, BABEL_TRANSFORMER_ENTRYPOINT))
+	babelTransformCmd := exec.Command("/usr/bin/env", "deno", "run", "--no-check", "--allow-all", filepath.Join(t.dir, BABEL_TRANSFORMER_ENTRYPOINT))
 	babelTransformCmd.Stdin = bytes.NewReader(input)
 	babelTransformCmd.Stderr = os.Stderr
 	result, err := babelTransformCmd.Output()
@@ -106,14 +106,14 @@ func CompileTypescriptWithFlags(input []byte, flags CompileOptions) ([]byte, err
 		return nil, errors.New("while transforming TS: " + firstStep.Errors[0].Text)
 	}
 
+	transformer, err := newExternalTransformer()
+	if err != nil {
+		return nil, err
+	}
+	defer transformer.Close()
+
 	var secondStep []byte
 	if flags.ApeiroCompilation {
-		transformer, err := newExternalTransformer()
-		if err != nil {
-			return nil, err
-		}
-		defer transformer.Close()
-
 		secondStep, err = transformer.ApeiroTransform([]byte(firstStep.Code))
 		if err != nil {
 			return nil, err
@@ -134,7 +134,7 @@ func CompileTypescriptWithFlags(input []byte, flags CompileOptions) ([]byte, err
 		Target:            api.ES2016,
 		Plugins: []api.Plugin{
 			StaticEntryPointPlugin(secondStep),
-			ModuleLoaderPlugin(),
+			ModuleLoaderPlugin(transformer),
 		},
 	})
 	if finalResults.Errors != nil {

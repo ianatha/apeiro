@@ -12,7 +12,7 @@ import (
 
 const REMOTE_NAMESPACE = "web"
 
-func ModuleLoaderPlugin() api.Plugin {
+func ModuleLoaderPlugin(transformer *externalTransformer) api.Plugin {
 	return api.Plugin{
 		Name: "module-loader",
 		Setup: func(build api.PluginBuild) {
@@ -71,6 +71,19 @@ func ModuleLoaderPlugin() api.Plugin {
 					return api.OnLoadResult{}, err
 				}
 				bodyStr := string(body)
+
+				if strings.Contains(bodyStr, "pristine://") {
+					transformationResult, err := transformer.ApeiroTransform(body)
+					if err != nil {
+						return api.OnLoadResult{
+							Errors: []api.Message{{
+								Text: fmt.Sprintf("Cannot transform module %q: %v", args.Path, err),
+							}},
+						}, nil
+					}
+					bodyStr = string(transformationResult)
+					fmt.Printf("transformed: %s\n", bodyStr)
+				}
 
 				return api.OnLoadResult{
 					Contents: &bodyStr,

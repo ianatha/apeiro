@@ -87,6 +87,22 @@ function explodeFunctionCalls(frameIndex: number) {
 }
 
 const introduceContext = {
+  // FunctionExpression(path: NodePath<FunctionExpression>) {
+    // path.node.params.unshift(t.identifier("$ctx"));
+    // const functionNameIdentifier = path.node.id!;
+    // path.insertAfter(
+    //   t.expressionStatement(
+    //     t.assignmentExpression(
+    //       "=",
+    //       t.memberExpression(
+    //         functionNameIdentifier,
+    //         t.identifier("$apeiro_func")
+    //       ),
+    //       t.booleanLiteral(true)
+    //     )
+    //   )
+    // );
+  // },
   FunctionDeclaration(path: NodePath<FunctionDeclaration>) {
     path.node.params.unshift(t.identifier("$ctx"));
     const functionNameIdentifier = path.node.id!;
