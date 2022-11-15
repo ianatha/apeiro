@@ -38,7 +38,7 @@ function callThroughContext(
     ),
     [
       target,
-      identifier as Expression,
+      callee,
       ...node.arguments,
     ]
   )

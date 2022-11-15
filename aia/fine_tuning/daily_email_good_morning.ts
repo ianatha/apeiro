@@ -1,6 +1,6 @@
 // Prompt: email me good morning every morning
-import { sendEmail } from "apeiro://$/emailbox";
-import { time } from "apeiro://$/time";
+import { sendEmail } from "pristine://$/emailbox";
+import { time } from "pristine://$/time";
 
 export default function daily_email_good_morning() {
 	let me = "you@example.com";

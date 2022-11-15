@@ -8,12 +8,13 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/r3labs/sse/v2"
+	"github.com/apeiromont/apeiro/config"
+	"github.com/ianatha/sse/v2"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/javascript"
 )
 
-const OAI_KEY = "***REMOVED***"
+const OAI_KEY = config.OAI_KEY
 
 type OAICompletionRequest struct {
 	Model       string  `json:"model"`
@@ -173,8 +174,8 @@ func CodeCompletion(ctx context.Context, prompt string) (chan string, error) {
 /*
 more content
 // a function that calls an API that needs an access key and emails me
-import { sendEmail } from "apeiro://$/emailbox";
-import { secret } from "apeiro://$";
+import { sendEmail } from "pristine://$/emailbox";
+import { secret } from "pristine://$";
 
 	export default function random_api_example() {
 		let api_response = fetchjson("https://api.example.com/v1/api_call?token=" + secret("EXAMPLE_COM_TOKEN"));

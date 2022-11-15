@@ -35,7 +35,7 @@ func SetupApp() (*ApeiroRestAPI, *runtime.ApeiroRuntime) {
 		panic(err)
 	}
 
-	return NewApeiroRestAPI(a), a
+	return NewApeiroRestAPI(a, false), a
 }
 
 func TestPingHandler(t *testing.T) {
@@ -144,11 +144,12 @@ func TestSpawnAndSupplySimpleFunction(t *testing.T) {
 	script := strings.TrimSpace(`
 import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
 import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
-import { inputRest } from "apeiro://$"
+import { input } from "pristine://$/rest"
 
 export default function sum() {
-	const x = inputRest(zodToJsonSchema(z.object({ val1: z.number() }), "$"));
-	const y = inputRest(zodToJsonSchema(z.object({ val2: z.number() }), "$"));
+	const x = input(zodToJsonSchema(z.object({ val1: z.number() }), "$"));
+	const y = input(zodToJsonSchema(z.object({ val2: z.number() }), "$"));
+	console.log(JSON.stringify({x, y}))
 	return x.val1 + y.val2;
 }`)
 	r, a := SetupApp()
@@ -196,7 +197,7 @@ export default function sum() {
 // 	script := strings.TrimSpace(`
 // import { z } from "https://deno.land/x/zod@v3.17.0/mod.ts";
 // import zodToJsonSchema from "https://esm.sh/zod-to-json-schema@3.17.0";
-// import { inputRest } from "apeiro://$"
+// import { inputRest } from "pristine://$"
 
 // export default function *hello() {
 // 	let sum = 0;

@@ -14,7 +14,7 @@ func main() {
 		panic(err)
 	}
 
-	r := restengine.NewApeiroRestAPI(a)
+	r := restengine.NewApeiroRestAPI(a, true)
 	a.Start()
 
 	r.Run()

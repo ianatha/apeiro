@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"testing"
 
@@ -185,70 +186,39 @@ export default function simple(a, b) {
 simple.$apeiro_func = true;`, strings.TrimSpace(string(output)))
 }
 
-func TestCompileYield(t *testing.T) {
-	output, err := ApeiroTransform(`import { input as io } from "pristine://$/rest";
-
-export default function *email_responder() {
-	let last_email = {};
-	while (true) {
-		yield last_email;
-		last_email = io({
-			email: {}
-		});
-		console.log(JSON.stringify(last_email));
+func LinesTrimSpace(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
 	}
-	throw new Error("Should not reach here");
-}`)
-
-	fmt.Printf("\n\n%s\n\n", output)
-	assert.Nil(t, err)
-	assert.Equal(t, `export default function* email_responder($ctx) {
-  const $f0 = $ctx.frame();
-
-  switch ($f0.pc) {
-    case 0:
-      $f0.s.last_email = {};
-      $f0.pc++;
-
-    case 1:
-      while (true) {
-        const $f1 = $f0.subframe();
-
-        switch ($f1.pc) {
-          case 0:
-            yield $f0.s.last_email;
-            $f1.pc++;
-
-          case 1:
-            $f0.s.last_email = $ctx.call(0, $ctx.getFunction("$", "rest", "input"), {
-              email: {}
-            });
-            $f1.pc++;
-
-          case 2:
-            $f0.s._JSON$stringify = $ctx.call(JSON, stringify, $f0.s.last_email);
-            $f1.pc++;
-
-          case 3:
-            $ctx.call(console, log, $f0.s._JSON$stringify);
-            $f1.pc++;
-
-          case 4:
-            delete $f0.s._JSON$stringify;
-            $f1.pc++;
-        }
-
-        $f1.end();
-      }
-
-      $f0.pc++;
-
-    case 2:
-      throw new Error("Should not reach here");
-      $f0.pc++;
-  }
-
-  $f0.end();
+	return strings.Join(lines, "\n")
 }
-email_responder.$apeiro_func = true;`, strings.TrimSpace(string(output)))
+
+func FixtureTest(t *testing.T, name string) {
+	input, err := ioutil.ReadFile(fmt.Sprintf("test_fixtures/%s.in.js", name))
+	if err != nil {
+		panic(err)
+	}
+
+	expectedOutputBytes, err := ioutil.ReadFile(fmt.Sprintf("test_fixtures/%s.out.js", name))
+	if err != nil {
+		panic(err)
+	}
+
+	expectedOutput := LinesTrimSpace(string(expectedOutputBytes))
+
+	output, err := ApeiroTransform(string(input))
+	if err != nil {
+		panic(err)
+	}
+
+	assert.Equal(t, expectedOutput, LinesTrimSpace(string(output)))
+}
+
+func TestImportZod(t *testing.T) {
+	FixtureTest(t, "zod")
+}
+
+func TestCompileYield(t *testing.T) {
+	FixtureTest(t, "yield")
 }

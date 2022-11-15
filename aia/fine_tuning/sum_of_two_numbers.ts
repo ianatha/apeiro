@@ -1,5 +1,5 @@
 // Prompt: ask for two numbers and return their their sum
-import { io } from "apeiro://$";
+import { io } from "pristine://$";
 
 export default function sum_of_two_numbers() {
 		const n = io.input({

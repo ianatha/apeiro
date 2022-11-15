@@ -2,7 +2,7 @@
 
 // To query Yahoo Finance for SYMB you must call https://query1.finance.yahoo.com/v7/finance/quote?symbols=SYMB
 // let price = response.quoteResponse.result[0].regularMarketPrice
-import { recvEmail, sendEmail } from "apeiro://$/emailbox"
+import { recvEmail, sendEmail } from "pristine://$/emailbox"
 
 export default function respond_to_email_with_quote() {
 	while (true) {

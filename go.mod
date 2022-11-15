@@ -11,9 +11,9 @@ require (
 	github.com/go-xmlfmt/xmlfmt v1.1.2
 	github.com/goccy/go-json v0.9.7
 	github.com/gwatts/gin-adapter v1.0.0
+	github.com/ianatha/sse/v2 v2.8.1
 	github.com/k0kubun/pp v3.0.1+incompatible
 	github.com/mattn/go-sqlite3 v1.14.15
-	github.com/r3labs/sse/v2 v2.8.1
 	github.com/rs/zerolog v1.28.0
 	github.com/slack-go/slack v0.11.3
 	github.com/smacker/go-tree-sitter v0.0.0-20221031025734-03a9c97d8039
@@ -56,4 +56,4 @@ replace go.kuoruan.net/v8go-polyfills v0.5.0 => ../v8go-polyfills
 
 replace rogchap.com/v8go v0.7.0 => github.com/ianatha/v8go v0.0.0-20221023183758-2e9fa851a5b2
 
-replace github.com/r3labs/sse/v2 v2.8.1 => ../sse
+replace github.com/ianatha/sse/v2 v2.8.1 => ../sse

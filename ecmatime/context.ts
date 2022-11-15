@@ -88,18 +88,30 @@ class InternalPristineContext implements PristineContext {
     return res;
   }
 
-  call(fn: any, ...args: any[]): any {
+  call(receiver: any, fn: any, ...args: any[]): any {
     if (!fn) {
       return null;
     }
     if (fn.$apeiro_func) {
-      return fn(this, ...args);
+      if (receiver) {
+        const bound_fn = fn.bind(receiver);
+        return bound_fn(this, ...args);
+      } else {
+        return fn(this, ...args);
+      }
     } else {
-      return fn(...args);
+      if (receiver) {
+        const bound_fn = fn.bind(receiver);
+        return bound_fn(...args);
+      } else {
+        return fn(...args);
+      }
     }
+    throw new Error("Unreachable")
   }
 
   public useUIInput(schema: any) {
+    console.log("running useUInput", + JSON.stringify(schema));
     if (this._frame!.aw === undefined || this._frame!.aw === null) {
       throw new SuspensionUntilInput(schema);
     } else {
@@ -159,102 +171,57 @@ class InternalPristineContext implements PristineContext {
 
   promises: Promise<any>[] = [];
 
-  getFunction([namespace, fn]: [string, string]) {
-    console.log("in GetFunction " + JSON.stringify([namespace, fn]) + " my pid is " + this._pid);
+  getFunction(...specifiers: string[]) {
     const ctx = this;
 
-    if (namespace == "$.io" && fn === "number") {
-      return (desc) => {
-        return z.number().describe(desc);
-      }
-    }
-
-    if (namespace == "$.io" && fn === "string") {
-      return (desc) => {
-        return z.string().describe(desc);
-      }
-    }
-
-    if (namespace == "$.io" && fn === "boolean") {
-      return (desc) => {
-        return z.boolean().describe(desc);
-      }
-    }
-  
-    if (fn === "io") {
-      const obj = {
-        ...z,
-        number(...args) {
-          return {
-            ...z.number(...args),
-            $from_apeiro_ctx: ["$.io", "number"],
-          }
-        },
-        boolean({ desc }) {
-          return {
-            ...z.boolean().describe(desc),
-            $from_apeiro_ctx: ["$.io", "boolean"],
-          }
-        },
-        string(...args) {
-          return {
-            ...z.string(...args),
-            $from_apeiro_ctx: ["$.io", "string"],
-          }
-        },
-        input(arg: any) {
-          return ctx.useUIInput(zodToJsonSchema(
-            z.object(arg), "$"
-          ),);
-        },
-        $from_apeiro_ctx: ["$", "io"],
-      }
-      return obj;
-    }
-
-    return function (...args: any[]) {
-      if (fn === "inputUI" || fn === "inputRest") {
+    if (specifiers[0] == '$' && specifiers[1] == 'rest' && specifiers[2] == 'input') {
+      console.log("returning useUIInput for " + specifiers);
+      return function (...args: any[]) {
         return ctx.useUIInput(args[0]);
-      } else if (fn == "secret") {
-        let stored_secret = getSecret(args[0]);
-        console.log(JSON.stringify({
-          stored_secret
-        }));
-        if (stored_secret === "") {
-          const new_secret_val = ctx.useUIInput(zodToJsonSchema(
-            z.object({
-              "secret": z.string().describe("Secret for " + args[0]),
-            }), "$"
-          )).secret;
-          stored_secret = new_secret_val;
-          setSecret(args[0], new_secret_val);
-        }
-        return stored_secret;
-      } else if (fn == "recvStripeEvent") {
-        return ctx.useGeneric("stripe", {});
-      } else if (fn == "ownerEmail") {
-        return "ian@apeiromont.com";
-      } else if (fn == "waitUntil") {
-        return ctx.suspend();
-      } else if (fn == "nextMorning") {
-        return { next_morning: true };
-      } else if (fn == "recvMessage") {
-        return ctx.useUIInput(args[0]);
-      } else if (fn == "recvEmail") {
-        return ctx.useUIInput(args[0]).mail;
-      } else if (fn === "recv") {
-        return ctx.useUIInput(args[0]);
-      } else if (fn == "respondToMessage") {
-        ctx.promises.push(sendSlackMessage(ctx._pid, args[0], args[1]));
-        return { $ext: "sendEmail" };
-      } else if (fn == "sendEmail") {
-        console.log("enqueueing email from " + ctx._pid);
-        ctx.promises.push(sendEmail(ctx._pid, args[0], args[1], args[2]));
-        return { $ext: "sendEmail" };
-      } else {
-        throw new Error("unknown function " + fn);
       }
-    };
+    }
+    // return function (...args: any[]) {
+    //   if (fn === "inputUI" || fn === "inputRest") {
+    //     return ctx.useUIInput(args[0]);
+    //   } else if (fn == "secret") {
+    //     let stored_secret = getSecret(args[0]);
+    //     console.log(JSON.stringify({
+    //       stored_secret
+    //     }));
+    //     if (stored_secret === "") {
+    //       const new_secret_val = ctx.useUIInput(zodToJsonSchema(
+    //         z.object({
+    //           "secret": z.string().describe("Secret for " + args[0]),
+    //         }), "$"
+    //       )).secret;
+    //       stored_secret = new_secret_val;
+    //       setSecret(args[0], new_secret_val);
+    //     }
+    //     return stored_secret;
+    //   } else if (fn == "recvStripeEvent") {
+    //     return ctx.useGeneric("stripe", {});
+    //   } else if (fn == "ownerEmail") {
+    //     return "ian@apeiromont.com";
+    //   } else if (fn == "waitUntil") {
+    //     return ctx.suspend();
+    //   } else if (fn == "nextMorning") {
+    //     return { next_morning: true };
+    //   } else if (fn == "recvMessage") {
+    //     return ctx.useUIInput(args[0]);
+    //   } else if (fn == "recvEmail") {
+    //     return ctx.useUIInput(args[0]).mail;
+    //   } else if (fn === "recv") {
+    //     return ctx.useUIInput(args[0]);
+    //   } else if (fn == "respondToMessage") {
+    //     ctx.promises.push(sendSlackMessage(ctx._pid, args[0], args[1]));
+    //     return { $ext: "sendEmail" };
+    //   } else if (fn == "sendEmail") {
+    //     console.log("enqueueing email from " + ctx._pid);
+    //     ctx.promises.push(sendEmail(ctx._pid, args[0], args[1], args[2]));
+    //     return { $ext: "sendEmail" };
+    //   } else {
+        throw new Error("unknown function " + specifiers);
+      // }
   }
 }
 
@@ -359,11 +326,4 @@ export async function sendEmail(pid: string, to: string, subject: string, body: 
     }
   });
   return res;
-}
-
-export function importFunction(
-  namespace: string,
-  fn: string,
-): [string, string] {
-  return [namespace, fn];
 }

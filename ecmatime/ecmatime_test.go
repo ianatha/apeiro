@@ -78,11 +78,11 @@ func TestEcmatimeExports(t *testing.T) {
 		"headersToList",
 		"headersToObject",
 		"headersToString",
-		"importFunction",
 		"listToHeaders",
 		"objectToHeaders",
 		"reduceHeadersObject",
 		"sendEmail",
+		"sendSlackMessage",
 		"step",
 		"stringToHeaders",
 	}, apeiroModule.GetOwnPropertyNames())

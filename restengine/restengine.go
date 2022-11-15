@@ -1,7 +1,6 @@
 package restengine
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -17,7 +16,7 @@ type ApeiroRestAPI struct {
 	r *gin.Engine
 }
 
-func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
+func NewApeiroRestAPI(a *runtime.ApeiroRuntime, authRequired bool) *ApeiroRestAPI {
 	r := gin.New()
 
 	api := &ApeiroRestAPI{
@@ -39,17 +38,27 @@ func NewApeiroRestAPI(a *runtime.ApeiroRuntime) *ApeiroRestAPI {
 		MaxAge: 12 * time.Hour,
 	}))
 
-	// jwtRequired := adapter.Wrap(EnsureValidToken())
-	jwtRequired := adapter.Wrap(func(h http.Handler) http.Handler {
-		return h
-	})
+	var jwtRequired gin.HandlerFunc
 
-	r.GET("/ping", jwtRequired, func(c *gin.Context) {
+	if authRequired {
+		jwtRequired = adapter.Wrap(EnsureValidToken())
+	} else {
+		jwtRequired = adapter.Wrap(func(h http.Handler) http.Handler {
+			return h
+		})
+	}
+
+	r.GET("/token_debug", jwtRequired, func(c *gin.Context) {
 		token, err := GetValidatedToken(c)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("debug: %+v\n", token.CustomClaims)
+		c.JSON(http.StatusOK, gin.H{
+			"token": token,
+		})
+	})
+
+	r.GET("/ping", jwtRequired, func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
 		})

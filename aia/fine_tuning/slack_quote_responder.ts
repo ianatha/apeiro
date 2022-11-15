@@ -1,5 +1,5 @@
 // Prompt: respond with a random quote when I message you on Slack
-import { recvMessage, respondToMessage } from "apeiro://$/slack";
+import { recvMessage, respondToMessage } from "pristine://$/slack";
 
 export default function slack_quote_responder() {
 	while (true) {
