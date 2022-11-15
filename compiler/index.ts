@@ -3,7 +3,7 @@ import babel, {
   types as t,
 } from "https://esm.sh/@babel/core@7.18.13";
 
-import { Expression } from "https://esm.sh/v92/@babel/types@7.18.13/lib/index-legacy.d.ts";
+import { Expression, ImportDefaultSpecifier, ImportNamespaceSpecifier, ImportSpecifier, PrivateName } from "https://esm.sh/v92/@babel/types@7.18.13/lib/index-legacy.d.ts";
 import {
   BlockStatement,
   CallExpression,
@@ -24,13 +24,21 @@ function callThroughContext(
     return node;
   }
 
+  let target: Expression = t.numericLiteral(0);
+  let identifier: Expression | PrivateName = callee;
+  if (callee.type === "MemberExpression") {
+    target = callee.object;
+    identifier = callee.property;
+  }
+
   return t.callExpression(
     t.memberExpression(
       t.identifier("$ctx"),
       t.identifier("call"),
     ),
     [
-      callee as Expression,
+      target,
+      identifier as Expression,
       ...node.arguments,
     ]
   )
@@ -174,6 +182,20 @@ function rewriteBindingsToFrameState(
   }
 }
 
+const importSpecifierToName = function(specifier: ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier) {
+  if (specifier.type == "ImportSpecifier") {
+    if (specifier.imported.type == "Identifier") {
+      return specifier.imported.name;
+    } else {
+      return specifier.imported.value;
+    }
+  } else if (specifier.type == "ImportDefaultSpecifier") {
+    return "default";
+  } else if (specifier.type == "ImportNamespaceSpecifier") {
+    return specifier.local.name;
+  }
+}
+
 const importDeclarationVisitor = {
   ImportDeclaration(path: NodePath<ImportDeclaration>) {
     if (path.node.source.value.indexOf("pristine://") != 0) {
@@ -181,37 +203,28 @@ const importDeclarationVisitor = {
     }
     
     const [ _, pristinePath ] = path.node.source.value.split("pristine://");
-    path.replaceWithMultiple(
-      path.node.specifiers.map((specifier) => {
-        const binding = path.scope.getBinding(specifier.local.name);
-        if (binding) {
-          binding.referencePaths.forEach((refPath) => {
-            refPath.replaceWith(
-              t.callExpression(
-                t.identifier("$ctx.getFunction"),
-                [
-                  t.identifier(specifier.local.name)
-                ]
-              )
-            );
-          });
-        }
-        return t.variableDeclaration("const", [
-          t.variableDeclarator(
-            t.identifier(specifier.local.name),
+    const pristinePathParts = pristinePath.split("/");
+    path.node.specifiers.map((specifier) => {
+      const binding = path.scope.getBinding(specifier.local.name);
+      if (binding) {
+        binding.referencePaths.forEach((refPath) => {
+          const importedName = importSpecifierToName(specifier);
+
+          refPath.replaceWith(
             t.callExpression(
-              t.identifier("$apeiro.importFunction"),
+              t.identifier("$ctx.getFunction"),
               [
-                t.stringLiteral(pristinePath),
-                t.stringLiteral(specifier.imported.name)
-              ],
+                ...pristinePathParts.map((part) => t.stringLiteral(part)),
+                t.stringLiteral(specifier.imported.name),
+              ]
             )
-          ),
-        ]);
-      })
-    );
-  },
-}
+          );
+        });
+      }
+    });
+    path.remove();
+  }
+};
 
 function transform(code) {
   const output = babel.transformSync(code, {
@@ -224,33 +237,9 @@ function transform(code) {
             BlockStatement(path: NodePath<BlockStatement>) {
               const frameIndex = assignFrameIndex(path);
               path.traverse(explodeFunctionCalls(frameIndex));
-              const [frameIdentifier, frameDeclaration] =
-                generateFrameDeclaration(path, frameIndex);
+              const [frameIdentifier, frameDeclaration] = generateFrameDeclaration(path, frameIndex);
               rewriteBindingsToFrameState(path, frameIdentifier);
-              path.node.body = [
-                frameDeclaration,
-                t.switchStatement(
-                  t.identifier(`$f${path.getData("frame")}.pc`),
-                  path.node.body.reduce((newBody, statement, i) => {
-                    newBody.push(
-                      t.switchCase(
-                        t.numericLiteral(i),
-                        [
-                          statement,
-                          t.expressionStatement(
-                            t.updateExpression(
-                              "++",
-                              t.identifier(`$f${path.getData("frame")}.pc`),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                    return newBody;
-                  }, [] as SwitchCase[]),
-                ),
-                frameEndDeclaration(path),
-              ];
+              path.node.body = functionBodyToSwitch(frameDeclaration, path);
             },
           },
         };
@@ -270,4 +259,31 @@ while (true) {
     console.log(transform(res));
     Deno.exit(0);
   }
+}
+
+function functionBodyToSwitch(frameDeclaration: VariableDeclaration, path: babel.NodePath<BlockStatement>): Statement[] {
+  return [
+    frameDeclaration,
+    t.switchStatement(
+      t.identifier(`$f${path.getData("frame")}.pc`),
+      path.node.body.reduce((newBody, statement, i) => {
+        newBody.push(
+          t.switchCase(
+            t.numericLiteral(i),
+            [
+              statement,
+              t.expressionStatement(
+                t.updateExpression(
+                  "++",
+                  t.identifier(`$f${path.getData("frame")}.pc`)
+                )
+              ),
+            ]
+          )
+        );
+        return newBody;
+      }, [] as SwitchCase[])
+    ),
+    frameEndDeclaration(path),
+  ];
 }

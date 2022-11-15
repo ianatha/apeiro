@@ -39,7 +39,7 @@ return c + d;
       $f0.pc++;
 
     case 1:
-      $f0.s._square = $ctx.call(square, b);
+      $f0.s._square = $ctx.call(0, square, b);
       $f0.pc++;
 
     case 2:
@@ -62,7 +62,7 @@ simple.$apeiro_func = true;`, result)
 }
 
 func TestApeiroMultipleFunctions(t *testing.T) {
-	result, err := ApeiroTransform(`import { input } from "apeiro://$";
+	result, err := ApeiroTransform(`import { input } from "pristine://$";
 function number() {
   return 100;
 }
@@ -74,9 +74,7 @@ export default function simple(a, b) {
   return c + d;
 }`)
 	assert.Nil(t, err)
-	assert.Equal(t, `const input = $apeiro.importFunction("$", "input");
-
-function number($ctx) {
+	assert.Equal(t, `function number($ctx) {
   const $f0 = $ctx.frame();
 
   switch ($f0.pc) {
@@ -94,7 +92,7 @@ export default function simple($ctx, a, b) {
 
   switch ($f0.pc) {
     case 0:
-      $f0.s._number = $ctx.call(number);
+      $f0.s._number = $ctx.call(0, number);
       $f0.pc++;
 
     case 1:
@@ -106,11 +104,11 @@ export default function simple($ctx, a, b) {
       $f0.pc++;
 
     case 3:
-      $f0.s._square = $ctx.call(square, b);
+      $f0.s._square = $ctx.call(0, square, b);
       $f0.pc++;
 
     case 4:
-      $f0.s._$ctxGetFunction = $ctx.call($ctx.getFunction(input), 10);
+      $f0.s._$ctxGetFunction = $ctx.call(0, $ctx.getFunction("$", "input"), 10);
       $f0.pc++;
 
     case 5:
@@ -126,7 +124,7 @@ export default function simple($ctx, a, b) {
       $f0.pc++;
 
     case 8:
-      $f0.s.e = $ctx.call(number);
+      $f0.s.e = $ctx.call(0, number);
       $f0.pc++;
 
     case 9:
@@ -150,7 +148,7 @@ func TestCompileTypescript(t *testing.T) {
 }
 
 func TestCompileImport(t *testing.T) {
-	output, err := ApeiroTransform(`import { receive } from "apeiro://$";
+	output, err := ApeiroTransform(`import { receive } from "pristine://$";
 
 export default function simple(a, b) {
 	let c = a + b;
@@ -161,8 +159,7 @@ export default function simple(a, b) {
 
 	assert.Nil(t, err)
 
-	assert.Equal(t, `const receive = $apeiro.importFunction("$", "receive");
-export default function simple($ctx, a, b) {
+	assert.Equal(t, `export default function simple($ctx, a, b) {
   const $f0 = $ctx.frame();
 
   switch ($f0.pc) {
@@ -175,7 +172,7 @@ export default function simple($ctx, a, b) {
       $f0.pc++;
 
     case 2:
-      $f0.s.e = $ctx.call($ctx.getFunction(receive), 'specifier');
+      $f0.s.e = $ctx.call(0, $ctx.getFunction("$", "receive"), 'specifier');
       $f0.pc++;
 
     case 3:
@@ -189,13 +186,13 @@ simple.$apeiro_func = true;`, strings.TrimSpace(string(output)))
 }
 
 func TestCompileYield(t *testing.T) {
-	output, err := ApeiroTransform(`import { inputRest } from "apeiro://$";
+	output, err := ApeiroTransform(`import { input as io } from "pristine://$/rest";
 
 export default function *email_responder() {
 	let last_email = {};
 	while (true) {
 		yield last_email;
-		last_email = inputRest({
+		last_email = io({
 			email: {}
 		});
 		console.log(JSON.stringify(last_email));
@@ -205,8 +202,7 @@ export default function *email_responder() {
 
 	fmt.Printf("\n\n%s\n\n", output)
 	assert.Nil(t, err)
-	assert.Equal(t, `const inputRest = $apeiro.importFunction("$", "inputRest");
-export default function* email_responder($ctx) {
+	assert.Equal(t, `export default function* email_responder($ctx) {
   const $f0 = $ctx.frame();
 
   switch ($f0.pc) {
@@ -224,17 +220,17 @@ export default function* email_responder($ctx) {
             $f1.pc++;
 
           case 1:
-            $f0.s.last_email = $ctx.call($ctx.getFunction(inputRest), {
+            $f0.s.last_email = $ctx.call(0, $ctx.getFunction("$", "rest", "input"), {
               email: {}
             });
             $f1.pc++;
 
           case 2:
-            $f0.s._JSON$stringify = $ctx.call(JSON.stringify, $f0.s.last_email);
+            $f0.s._JSON$stringify = $ctx.call(JSON, stringify, $f0.s.last_email);
             $f1.pc++;
 
           case 3:
-            $ctx.call(console.log, $f0.s._JSON$stringify);
+            $ctx.call(console, log, $f0.s._JSON$stringify);
             $f1.pc++;
 
           case 4:
