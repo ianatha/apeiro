@@ -1,0 +1,1 @@
+Files copied from the Blockly project (https://github.com/google/blockly/tree/6f924e349afffe3668456c85f8954855c14e8184/tests/generators) on 2015-12-24

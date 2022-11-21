@@ -8,6 +8,7 @@ require (
 	github.com/evanw/esbuild v0.15.11
 	github.com/gin-contrib/cors v1.4.0
 	github.com/gin-gonic/gin v1.8.1
+	github.com/go-xmlfmt/xmlfmt v1.1.2
 	github.com/goccy/go-json v0.9.7
 	github.com/gwatts/gin-adapter v1.0.0
 	github.com/k0kubun/pp v3.0.1+incompatible
