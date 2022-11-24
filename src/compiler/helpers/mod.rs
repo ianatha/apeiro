@@ -275,7 +275,11 @@ macro_rules! define_helpers {
     };
 }
 
-define_helpers!(Helpers {});
+define_helpers!(Helpers {
+    define_property: (),
+    ts_generator: (),
+    ts_values: (),
+});
 
 pub fn inject_helpers() -> impl Fold + VisitMut {
     as_folder(InjectHelpers)

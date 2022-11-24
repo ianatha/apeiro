@@ -8,6 +8,8 @@ mod either_param_to_closure;
 mod fn_decl_to_fn_expr;
 mod fn_instrument;
 mod fn_wrap;
+#[allow(dead_code)]
+mod generator;
 mod utils;
 
 use swc::{Compiler, SwcComments};

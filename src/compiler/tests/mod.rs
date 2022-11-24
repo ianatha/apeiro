@@ -1,8 +1,8 @@
 use crate::compiler::{self, either_param_to_closure, fn_instrument, fn_wrap};
 
-use swc_common::chain;
+use swc_common::{chain, Mark};
 
-use super::fn_decl_to_fn_expr;
+use super::{fn_decl_to_fn_expr, generator};
 
 fn compiler_test<P>(
     input: &str,
@@ -98,6 +98,39 @@ fn test_fn_wrap_simple() {
         r#"var one = $fn(function one() {
     return 1;
 }, "14146478158333422237");
+"#,
+    );
+}
+
+#[test]
+fn test_fn_generator() {
+    compiler_test(
+        "function *one() { yield 1; yield 2; return 4;}",
+        |_| generator::generator(Mark::fresh(Mark::root())),
+        r#"import _ts_generator from "@pristine/helpers/src/_ts_generator.mjs";
+function one() {
+    return _ts_generator(this, function(_state) {
+        switch(_state.label){
+            case 0:
+                return [
+                    4,
+                    1
+                ];
+            case 1:
+                _state.sent();
+                return [
+                    4,
+                    2
+                ];
+            case 2:
+                _state.sent();
+                return [
+                    2,
+                    4
+                ];
+        }
+    });
+}
 "#,
     );
 }
