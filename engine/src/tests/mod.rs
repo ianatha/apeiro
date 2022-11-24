@@ -1,4 +1,4 @@
-use crate::engine::Engine;
+use crate::Engine;
 
 #[tokio::test]
 async fn it_maintains_state() {

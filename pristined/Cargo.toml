@@ -1,0 +1,21 @@
+[package]
+name = "pristined"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# v8 = "0.55.0"
+# futures = "0.3.25"
+# anyhow = "1.0.66"
+# serde = { version = "1.0.147", features =[ "derive" ] }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4.0.26", features = ["cargo"] }
+pristine_engine = { path = "../engine" }
+anyhow = "1.0.66"
+
+[dev-dependencies]
+criterion = { version = "0.3", features = ["async_futures", "html_reports"] }
+
+[[bench]]
+name = "snapshot"
+harness = false

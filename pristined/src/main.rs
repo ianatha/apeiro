@@ -1,11 +1,6 @@
-mod compiler;
-mod engine;
-mod fs;
-mod v8_helpers;
-
 use anyhow::{Ok, Result};
 use clap::{Arg, ArgAction, Command};
-use engine::Engine;
+use pristine_engine::Engine;
 use std::string::String;
 
 fn cli() -> Command {

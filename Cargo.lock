@@ -1380,14 +1380,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "pristine_stepper"
+name = "pristine_compiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "better_scoped_tls",
- "brotli",
- "clap 4.0.27",
- "criterion",
  "is-macro",
  "once_cell",
  "rustc-hash",
@@ -1402,10 +1399,30 @@ dependencies = [
  "swc_ecma_utils",
  "swc_ecma_visit",
  "swc_ecmascript",
- "tokio",
  "tracing",
- "v8",
  "xxhash-rust",
+]
+
+[[package]]
+name = "pristine_engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "brotli",
+ "pristine_compiler",
+ "tokio",
+ "v8",
+]
+
+[[package]]
+name = "pristined"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.0.27",
+ "criterion",
+ "pristine_engine",
+ "tokio",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 use criterion::async_executor::FuturesExecutor;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pristine_stepper::engine::Engine;
+use pristine_engine::Engine;
 
 const CODE: &str = r#"
 function makestr(length) {

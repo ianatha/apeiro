@@ -29,7 +29,7 @@ macro_rules! helper_expr {
         );
         let mark = $crate::enable_helper!($field_name);
         let span = $span.apply_mark(mark);
-        let external = $crate::compiler::helpers::HELPERS.with(|helper| helper.external());
+        let external = $crate::helpers::HELPERS.with(|helper| helper.external());
 
         if external {
             Expr::from(swc_ecma_utils::quote_ident!(
@@ -55,7 +55,7 @@ macro_rules! helper_expr {
         );
         let mark = $crate::enable_helper!($field_name);
         let span = $span.apply_mark(mark);
-        let external = $crate::compiler::helpers::HELPERS.with(|helper| helper.external());
+        let external = $crate::helpers::HELPERS.with(|helper| helper.external());
 
         if external {
             Expr::from(swc_ecma_utils::quote_ident!(
@@ -79,7 +79,7 @@ macro_rules! helper {
 #[macro_export]
 macro_rules! enable_helper {
     ($i:ident) => {{
-        $crate::compiler::helpers::HELPERS.with(|helpers| {
+        $crate::helpers::HELPERS.with(|helpers| {
             helpers.$i();
             helpers.mark()
         })

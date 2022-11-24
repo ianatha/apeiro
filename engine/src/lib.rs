@@ -1,12 +1,15 @@
 #[cfg(test)]
 mod tests;
 
+mod fs;
+mod v8_helpers;
+
 use anyhow::{anyhow, Ok, Result};
 use v8::ScriptOrigin;
 
-use crate::compiler::pristine_compile;
 use crate::fs::*;
 use crate::v8_helpers::*;
+use pristine_compiler::pristine_compile;
 use std::string::String;
 use std::sync::Once;
 use v8::{

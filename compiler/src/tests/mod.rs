@@ -1,4 +1,5 @@
-use crate::compiler::{self, either_param_to_closure, fn_instrument, fn_wrap};
+use crate as compiler;
+use crate::{either_param_to_closure, fn_instrument, fn_wrap};
 
 use swc_common::{chain, Mark};
 
