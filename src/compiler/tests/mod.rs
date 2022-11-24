@@ -11,7 +11,8 @@ fn compiler_test<P>(
 ) where
     P: swc_ecmascript::visit::Fold,
 {
-    let out = compiler::custom_pristine_compile(input.to_string(), folder_chain, false).unwrap();
+    let out =
+        compiler::custom_pristine_compile(input.to_string(), folder_chain, false, true).unwrap();
     if out != expected.to_string() {
         println!("\n# Output was:\n<<<<\n{}\n>>>>>\n", out);
         assert_eq!(out, expected.to_string());

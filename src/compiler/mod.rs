@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod tests;
 
+#[allow(dead_code)]
+pub mod helpers;
+
 mod either_param_to_closure;
 mod fn_decl_to_fn_expr;
 mod fn_instrument;
@@ -33,88 +36,94 @@ pub fn pristine_compile(input: String) -> Result<String> {
             )
         },
         true,
+        false,
     )
 }
 
 const BASELINE_ES_VERSION: EsVersion = EsVersion::Es2015;
 
+use self::helpers::{Helpers, HELPERS};
 pub fn custom_pristine_compile<P>(
     input: String,
     folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
     source_map: bool,
+    external_helpers: bool,
 ) -> Result<String>
 where
     P: swc_ecmascript::visit::Fold,
 {
     GLOBALS.set(&Globals::new(), || {
-        let cm: Lrc<SourceMap> = Default::default();
-        let compiler = Compiler::new(cm.clone());
-        let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
+        HELPERS.set(&Helpers::new(external_helpers), || {
+            let cm: Lrc<SourceMap> = Default::default();
+            let compiler = Compiler::new(cm.clone());
+            let handler =
+                Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
 
-        let config = TsConfig {
-            tsx: true,
-            decorators: true,
-            ..Default::default()
-        };
+            let config = TsConfig {
+                tsx: true,
+                decorators: true,
+                ..Default::default()
+            };
 
-        let comments: SwcComments = Default::default();
+            let comments: SwcComments = Default::default();
 
-        let file = cm.new_source_file(FileName::Custom("input.js".into()), input);
+            let file = cm.new_source_file(FileName::Custom("input.js".into()), input);
 
-        let program = compiler
-            .parse_js(
-                file.clone(),
+            let program = compiler
+                .parse_js(
+                    file.clone(),
+                    &handler,
+                    BASELINE_ES_VERSION,
+                    Syntax::Typescript(config),
+                    swc::config::IsModule::Bool(true),
+                    Some(&comments),
+                )
+                .expect("Failed to parse JS");
+
+            let result = compiler.process_js_with_custom_pass(
+                file,
+                Some(program),
                 &handler,
-                BASELINE_ES_VERSION,
-                Syntax::Typescript(config),
-                swc::config::IsModule::Bool(true),
-                Some(&comments),
-            )
-            .expect("Failed to parse JS");
-
-        let result = compiler.process_js_with_custom_pass(
-            file,
-            Some(program),
-            &handler,
-            &swc::config::Options {
-                config: swc::config::Config {
-                    jsc: swc::config::JscConfig {
-                        target: Some(BASELINE_ES_VERSION),
-                        syntax: Some(swc_ecma_parser::Syntax::Typescript(config)),
+                &swc::config::Options {
+                    config: swc::config::Config {
+                        jsc: swc::config::JscConfig {
+                            target: Some(BASELINE_ES_VERSION),
+                            syntax: Some(swc_ecma_parser::Syntax::Typescript(config)),
+                            ..Default::default()
+                        },
+                        minify: false.into(),
                         ..Default::default()
                     },
-                    minify: false.into(),
+                    source_maps: if source_map {
+                        Some(swc::config::SourceMapsConfig::Str("inline".into()))
+                    } else {
+                        None
+                    },
                     ..Default::default()
                 },
-                source_maps: if source_map {
-                    Some(swc::config::SourceMapsConfig::Str("inline".into()))
-                } else {
-                    None
-                },
-                ..Default::default()
-            },
-            SingleThreadedComments::default(),
-            |_| noop(),
-            folder_chain,
-        );
+                SingleThreadedComments::default(),
+                |_| noop(),
+                |p| chain!(folder_chain(p), helpers::inject_helpers(),),
+            );
 
-        let result = result?;
+            let result = result?;
 
-        let mut result_str = String::new();
+            let mut result_str = String::new();
 
-        // match result.map {
-        //     Some(map) => {
-        //         let src_map_b64 = base64::encode(map);
-        //         result_str.push_str(&format!(
-        //             "//# sourceMappingURL=data:application/json;base64,{}",
-        //             src_map_b64
-        //         ));
-        //     }
-        //     None => {}
-        // }
-        // result_str.push_str("//apeirocode\n\nfunction $fnwrap(fn, hash) { return fn; }\n");
-        result_str.push_str(&result.code);
+            // match result.map {
+            //     Some(map) => {
+            //         let src_map_b64 = base64::encode(map);
+            //         result_str.push_str(&format!(
+            //             "//# sourceMappingURL=data:application/json;base64,{}",
+            //             src_map_b64
+            //         ));
+            //     }
+            //     None => {}
+            // }
+            // result_str.push_str("//apeirocode\n\nfunction $fnwrap(fn, hash) { return fn; }\n");
+            result_str.push_str(&result.code);
 
-        Ok(result_str)
+            Ok(result_str)
+        })
     })
 }
