@@ -1,9 +1,9 @@
 function addTo(x) {
-	return x + $recv();
+	return x + $recv({ $type: "number" });
 }
 
 function multiplyBy(x) {
-	return x * $recv();
+	return x * $recv({ $type: "number" });
 }
 
 function calculator(init: number) {
@@ -13,7 +13,7 @@ function calculator(init: number) {
 
 	return {
 		incTwice: function() {
-			acc = acc + $recv();
+			acc = acc + $recv({ $type: "number" });;
 			acc = addTo(acc);
 		},
 		inc: function () {
@@ -30,6 +30,7 @@ function calculator(init: number) {
 
 function secondary(a) {
 	try {
+		log("before inc");
 		a.inc();
 		a.inc();
 	} catch (e) {
@@ -38,7 +39,9 @@ function secondary(a) {
 }
 
 function main() {
+	log("init");
 	const a = calculator(1);
+	log("before secondary")
 	secondary(a);
 	return a.get();
 }

@@ -1,6 +1,6 @@
 use criterion::async_executor::FuturesExecutor;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pristine_engine::Engine;
+use pristine_engine::{Engine, StepResult};
 
 const CODE: &str = r#"
 function makestr(length) {
@@ -32,11 +32,10 @@ function makestr(length) {
 "#;
 
 async fn run_engine(
-    state_loc: Option<String>,
     snapshot_loc: Option<Vec<u8>>,
     size: &usize,
-) -> (Option<String>, Option<Vec<u8>>) {
-    let engine = Engine::new();
+) -> (Option<StepResult>, Option<Vec<u8>>) {
+    let mut engine = Engine::new(None);
     let (new_state, new_snapshot) = engine
         .step_process(
             Some(
@@ -44,7 +43,6 @@ async fn run_engine(
                     .as_bytes()
                     .to_vec(),
             ),
-            state_loc,
             snapshot_loc,
             "million_strings.g(0)".to_string(),
         )
@@ -57,8 +55,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("strings");
     for size in [1_000, 5_000, 10_000, 25_000, 50_000].iter() {
         group.bench_with_input(BenchmarkId::new("snapshot", size), &size, |b, &s| {
-            b.to_async(FuturesExecutor)
-                .iter(|| run_engine(None, None, s))
+            b.to_async(FuturesExecutor).iter(|| run_engine(None, s))
         });
     }
 }

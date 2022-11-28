@@ -7,7 +7,6 @@ pub mod helpers;
 mod either_param_to_closure;
 mod fn_decl_to_fn_expr;
 mod fn_instrument;
-mod fn_wrap;
 #[allow(dead_code)]
 mod generator;
 mod utils;
@@ -26,6 +25,10 @@ use anyhow::Result;
 use swc_ecma_parser::{Syntax, TsConfig};
 use swc_ecma_transforms::pass::noop;
 
+pub fn engine_runtime_compile(input: String) -> Result<String> {
+    custom_pristine_compile(input, |_| noop(), false, false, true)
+}
+
 pub fn pristine_compile(input: String) -> Result<String> {
     custom_pristine_compile(
         input,
@@ -33,11 +36,11 @@ pub fn pristine_compile(input: String) -> Result<String> {
             chain!(
                 either_param_to_closure::folder(),
                 fn_decl_to_fn_expr::folder(),
-                fn_wrap::folder("$fnwrap".to_string()),
                 fn_instrument::folder(),
             )
         },
         true,
+        false,
         false,
     )
 }
@@ -50,6 +53,7 @@ pub fn custom_pristine_compile<P>(
     folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
     source_map: bool,
     external_helpers: bool,
+    minify: bool,
 ) -> Result<String>
 where
     P: swc_ecmascript::visit::Fold,
@@ -93,7 +97,7 @@ where
                             syntax: Some(swc_ecma_parser::Syntax::Typescript(config)),
                             ..Default::default()
                         },
-                        minify: false.into(),
+                        minify: minify.into(),
                         ..Default::default()
                     },
                     source_maps: if source_map {

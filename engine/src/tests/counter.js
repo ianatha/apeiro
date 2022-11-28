@@ -2,7 +2,10 @@ var $module = function (){
     var a = function a() {
       var counter = 0;
       return {
-        g: function() { return counter; },
+        g: function() { return {
+          status: "DONE",
+          val: counter,
+        }},
         i: function() { counter++; }
       }
     }; 

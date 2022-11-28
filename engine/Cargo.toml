@@ -9,3 +9,9 @@ v8 = "0.55.0"
 anyhow = "1.0.66"
 tokio = { version = "1", features = ["full"] }
 pristine_compiler = { path = "../compiler" }
+serde = { version = "=1.0.144", features = ["derive"] }
+serde_v8 = "0.72.0"
+serde_json = "1.0.89"
+
+[dev-dependencies]
+tokio-test = "0.4.2"

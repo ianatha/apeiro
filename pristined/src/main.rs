@@ -37,13 +37,13 @@ async fn main() -> Result<()> {
     let pid = matches.get_one::<String>("pid").expect("pid");
     let step = matches.get_one::<String>("step").expect("step").to_owned();
 
-    let engine = Engine::new();
+    let mut engine = Engine::new(None);
 
     let res = engine.step_fs_process(pid, step, !no_compile).await;
 
     match res {
         Result::Ok(state) => {
-            println!("state: {}", state);
+            println!("state: {:?}", state);
         }
         Err(e) => {
             println!("error: {}", e);
