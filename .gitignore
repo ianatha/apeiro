@@ -2,5 +2,6 @@ secrets.yaml
 apeirod
 coverage.out
 *.db
+/.vscode/
 /notes
 /target
