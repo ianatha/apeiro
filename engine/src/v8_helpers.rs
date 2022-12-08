@@ -22,3 +22,11 @@ pub fn stack_trace_to_string<'s>(
     }
     stack_trace_str
 }
+
+#[macro_export]
+macro_rules! v8_str {
+    ($scope:ident / $s:expr) => {
+        v8::String::new($scope, $s).unwrap()
+    };
+}
+

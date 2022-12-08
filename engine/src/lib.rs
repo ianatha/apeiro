@@ -5,25 +5,18 @@ mod fs;
 mod v8_helpers;
 
 use anyhow::{anyhow, Ok, Result};
-use serde::Deserialize;
-
+use pristine_internal_api::StepResult;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
 use crate::fs::*;
 use crate::v8_helpers::*;
-use pristine_compiler::pristine_compile;
+pub use pristine_compiler::pristine_compile;
 use std::string::String;
 use std::sync::Once;
 use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, NewStringType, Script};
 
 static INIT: Once = Once::new();
-
-macro_rules! v8_str {
-    ($scope:ident / $s:expr) => {
-        v8::String::new($scope, $s).unwrap()
-    };
-}
 
 #[inline(always)]
 fn v8_init() {
