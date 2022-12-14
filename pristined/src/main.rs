@@ -26,7 +26,7 @@ async fn main() -> std::io::Result<()> {
     let conn_pool = db::establish_connection(store).unwrap();
     db::init_db(&conn_pool).expect("DB initialization failed");
 
-    env_logger::init_from_env(Env::default().default_filter_or("info"));
+    env_logger::init_from_env(Env::default().default_filter_or("info,swc_ecma_codegen=off"));
 
     println!("Starting HTTP daemon on port {}", port);
     HttpServer::new(move || {
@@ -37,6 +37,7 @@ async fn main() -> std::io::Result<()> {
             .service(handlers::proc_new)
             .service(handlers::proc_list)
             .service(handlers::proc_get)
+            .service(handlers::proc_send)
     })
     .bind(("127.0.0.1", port))
     .expect("failed to bind 127.0.0.1")

@@ -38,7 +38,7 @@ function secondary(a) {
 	}
 }
 
-function main() {
+export default function main() {
 	log("init");
 	const a = calculator(1);
 	log("before secondary")

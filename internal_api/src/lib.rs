@@ -2,6 +2,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct ProcNewOutput {
+    pub id: String,
+    pub state: StepResult,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProcSummary {
     pub id: String,
 }
@@ -14,6 +20,11 @@ pub struct ProcListOutput {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewRequest {
     pub src: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProcSendRequest {
+    pub msg: Value,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]

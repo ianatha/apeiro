@@ -9,7 +9,8 @@ async fn it_maintains_state() {
         .step_process(
             Some(src),
             None,
-            "counter.i(); log(\"hello\"); counter.g()".to_string(),
+            "let counter = $usercode().default; counter.i(); log(\"hello\"); counter.g()"
+                .to_string(),
         )
         .await
         .unwrap();
@@ -32,7 +33,11 @@ async fn it_catches_exceptions() {
     let mut engine = Engine::new(None);
 
     let (state, snapshot) = engine
-        .step_process(Some(src), None, "counter.i(); counter.g()".to_string())
+        .step_process(
+            Some(src),
+            None,
+            "let counter = $usercode().default; counter.i(); counter.g()".to_string(),
+        )
         .await
         .unwrap();
 
@@ -54,7 +59,11 @@ async fn test_execution() {
     let mut engine = Engine::new(None);
 
     let (state, snapshot) = engine
-        .step_process(Some(src), None, "counter.i(); counter.g()".to_string())
+        .step_process(
+            Some(src),
+            None,
+            "let counter = $usercode().default; counter.i(); counter.g()".to_string(),
+        )
         .await
         .unwrap();
 
@@ -105,7 +114,7 @@ struct StepAssertion {
 
 fn multiple_steps(input: &str, steps: Vec<StepAssertion>) {
     let src_user_out = pristine_compiler::pristine_compile(input.to_string()).unwrap();
-    let js_stmt = r#"$step(main);"#;
+    let js_stmt = r#"$step($usercode().default);"#;
 
     let mut engine = crate::Engine::new(Some(crate::get_engine_runtime));
 

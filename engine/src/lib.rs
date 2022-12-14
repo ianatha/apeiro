@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests;
 
-mod fs;
 mod v8_helpers;
 
 use anyhow::{anyhow, Ok, Result};
@@ -10,7 +9,6 @@ pub use pristine_internal_api::StepResultStatus;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
-use crate::fs::*;
 use crate::v8_helpers::*;
 pub use pristine_compiler::pristine_compile;
 use std::string::String;
@@ -18,6 +16,15 @@ use std::sync::Once;
 use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
 
 static INIT: Once = Once::new();
+
+fn unexpected_module_resolve_callback<'a>(
+    _context: v8::Local<'a, v8::Context>,
+    _specifier: v8::Local<'a, v8::String>,
+    _import_assertions: v8::Local<'a, v8::FixedArray>,
+    _referrer: v8::Local<'a, v8::Module>,
+) -> Option<v8::Local<'a, v8::Module>> {
+    unreachable!()
+}
 
 #[inline(always)]
 fn v8_init() {
@@ -38,8 +45,13 @@ fn v8_init() {
 #[derive(Default, Debug)]
 pub struct Engine {
     runtime_js_src: Option<fn() -> String>,
-    mbox: Box<Vec<serde_json::Value>>,
+    pub mbox: Box<Vec<serde_json::Value>>,
     pid: String,
+}
+
+#[derive(Default, Debug)]
+pub struct EngineInstance<'a> {
+    pub usercode: Option<v8::Local<'a, v8::Module>>,
 }
 
 pub fn get_engine_runtime() -> String {
@@ -60,40 +72,6 @@ impl Engine {
         }
     }
 
-    pub async fn step_fs_process(
-        &mut self,
-        pid: &String,
-        js_stmt: String,
-        compile: bool,
-    ) -> Result<StepResult> {
-        let snapshot = file_to_bytes_decompress(format!("{}.snapshot.bin", pid), true);
-
-        let src: Option<String> = if snapshot.is_none() {
-            let src_loc = format!("{}.js", pid);
-            match file_to_bytes(src_loc) {
-                Some(src_bytes) => {
-                    let src = std::str::from_utf8(src_bytes.as_slice())
-                        .unwrap()
-                        .to_string();
-                    if compile {
-                        Some(pristine_compile(src).unwrap())
-                    } else {
-                        Some(src)
-                    }
-                }
-                None => None,
-            }
-        } else {
-            None
-        };
-
-        let (new_state, new_snpashot) = self.step_process(src, snapshot, js_stmt).await?;
-
-        bytes_to_file_compress(new_snpashot, format!("{}.snapshot.bin", pid), true)?;
-
-        Ok(new_state)
-    }
-
     fn setup_isolate(&self, mut isolate: v8::OwnedIsolate) -> v8::OwnedIsolate {
         isolate.set_capture_stack_trace_for_uncaught_exceptions(true, 100);
         isolate
@@ -105,6 +83,7 @@ impl Engine {
         snapshot: Option<Vec<u8>>,
         js_stmt: String,
     ) -> Result<(StepResult, Vec<u8>)> {
+        let mut engine_instance = EngineInstance { usercode: None };
         let align = std::mem::align_of::<usize>();
         let layout = std::alloc::Layout::from_size_align(
             std::mem::size_of::<*mut v8::OwnedIsolate>(),
@@ -114,6 +93,7 @@ impl Engine {
         assert!(layout.size() > 0);
 
         let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
+        let engine_instance_external_ref = (&engine_instance as *const _) as *mut std::ffi::c_void;
 
         let refs = v8::ExternalReferences::new(&[
             v8::ExternalReference {
@@ -123,22 +103,30 @@ impl Engine {
                 function: mbox_callback.map_fn_to(),
             },
             v8::ExternalReference {
+                function: usercode_callback.map_fn_to(),
+            },
+            v8::ExternalReference {
+                pointer: engine_instance_external_ref,
+            },
+            v8::ExternalReference {
                 pointer: engine_external_ref,
             },
         ]);
         let refs: &'static v8::ExternalReferences = Box::leak(Box::new(refs));
 
-        let snapshot_creator = match snapshot {
-            Some(snapshot) => {
-                Isolate::snapshot_creator_from_existing_snapshot(snapshot, Some(refs))
-            }
-            None => Isolate::snapshot_creator(Some(refs)),
+        let (snapshot_creator, snapshot_existed) = match snapshot {
+            Some(snapshot) => (
+                Isolate::snapshot_creator_from_existing_snapshot(snapshot, Some(refs)),
+                true,
+            ),
+            None => (Isolate::snapshot_creator(Some(refs)), false),
         };
         let mut isolate = self.setup_isolate(snapshot_creator);
         let new_state: Result<StepResult> = {
             let handle_scope = &mut HandleScope::new(&mut isolate);
 
             let engine_ref = v8::External::new(handle_scope, engine_external_ref);
+            let engine_instance_ref = v8::External::new(handle_scope, engine_instance_external_ref);
 
             let log_callback_fn_builder = v8::FunctionTemplate::builder(log_callback)
                 .data(engine_ref.into())
@@ -146,6 +134,10 @@ impl Engine {
 
             let mbox_fn_builder = v8::FunctionTemplate::builder(mbox_callback)
                 .data(engine_ref.into())
+                .build(handle_scope);
+
+            let usercode_fn_builder = v8::FunctionTemplate::builder(usercode_callback)
+                .data(engine_instance_ref.into())
                 .build(handle_scope);
 
             let global = v8::ObjectTemplate::new(handle_scope);
@@ -158,6 +150,11 @@ impl Engine {
                 mbox_fn_builder.into(),
             );
 
+            global.set(
+                v8::String::new(handle_scope, "$usercode").unwrap().into(),
+                usercode_fn_builder.into(),
+            );
+
             let context = v8::Context::new_from_template(handle_scope, global);
             handle_scope.set_default_context(context);
             let context_scope = &mut ContextScope::new(handle_scope, context);
@@ -167,31 +164,33 @@ impl Engine {
                 let null = v8::null(context_scope).into();
 
                 if let Some(src) = src {
-                    if let Some(engine_runtime_fn) = self.runtime_js_src {
-                        let engine_runtime = engine_runtime_fn();
-                        let engine_runtime = v8_str!(context_scope / &engine_runtime);
+                    if !snapshot_existed {
+                        if let Some(engine_runtime_fn) = self.runtime_js_src {
+                            let engine_runtime = engine_runtime_fn();
+                            let engine_runtime = v8_str!(context_scope / &engine_runtime);
 
-                        let engine_resource_name = v8_str!(context_scope / "engine").into();
+                            let engine_resource_name = v8_str!(context_scope / "engine").into();
 
-                        let script_origin = &ScriptOrigin::new(
-                            context_scope,
-                            engine_resource_name,
-                            0,
-                            0,
-                            false,
-                            0,
-                            null,
-                            false,
-                            false,
-                            false,
-                        );
+                            let script_origin = &ScriptOrigin::new(
+                                context_scope,
+                                engine_resource_name,
+                                0,
+                                0,
+                                false,
+                                0,
+                                null,
+                                false,
+                                false,
+                                false,
+                            );
 
-                        let engine_script =
-                            Script::compile(context_scope, engine_runtime, Some(script_origin))
-                                .ok_or(anyhow!("207"))?;
-                        _ = engine_script
-                            .run(context_scope)
-                            .ok_or(anyhow!("couldnt run engine script"))?;
+                            let engine_script =
+                                Script::compile(context_scope, engine_runtime, Some(script_origin))
+                                    .ok_or(anyhow!("207"))?;
+                            _ = engine_script
+                                .run(context_scope)
+                                .ok_or(anyhow!("couldnt run engine script"))?;
+                        }
                     }
 
                     let src_code = v8::String::new(context_scope, src.as_str())
@@ -209,14 +208,22 @@ impl Engine {
                         null,
                         false,
                         false,
-                        false,
+                        true,
                     );
 
-                    let src_script = Script::compile(context_scope, src_code, Some(script_origin))
-                        .ok_or(anyhow!("207"))?;
-                    _ = src_script
-                        .run(context_scope)
-                        .ok_or(anyhow!("couldnt run script"))?;
+                    let script = v8::script_compiler::Source::new(src_code, Some(&script_origin));
+
+                    let module =
+                        v8::script_compiler::compile_module(context_scope, script).unwrap();
+
+                    let module_i1 = module
+                        .instantiate_module(context_scope, unexpected_module_resolve_callback);
+                    assert_eq!(module_i1, Some(true));
+                    assert_eq!(module.get_status(), v8::ModuleStatus::Instantiated);
+
+                    let _module_instance = module.evaluate(context_scope).unwrap();
+
+                    engine_instance.usercode = Some(module);
                 }
 
                 let js_stmt_code = v8::String::new(context_scope, &js_stmt)
@@ -346,3 +353,15 @@ macro_rules! struct_method_to_v8 {
 
 struct_method_to_v8!(log_callback -> Engine::log_callback);
 struct_method_to_v8!(mbox_callback -> Engine::mbox_callback);
+
+fn usercode_callback(
+    _scope: &mut v8::HandleScope,
+    args: v8::FunctionCallbackArguments,
+    mut retval: v8::ReturnValue,
+) {
+    let external = v8::Local::<v8::External>::try_from(args.data()).unwrap();
+    let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
+    let val = struct_instance.usercode.unwrap();
+    let namespace = val.get_module_namespace();
+    retval.set(namespace);
+}

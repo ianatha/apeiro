@@ -2,7 +2,7 @@ use nanoid::nanoid;
 use pristine_engine::StepResultStatus;
 use pristine_internal_api::{ProcSummary, StepResult};
 use r2d2::{Pool, PooledConnection};
-use r2d2_sqlite::rusqlite::{params};
+use r2d2_sqlite::rusqlite::params;
 use r2d2_sqlite::SqliteConnectionManager;
 use serde_json;
 
@@ -88,12 +88,35 @@ pub fn proc_update(
     Ok(())
 }
 
+pub struct ProcDetails {
+    pub compiled_src: String,
+    pub snapshot: Vec<u8>,
+    pub state: StepResult,
+}
+
+pub fn proc_get_details(conn: &Conn, id: &String) -> Result<ProcDetails, anyhow::Error> {
+    let mut stmt = conn.prepare("SELECT compiled_src, snapshot FROM procs WHERE id = ?")?;
+
+    let state = proc_get(conn, id)?;
+
+    let result = stmt.query_row(&[id], |row| {
+        let compiled_src: String = row.get(0)?;
+        let snapshot: Vec<u8> = row.get(1)?;
+        Ok(ProcDetails {
+            compiled_src,
+            snapshot,
+            state,
+        })
+    })?;
+
+    Ok(result)
+}
+
 pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
     let mut stmt = conn.prepare("SELECT status, val, suspension FROM procs WHERE id = ?")?;
 
     let result = stmt.query_row(&[id], |row| {
         let status: String = row.get(0).unwrap();
-        println!("status: {}", status);
         let status: StepResultStatus = serde_json::from_str(&status).unwrap();
         let val: Result<String, _> = row.get(1);
         let val = if let Ok(val) = val {

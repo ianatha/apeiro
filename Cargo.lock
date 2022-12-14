@@ -1999,6 +1999,7 @@ dependencies = [
  "pristine_engine",
  "pristine_internal_api",
  "reqwest",
+ "serde_json",
  "tokio",
 ]
 
