@@ -15,12 +15,12 @@ fn test_fn_wrap_simple() {
     compiler_test(
         "function one() { return 1;}",
         folder_chain!(),
-        r#"var one = $fn(function one() {
-    var $f1 = $new_frame("14146478158333422237", null, $sc1);
-    var $sc1 = $scope(undefined, $f1);
+        r#"let one = $fn(function one() {
+    let $f1 = $new_frame("14146478158333422237", null);
+    let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
-            var __return_val = 1;
+            let __return_val = 1;
             $frame_end($f1);
             return __return_val;
     }
@@ -67,12 +67,12 @@ fn test_fn_wrap_export_default() {
     compiler_test(
         "export default function sum(a, b) { return a + b; }",
         folder_chain!(),
-        r#"var sum = $fn(function(a, b) {
-    var $f1 = $new_frame("6977906965653910212", null, $sc1);
-    var $sc1 = $scope(undefined, $f1);
+        r#"let sum = $fn(function(a, b) {
+    let $f1 = $new_frame("6977906965653910212", null);
+    let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
-            var __return_val = a + b;
+            let __return_val = a + b;
             $frame_end($f1);
             return __return_val;
     }
@@ -87,12 +87,12 @@ fn test_fn_wrap_export_named() {
     compiler_test(
         "export function sum(a, b) { return a + b; }",
         folder_chain!(),
-        r#"export var sum = $fn(function sum(a, b) {
-    var $f1 = $new_frame("10735822781612323506", null, $sc1);
-    var $sc1 = $scope(undefined, $f1);
+        r#"export let sum = $fn(function sum(a, b) {
+    let $f1 = $new_frame("10735822781612323506", null);
+    let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
-            var __return_val = a + b;
+            let __return_val = a + b;
             $frame_end($f1);
             return __return_val;
     }

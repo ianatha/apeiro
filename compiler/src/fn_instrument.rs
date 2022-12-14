@@ -120,7 +120,7 @@ impl WrapFunctions {
         };
         VarDecl {
             span: DUMMY_SP,
-            kind: VarDeclKind::Var,
+            kind: VarDeclKind::Let,
             declare: false,
             decls: vec![VarDeclarator {
                 span: Span {
@@ -148,10 +148,6 @@ impl WrapFunctions {
                         Some(hash) => hash.to_string().as_arg(),
                         None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
                     },
-                    match self.current_scope_identifier() {
-                        Some(scope_id) => scope_id.as_arg(),
-                        None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
-                    },
                 ],
             }
         } else {
@@ -165,16 +161,12 @@ impl WrapFunctions {
                         Some(hash) => hash.to_string().as_arg(),
                         None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
                     },
-                    match self.current_scope_identifier() {
-                        Some(scope_id) => scope_id.as_arg(),
-                        None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
-                    },
                 ],
             }
         };
         VarDecl {
             span: DUMMY_SP,
-            kind: VarDeclKind::Var,
+            kind: VarDeclKind::Let,
             declare: false,
             decls: vec![VarDeclarator {
                 span: Span {
@@ -318,7 +310,7 @@ impl WrapFunctions {
                         vec![
                             VarDecl {
                                 span: DUMMY_SP,
-                                kind: VarDeclKind::Var,
+                                kind: VarDeclKind::Let,
                                 declare: false,
                                 decls: vec![VarDeclarator {
                                     span: DUMMY_SP,

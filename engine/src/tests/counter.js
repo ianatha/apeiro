@@ -1,12 +1,12 @@
-var $module = function (){
-    var a = function a() {
-      var counter = 0;
+let $module = function (){
+    let a = function a() {
+      let x = 0;
       return {
         g: function() { return {
-          status: "DONE",
-          val: counter,
-        }},
-        i: function() { counter++; }
+          status: "SUSPEND",
+          val: x,
+        }; },
+        i: function() { x++; }
       }
     }; 
     return {

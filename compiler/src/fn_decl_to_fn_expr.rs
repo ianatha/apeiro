@@ -30,7 +30,7 @@ impl VisitMut for VisitorFnDeclToFnExpr {
                 })) => {
                     let var_decl = VarDecl {
                         span: ident.span,
-                        kind: VarDeclKind::Var,
+                        kind: VarDeclKind::Let,
                         declare: false,
                         decls: vec![VarDeclarator {
                             span: ident.span,
@@ -60,7 +60,7 @@ impl VisitMut for VisitorFnDeclToFnExpr {
         if let Decl::Fn(fn_decl) = decl {
             *decl = VarDecl {
                 span: fn_decl.span(),
-                kind: VarDeclKind::Var,
+                kind: VarDeclKind::Let,
                 declare: false,
                 decls: vec![VarDeclarator {
                     span: fn_decl.function.span(),

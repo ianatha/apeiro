@@ -92,7 +92,7 @@ impl VisitMut for Wrapper {
                 stmts.push(
                     VarDecl {
                         span: DUMMY_SP,
-                        kind: VarDeclKind::Var,
+                        kind: VarDeclKind::Let,
                         declare: Default::default(),
                         decls: v.hoisted_vars.take(),
                     }
@@ -104,7 +104,7 @@ impl VisitMut for Wrapper {
                 stmts.push(
                     VarDecl {
                         span: DUMMY_SP,
-                        kind: VarDeclKind::Var,
+                        kind: VarDeclKind::Let,
                         declare: Default::default(),
                         decls: vars,
                     }

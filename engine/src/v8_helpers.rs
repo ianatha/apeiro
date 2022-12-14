@@ -29,4 +29,3 @@ macro_rules! v8_str {
         v8::String::new($scope, $s).unwrap()
     };
 }
-

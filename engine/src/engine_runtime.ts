@@ -71,7 +71,7 @@ function $frame_end(dead_child) {
 
 var current_frame = 0;
 
-function $new_frame(fnhash, last_fn_hash, scope) {
+function $new_frame(fnhash, last_fn_hash) {
 	if ($frames[current_frame]) {
 		if ($frames[current_frame].fnhash !== fnhash) {
 			throw new PristineEngineError("illegal frame restoration, targetting wrong fn");
@@ -79,7 +79,7 @@ function $new_frame(fnhash, last_fn_hash, scope) {
 		current_frame++;
 		return $frames[current_frame - 1];
 	}
-	var $new_frame = { $pc: 0, idx: $frames.length, fnhash, scope };
+	var $new_frame = { $pc: 0, idx: $frames.length, fnhash };
 	$frames.push($new_frame);
 	current_frame++;
 	return $new_frame;
