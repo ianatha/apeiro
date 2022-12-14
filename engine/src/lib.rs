@@ -94,50 +94,12 @@ impl Engine {
         Ok(new_state)
     }
 
-    pub async fn step_process(
-        &mut self,
-        src: Option<String>,
-        snapshot: Option<Vec<u8>>,
-        js_stmt: String,
-    ) -> Result<(StepResult, Vec<u8>)> {
-        match (src, snapshot) {
-            (Some(src), None) => {
-                // First step
-                let (state, snapshot) = self.step_process_first(src, js_stmt).await?;
-                Ok((state, snapshot))
-            }
-            (_, Some(snapshot)) => {
-                // Subsequent step
-                let (new_state, new_snapshot) =
-                    self.step_process_subsequent(snapshot, js_stmt).await?;
-                Ok((new_state, new_snapshot))
-            }
-            _ => Err(anyhow!("missing both src and snapshot")),
-        }
-    }
-
     fn setup_isolate(&self, mut isolate: v8::OwnedIsolate) -> v8::OwnedIsolate {
         isolate.set_capture_stack_trace_for_uncaught_exceptions(true, 100);
         isolate
     }
 
-    async fn step_process_first(
-        &mut self,
-        src: String,
-        js_stmt: String,
-    ) -> Result<(StepResult, Vec<u8>)> {
-        self.step_process_inner(Some(src), None, js_stmt).await
-    }
-
-    async fn step_process_subsequent(
-        &mut self,
-        snapshot: Vec<u8>,
-        js_stmt: String,
-    ) -> Result<(StepResult, Vec<u8>)> {
-        self.step_process_inner(None, Some(snapshot), js_stmt).await
-    }
-
-    async fn step_process_inner(
+    pub async fn step_process(
         &mut self,
         src: Option<String>,
         snapshot: Option<Vec<u8>>,
