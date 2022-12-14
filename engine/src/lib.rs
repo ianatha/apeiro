@@ -5,7 +5,8 @@ mod fs;
 mod v8_helpers;
 
 use anyhow::{anyhow, Ok, Result};
-use pristine_internal_api::StepResult;
+pub use pristine_internal_api::StepResult;
+pub use pristine_internal_api::StepResultStatus;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
@@ -41,22 +42,6 @@ pub struct Engine {
     pid: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Default)]
-pub enum StepResultStatus {
-    #[default]
-    DONE,
-    SUSPEND,
-    ERROR,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct StepResult {
-    pub status: StepResultStatus,
-    pub val: Option<serde_json::Value>,
-    // err: Option<v8::Value>,
-    pub suspension: Option<serde_json::Value>,
-}
-
 pub fn get_engine_runtime() -> String {
     pristine_compiler::engine_runtime_compile(include_str!("engine_runtime.ts").into()).unwrap()
 }
@@ -81,11 +66,9 @@ impl Engine {
         js_stmt: String,
         compile: bool,
     ) -> Result<StepResult> {
-        let state = file_to_bytes(format!("{}.state.json", pid))
-            .map(|x| std::str::from_utf8(x.as_slice()).unwrap().to_string());
         let snapshot = file_to_bytes_decompress(format!("{}.snapshot.bin", pid), true);
 
-        let src: Option<Vec<u8>> = if state.is_none() || snapshot.is_none() {
+        let src: Option<Vec<u8>> = if snapshot.is_none() {
             let src_loc = format!("{}.js", pid);
             match file_to_bytes(src_loc) {
                 Some(src_bytes) => {
@@ -113,11 +96,11 @@ impl Engine {
 
     pub async fn step_process(
         &mut self,
-        src_loc: Option<Vec<u8>>,
-        snapshot_loc: Option<Vec<u8>>,
+        src: Option<Vec<u8>>,
+        snapshot: Option<Vec<u8>>,
         js_stmt: String,
     ) -> Result<(StepResult, Vec<u8>)> {
-        match (src_loc, snapshot_loc) {
+        match (src, snapshot) {
             (Some(src), None) => {
                 // First step
                 let (state, snapshot) = self.step_process_first(src, js_stmt).await?;

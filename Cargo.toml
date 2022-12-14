@@ -3,5 +3,7 @@
 members = [
 	"compiler",
 	"engine",
-	"pristined"
+	"pristined",
+	"internal_api",
+	"cli",
 ]

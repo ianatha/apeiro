@@ -1,54 +1,34 @@
-use anyhow::{Ok, Result};
-use clap::{Arg, ArgAction, Command};
-use pristine_engine::Engine;
-use std::string::String;
+mod handlers;
 
-fn cli() -> Command {
-    Command::new("pristine_stepper")
-        .arg(
-            Arg::new("no-compile")
-                .short('N')
-                .long("no-compile")
-                .action(ArgAction::SetTrue)
-                .num_args(0),
-        )
-        .arg(
-            Arg::new("pid")
-                .action(ArgAction::Set)
-                .required(true)
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("step")
-                .action(ArgAction::Set)
-                .required(true)
-                .num_args(1),
-        )
+use actix_web::middleware::Logger;
+use actix_web::{App, HttpServer};
+use clap::{command, Parser};
+use env_logger::Env;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[clap(short, long)]
+    port: Option<u16>,
 }
 
-/// pristine_stepper [id] [js_stmt]
-/// Steps a Pristine function by executing [js_stmt]. If no [id].state.json, or [id].snapshot.bin exist,
-/// it assumes this is the function's first step, and it expects its source to be at [id].js.
-/// [id].js is not evaluated after the first step.
 #[tokio::main]
-async fn main() -> Result<()> {
-    let matches = cli().get_matches();
-    let no_compile = matches.get_flag("no-compile");
-    let pid = matches.get_one::<String>("pid").expect("pid");
-    let step = matches.get_one::<String>("step").expect("step").to_owned();
+async fn main() -> std::io::Result<()> {
+    let cli = Cli::parse();
+    let port = cli.port.unwrap_or(5151);
 
-    let mut engine = Engine::new(None);
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
 
-    let res = engine.step_fs_process(pid, step, !no_compile).await;
-
-    match res {
-        Result::Ok(state) => {
-            println!("state: {:?}", state);
-        }
-        Err(e) => {
-            println!("error: {}", e);
-        }
-    }
-
-    Ok(())
+    println!("Starting HTTP daemon on port {}", port);
+    HttpServer::new(move || {
+        App::new()
+            .wrap(Logger::default())
+            .wrap(Logger::new("%a %{User-Agent}i"))
+            .service(handlers::proc_list)
+    })
+    .bind(("127.0.0.1", port))
+    .expect("failed to bind 127.0.0.1")
+    .run()
+    .await
 }

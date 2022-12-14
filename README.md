@@ -1,23 +1,20 @@
 # Quickstart
 
 ```bash
-$ cargo run -- src/engine/tests/counter "counter.i(); counter.g()"
-Finished dev [unoptimized + debuginfo] target(s) in 0.06s
-     Running `target/debug/pristine_stepper src/tests/counter 'counter.i(); counter.g()'`
-state: 1
+$ cargo run --bin pristine_cli -- step engine/src/tests/counter "counter.inc(); counter.get()"
+state: StepResult { status: SUSPEND, val: Some(Number(1)), suspension: None }
 
-$ cargo run -- src/engine/tests/counter "counter.i(); counter.g()"
+$ cargo run --bin pristine_cli -- step engine/src/tests/counter "counter.i(); counter.g()"
     Finished dev [unoptimized + debuginfo] target(s) in 0.07s
      Running `target/debug/pristine_stepper src/tests/counter 'counter.i(); counter.g()'`
-state: 2
+state: StepResult { status: SUSPEND, val: Some(Number(2)), suspension: None }
 
-$ cargo run -- src/engine/tests/counter "counter.i(); counter.g()"
+$ cargo run --bin pristine_cli -- step engine/src/tests/counter "counter.i(); counter.g()"
     Finished dev [unoptimized + debuginfo] target(s) in 0.07s
      Running `target/debug/pristine_stepper src/tests/counter 'counter.i(); counter.g()'`
-state: 3
+state: StepResult { status: SUSPEND, val: Some(Number(3)), suspension: None }
 
 $ stat -f "%N %z" src/engine/tests/counter.*
-src/engine/tests/counter.js 262
-src/engine/tests/counter.snapshot.bin 39836
-src/engine/tests/counter.state.json 1
+engine/src/tests/counter.js 301
+engine/src/tests/counter.snapshot.bin 44787
 ```
