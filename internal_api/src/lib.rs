@@ -1,22 +1,19 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProcSummary {
     pub id: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProcListOutput {
     pub procs: Vec<ProcSummary>,
 }
 
-#[derive(Serialize, Debug, Clone)]
-pub struct ProcState {
-    pub id: String,
-    pub status: StepResultStatus,
-    pub val: Option<Value>,
-    pub suspension: Option<Value>,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProcNewRequest {
+    pub src: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default, Clone)]
@@ -33,7 +30,7 @@ impl std::fmt::Display for StepResultStatus {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct StepResult {
     pub status: StepResultStatus,
     pub val: Option<Value>,
