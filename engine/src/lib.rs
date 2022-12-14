@@ -15,7 +15,7 @@ use crate::v8_helpers::*;
 pub use pristine_compiler::pristine_compile;
 use std::string::String;
 use std::sync::Once;
-use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, NewStringType, Script};
+use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
 
 static INIT: Once = Once::new();
 
@@ -68,17 +68,17 @@ impl Engine {
     ) -> Result<StepResult> {
         let snapshot = file_to_bytes_decompress(format!("{}.snapshot.bin", pid), true);
 
-        let src: Option<Vec<u8>> = if snapshot.is_none() {
+        let src: Option<String> = if snapshot.is_none() {
             let src_loc = format!("{}.js", pid);
             match file_to_bytes(src_loc) {
                 Some(src_bytes) => {
+                    let src = std::str::from_utf8(src_bytes.as_slice())
+                        .unwrap()
+                        .to_string();
                     if compile {
-                        let src = std::str::from_utf8(src_bytes.as_slice())
-                            .unwrap()
-                            .to_string();
-                        Some(pristine_compile(src).unwrap().into_bytes())
+                        Some(pristine_compile(src).unwrap())
                     } else {
-                        Some(src_bytes)
+                        Some(src)
                     }
                 }
                 None => None,
@@ -96,7 +96,7 @@ impl Engine {
 
     pub async fn step_process(
         &mut self,
-        src: Option<Vec<u8>>,
+        src: Option<String>,
         snapshot: Option<Vec<u8>>,
         js_stmt: String,
     ) -> Result<(StepResult, Vec<u8>)> {
@@ -123,7 +123,7 @@ impl Engine {
 
     async fn step_process_first(
         &mut self,
-        src: Vec<u8>,
+        src: String,
         js_stmt: String,
     ) -> Result<(StepResult, Vec<u8>)> {
         self.step_process_inner(Some(src), None, js_stmt).await
@@ -139,7 +139,7 @@ impl Engine {
 
     async fn step_process_inner(
         &mut self,
-        src: Option<Vec<u8>>,
+        src: Option<String>,
         snapshot: Option<Vec<u8>>,
         js_stmt: String,
     ) -> Result<(StepResult, Vec<u8>)> {
@@ -232,9 +232,8 @@ impl Engine {
                             .ok_or(anyhow!("couldnt run engine script"))?;
                     }
 
-                    let src_code =
-                        v8::String::new_from_utf8(context_scope, &src, NewStringType::Normal)
-                            .ok_or(anyhow!("src is too long"))?;
+                    let src_code = v8::String::new(context_scope, src.as_str())
+                        .ok_or(anyhow!("src is too long"))?;
 
                     let resource_name = v8::String::new(context_scope, "src").unwrap().into();
 

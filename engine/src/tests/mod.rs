@@ -2,7 +2,7 @@ use crate::{Engine, StepResultStatus};
 
 #[tokio::test]
 async fn it_maintains_state() {
-    let src = include_bytes!("counter.js").to_vec();
+    let src = include_str!("counter.js").to_string();
     let mut engine = Engine::new_with_name(None, "test_01".into());
 
     let (mut state, mut snapshot) = engine
@@ -28,7 +28,7 @@ async fn it_maintains_state() {
 
 #[tokio::test]
 async fn it_catches_exceptions() {
-    let src = include_bytes!("counter.js").to_vec();
+    let src = include_str!("counter.js").to_string();
     let mut engine = Engine::new(None);
 
     let (state, snapshot) = engine
@@ -50,7 +50,7 @@ async fn it_catches_exceptions() {
 
 #[tokio::test]
 async fn test_execution() {
-    let src = include_bytes!("counter.js").to_vec();
+    let src = include_str!("counter.js").to_string();
     let mut engine = Engine::new(None);
 
     let (state, snapshot) = engine
@@ -115,7 +115,7 @@ fn multiple_steps(input: &str, steps: Vec<StepAssertion>) {
         engine.mbox = assertion_step.before_mbox.into();
 
         let (state, new_snapshot) = tokio_test::block_on(engine.step_process(
-            Some(src_user_out.clone().into_bytes()),
+            Some(src_user_out.clone()),
             snapshot,
             js_stmt.to_string(),
         ))
