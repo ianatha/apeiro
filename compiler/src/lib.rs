@@ -9,6 +9,7 @@ mod fn_decl_to_fn_expr;
 mod fn_instrument;
 #[allow(dead_code)]
 mod generator;
+mod stmt_exploder;
 mod utils;
 
 use swc::{Compiler, SwcComments};
@@ -36,6 +37,7 @@ pub fn pristine_compile(input: String) -> Result<String> {
             chain!(
                 either_param_to_closure::folder(),
                 fn_decl_to_fn_expr::folder(),
+                stmt_exploder::folder(),
                 fn_instrument::folder(),
             )
         },

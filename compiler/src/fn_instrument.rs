@@ -290,9 +290,9 @@ impl WrapFunctions {
     }
 
     fn block_statement_to_switch(&mut self, stmts: &mut Vec<Stmt>) -> Stmt {
+        let stmts_length = stmts.len();
         let mut cases = Vec::with_capacity(stmts.len());
         let mut pc = 0;
-        let stmts_length = stmts.len();
         for (index, stmt) in stmts.iter_mut().enumerate() {
             cases.push(SwitchCase {
                 span: DUMMY_SP,
