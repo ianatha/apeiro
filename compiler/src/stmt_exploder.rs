@@ -7,10 +7,8 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast::BlockStmt;
 
 use swc_ecma_ast::Decl;
-use swc_ecma_ast::ExprStmt;
 use swc_ecma_ast::Function;
 use swc_ecma_ast::Ident;
-use swc_ecma_ast::Pat;
 use swc_ecma_ast::Stmt;
 
 use swc_ecma_ast::VarDecl;

@@ -66,7 +66,6 @@ async fn main() -> Result<()> {
             println!("{:?}", resp);
 
             Ok(())
-
         }
         Commands::New { srcfile } => {
             let src = std::fs::read_to_string(srcfile)?;
