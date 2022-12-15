@@ -7,6 +7,7 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast::BlockStmt;
 
 use swc_ecma_ast::Decl;
+use swc_ecma_ast::Expr;
 use swc_ecma_ast::Function;
 use swc_ecma_ast::Ident;
 use swc_ecma_ast::Stmt;
@@ -14,10 +15,7 @@ use swc_ecma_ast::Stmt;
 use swc_ecma_ast::VarDecl;
 use swc_ecma_ast::VarDeclarator;
 use swc_ecmascript::visit::{as_folder, Fold};
-use swc_ecmascript::{
-    ast::Expr,
-    visit::{VisitMut, VisitMutWith},
-};
+use swc_ecmascript::visit::{VisitMut, VisitMutWith};
 
 use super::utils::is_use_strict;
 
