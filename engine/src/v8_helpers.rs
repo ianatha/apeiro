@@ -29,3 +29,18 @@ macro_rules! v8_str {
         v8::String::new($scope, $s).unwrap()
     };
 }
+
+#[macro_export]
+macro_rules! struct_method_to_v8 {
+    ($struct_less_name:ident -> $struct_type:ident :: $method:ident) => {
+        fn $struct_less_name(
+            scope: &mut v8::HandleScope,
+            args: v8::FunctionCallbackArguments,
+            retval: v8::ReturnValue,
+        ) {
+            let external = v8::Local::<v8::External>::try_from(args.data()).unwrap();
+            let struct_instance = unsafe { &mut *(external.value() as *mut $struct_type) };
+            $struct_type::$method(struct_instance, scope, args, retval);
+        }
+    };
+}
