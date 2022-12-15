@@ -8,6 +8,7 @@ use swc_ecma_ast::BlockStmt;
 
 use swc_ecma_ast::Decl;
 use swc_ecma_ast::Expr;
+use swc_ecma_ast::ExprStmt;
 use swc_ecma_ast::Function;
 use swc_ecma_ast::Ident;
 use swc_ecma_ast::Stmt;
@@ -29,6 +30,7 @@ pub fn folder() -> impl Fold {
 struct CallExprExploder {
     count: u32,
     pre_stmts: Vec<Stmt>,
+    post_stmts: Vec<Stmt>,
 }
 
 impl VisitMut for CallExprExploder {
@@ -70,6 +72,20 @@ impl VisitMut for CallExprExploder {
                     .into(),
                 )));
 
+                // push delete statement
+                self.post_stmts.push(
+                    ExprStmt {
+                        span: DUMMY_SP,
+                        expr: swc_ecma_ast::UnaryExpr {
+                            span: DUMMY_SP,
+                            op: swc_ecma_ast::UnaryOp::Delete,
+                            arg: Box::new(Expr::Ident(ident.clone())),
+                        }
+                        .into(),
+                    }
+                    .into(),
+                );
+
                 *n = Expr::Ident(ident)
             }
             _ => {}
@@ -82,20 +98,22 @@ impl VisitMut for CallExprExploder {
 struct StmtExploder {}
 
 impl StmtExploder {
-    fn expand_stmt(&mut self, mut stmt: Stmt) -> Vec<Stmt> {
+    fn expand_stmt(&mut self, mut stmt: Stmt) -> (Vec<Stmt>, Vec<Stmt>) {
         let mut a = CallExprExploder {
             ..Default::default()
         };
         stmt.visit_mut_children_with(&mut a);
         a.pre_stmts.push(stmt);
-        a.pre_stmts
+        (a.pre_stmts, a.post_stmts)
     }
 
     fn block_statement_to_switch(&mut self, stmts: &mut Vec<Stmt>) -> Vec<Stmt> {
         let stmts_length = stmts.len();
         let mut expanded_stmts = Vec::with_capacity(stmts_length);
         for (_index, stmt) in stmts.iter_mut().enumerate() {
-            expanded_stmts.append(&mut self.expand_stmt(stmt.take()));
+            let (mut pre, mut post) = self.expand_stmt(stmt.take());
+            expanded_stmts.append(&mut pre);
+            expanded_stmts.append(&mut post);
         }
         expanded_stmts
     }

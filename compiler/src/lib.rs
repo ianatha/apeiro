@@ -4,6 +4,7 @@ mod tests;
 #[allow(dead_code)]
 pub mod helpers;
 
+mod bundle_phase;
 mod compile_phase;
 mod either_param_to_closure;
 mod fn_decl_to_fn_expr;
@@ -13,6 +14,7 @@ mod generator;
 mod stmt_exploder;
 mod utils;
 
+pub use bundle_phase::pristine_bundle_and_compile;
 pub use compile_phase::custom_pristine_compile;
 
 use swc_common::chain;

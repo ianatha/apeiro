@@ -17,7 +17,9 @@ fn test_either_param_to_closure() {
     either([
         [
             ()=>suspend(1, 2),
-            (received)=>console.log(received)
+            function(received) {
+                return console.log(received);
+            }
         ],
         [
             ()=>suspend(3, 4),

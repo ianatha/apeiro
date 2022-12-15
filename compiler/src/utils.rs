@@ -27,6 +27,12 @@ pub fn ast_to_str<T: swc_ecma_codegen::Node>(node: &T) -> Vec<u8> {
     buf
 }
 
+#[cfg(test)]
+pub fn ast_to_hash<T: swc_ecma_codegen::Node>(node: &T) -> u64 {
+    1
+}
+
+#[cfg(not(test))]
 pub fn ast_to_hash<T: swc_ecma_codegen::Node>(node: &T) -> u64 {
     xxhash_rust::xxh3::xxh3_64(&ast_to_str(node))
 }

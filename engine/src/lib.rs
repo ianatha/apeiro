@@ -6,6 +6,7 @@ mod v8_helpers;
 use std::sync::Once;
 
 pub use engine::Engine;
+pub use pristine_compiler::pristine_bundle_and_compile;
 pub use pristine_compiler::pristine_compile;
 pub use pristine_internal_api::StepResult;
 pub use pristine_internal_api::StepResultStatus;

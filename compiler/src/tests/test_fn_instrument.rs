@@ -22,7 +22,7 @@ fn test_fn_calls_many() {
         "function calls_many() { return a() + b(); }",
         folder_chain!(),
         r#"let calls_many = $fn(function calls_many() {
-    let $f1 = $new_frame("6289129703983417961", null);
+    let $f1 = $new_frame("1", null);
     let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
@@ -40,7 +40,7 @@ fn test_fn_calls_many() {
             $frame_end($f1);
             return __return_val;
     }
-}, "6289129703983417961", null);
+}, "1", null);
 "#,
     );
 }
@@ -51,7 +51,7 @@ fn test_fn_wrap_simple() {
         "function one() { return 1;}",
         folder_chain!(),
         r#"let one = $fn(function one() {
-    let $f1 = $new_frame("14146478158333422237", null);
+    let $f1 = $new_frame("1", null);
     let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
@@ -59,7 +59,7 @@ fn test_fn_wrap_simple() {
             $frame_end($f1);
             return __return_val;
     }
-}, "14146478158333422237", null);
+}, "1", null);
 "#,
     );
 }
@@ -74,7 +74,7 @@ fn test_fn_wrap_two_receives() {
 }"#,
         folder_chain!(),
         r#"let two = $fn(function two() {
-    let $f1 = $new_frame("9708052724451075839", null);
+    let $f1 = $new_frame("1", null);
     let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
@@ -112,7 +112,7 @@ fn test_fn_wrap_two_receives() {
             $frame_end($f1);
             return __return_val;
     }
-}, "9708052724451075839", null);
+}, "1", null);
 "#,
     );
 }
@@ -151,12 +151,50 @@ fn test_fn_wrap_two_receives() {
 // }
 
 #[test]
+fn test_fn_multi_assign() {
+    compiler_test(
+        "function sum() {
+    const { a, b } = params()
+    return a + b;
+}",
+        folder_chain!(),
+        r#"let sum = $fn(function sum() {
+    let $f1 = $new_frame("1", null);
+    let $sc1 = $scope(undefined, $f1);
+    switch($f1.$pc){
+        case 0:
+            $sc1._temp$1 = {
+                value: params()
+            };
+            $f1.$pc = 1;
+        case 1:
+            $sc1._params = {
+                value: $sc1._temp$1.value
+            };
+            $sc1.a = {
+                value: $sc1._params.value.a
+            };
+            $sc1.b = {
+                value: $sc1._params.value.b
+            };
+            $f1.$pc = 2;
+        case 2:
+            let __return_val = $sc1.a.value + $sc1.b.value;
+            $frame_end($f1);
+            return __return_val;
+    }
+}, "1", null);
+"#,
+    );
+}
+
+#[test]
 fn test_fn_wrap_export_default() {
     compiler_test(
         "export default function sum(a, b) { return a + b; }",
         folder_chain!(),
         r#"let sum = $fn(function(a, b) {
-    let $f1 = $new_frame("6977906965653910212", null);
+    let $f1 = $new_frame("1", null);
     let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
@@ -164,7 +202,7 @@ fn test_fn_wrap_export_default() {
             $frame_end($f1);
             return __return_val;
     }
-}, "6977906965653910212", null);
+}, "1", null);
 export default sum;
 "#,
     );
@@ -176,7 +214,7 @@ fn test_fn_wrap_export_named() {
         "export function sum(a, b) { return a + b; }",
         folder_chain!(),
         r#"export let sum = $fn(function sum(a, b) {
-    let $f1 = $new_frame("10735822781612323506", null);
+    let $f1 = $new_frame("1", null);
     let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
@@ -184,7 +222,7 @@ fn test_fn_wrap_export_named() {
             $frame_end($f1);
             return __return_val;
     }
-}, "10735822781612323506", null);
+}, "1", null);
 "#,
     );
 }

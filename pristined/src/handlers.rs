@@ -2,7 +2,7 @@ use crate::db;
 use crate::db::DbPool;
 use actix_web::error::{self, ErrorBadRequest};
 use actix_web::{get, post, put, web, HttpRequest, Responder};
-use pristine_engine::pristine_compile;
+use pristine_engine::pristine_bundle_and_compile;
 use pristine_internal_api::*;
 
 #[post("/proc/")]
@@ -13,7 +13,13 @@ async fn proc_new(
 ) -> impl Responder {
     let conn = pool.get().map_err(|_e| error::ErrorBadRequest("no conn"))?;
 
-    let compiled_src = pristine_compile(body.src.clone()).unwrap();
+    let src = body.src.clone();
+    let compiled_src =
+        tokio::task::spawn_blocking(move || pristine_bundle_and_compile(src).unwrap())
+            .await
+            .unwrap();
+    println!("compiled_src: {}", compiled_src);
+    // let compiled_src = pristine_compile(body.src.clone()).unwrap();
 
     let proc_id = db::proc_new(&conn, &body.src, &compiled_src).unwrap();
 
@@ -79,7 +85,7 @@ async fn proc_send(
     if proc.state.status != StepResultStatus::SUSPEND {
         Err(error::ErrorBadRequest("can only send to suspended procs"))
     } else {
-        let mut engine = pristine_engine::Engine::new(Some(pristine_engine::get_engine_runtime));
+        let mut engine = pristine_engine::Engine::new_with_name(Some(pristine_engine::get_engine_runtime), proc_id.clone());
 
         engine.mbox.push(body.msg.clone());
 

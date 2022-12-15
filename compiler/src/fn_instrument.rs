@@ -143,7 +143,12 @@ impl WrapFunctions {
                 type_args: None,
                 callee: Callee::Expr(Box::new(Expr::Ident(quote_ident!("$new_frame")))),
                 args: vec![
-                    self.fn_hash.last().unwrap().to_string().as_arg(),
+                    self.fn_hash
+                        .last()
+                        .or(Some(&(1 as u64)))
+                        .unwrap()
+                        .to_string()
+                        .as_arg(),
                     match penultimate(&self.fn_hash) {
                         Some(hash) => hash.to_string().as_arg(),
                         None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
@@ -156,7 +161,12 @@ impl WrapFunctions {
                 type_args: None,
                 callee: Callee::Expr(Box::new(Expr::Ident(quote_ident!("$new_frame")))),
                 args: vec![
-                    self.fn_hash.last().unwrap().to_string().as_arg(),
+                    self.fn_hash
+                        .last()
+                        .or(Some(&(1 as u64)))
+                        .unwrap()
+                        .to_string()
+                        .as_arg(),
                     match penultimate(&self.fn_hash) {
                         Some(hash) => hash.to_string().as_arg(),
                         None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
@@ -235,58 +245,63 @@ impl WrapFunctions {
         })
     }
 
-    fn move_var_assignments(&mut self, stmt: &mut Stmt) -> Stmt {
+    fn move_var_assignments(&mut self, stmt: &mut Stmt) -> Vec<Stmt> {
         if let Stmt::Decl(Decl::Var(var)) = stmt {
-            let new_stmts = Vec::new();
+            let mut new_stmts = Vec::new();
             for decl in &var.decls {
                 if let Some(init) = &decl.init {
-                    self.moved_vars
-                        .last_mut()
-                        .unwrap()
-                        .push(decl.name.as_ident().unwrap().to_id());
-                    return ExprStmt {
-                        span: DUMMY_SP,
-                        expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
-                            span: DUMMY_SP,
-                            left: MemberExpr {
+                    if let Some(assignee_name) = decl.name.as_ident() {
+                        if let Some(moved_vars) = self.moved_vars.last_mut() {
+                            moved_vars.push(assignee_name.to_id());
+                        } else {
+                            // TODO
+                            todo!();
+                        }
+                        new_stmts.push(
+                            ExprStmt {
                                 span: DUMMY_SP,
-                                obj: self.current_scope_identifier().unwrap().into(),
-                                prop: decl.name.as_ident().unwrap().id.clone().into(),
-                                // Expr::Ident(quote_ident!("$frame")).into(),
-                                // prop: ,
-                                // decl.name.clone().as_ident().unwrap().into(),
-                                // Ident {
-                                //     span: DUMMY_SP,
-                                //     sym: ,
-                                //     optional: false,
-                                // }),
-                            }
-                            .into(),
-                            op: swc_ecma_ast::AssignOp::Assign,
-                            right: ObjectLit {
-                                span: DUMMY_SP,
-                                props: vec![swc_ecma_ast::PropOrSpread::Prop(
-                                    Prop::KeyValue(KeyValueProp {
-                                        key: quote_ident!("value").into(),
-                                        value: init.clone(),
-                                    })
+                                expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
+                                    span: DUMMY_SP,
+                                    left: MemberExpr {
+                                        span: DUMMY_SP,
+                                        obj: self.current_scope_identifier().unwrap().into(),
+                                        prop: assignee_name.id.clone().into(),
+                                    }
                                     .into(),
-                                )],
+                                    op: swc_ecma_ast::AssignOp::Assign,
+                                    right: ObjectLit {
+                                        span: DUMMY_SP,
+                                        props: vec![swc_ecma_ast::PropOrSpread::Prop(
+                                            Prop::KeyValue(KeyValueProp {
+                                                key: quote_ident!("value").into(),
+                                                value: init.clone(),
+                                            })
+                                            .into(),
+                                        )],
+                                    }
+                                    .into(),
+                                })),
                             }
                             .into(),
-                        })),
+                        );
+                    } else {
+                        // TODO
+                        todo!();
+                        // println!("todo008");
+                        // return stmt.take();
                     }
-                    .into();
+                } else {
+                    // TODO
+                    todo!();
+                    // println!("todo009");
+                    // return stmt.take();
                 }
             }
             if new_stmts.len() > 0 {
-                return Stmt::Block(BlockStmt {
-                    span: DUMMY_SP,
-                    stmts: new_stmts,
-                });
+                return new_stmts;
             }
         }
-        stmt.take()
+        vec![stmt.take()]
     }
 
     fn block_statement_to_switch(&mut self, stmts: &mut Vec<Stmt>) -> Stmt {
@@ -328,15 +343,20 @@ impl WrapFunctions {
                             .into(),
                         ]
                     } else {
-                        vec![self.expr_end_frame(), self.move_var_assignments(stmt)]
+                        let mut res = vec![self.expr_end_frame()];
+                        res.append(&mut self.move_var_assignments(stmt));
+                        res
                     }
                 } else if index == stmts_length - 1 {
-                    vec![self.move_var_assignments(stmt), self.expr_end_frame()]
+                    let mut res = vec![];
+                    res.append(&mut self.move_var_assignments(stmt));
+                    res.push(self.expr_end_frame());
+                    res
                 } else {
-                    vec![
-                        self.move_var_assignments(stmt),
-                        self.expr_set_frame_pc(pc + 1),
-                    ]
+                    let mut res = vec![];
+                    res.append(&mut self.move_var_assignments(stmt));
+                    res.push(self.expr_set_frame_pc(pc + 1));
+                    res
                 },
             });
             pc = pc + 1;

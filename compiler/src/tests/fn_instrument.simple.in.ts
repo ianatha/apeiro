@@ -37,7 +37,7 @@ function secondary(a) {
 	}
 }
 
-function main() {
+export default function main() {
 	const a = calculator(1);
 	secondary(a);
 	return a.get();
