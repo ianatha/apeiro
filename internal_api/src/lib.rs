@@ -41,9 +41,11 @@ impl std::fmt::Display for StepResultStatus {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct StepResult {
     pub status: StepResultStatus,
     pub val: Option<Value>,
     pub suspension: Option<Value>,
+    pub current_frame: Option<u64>,
+    pub frames: Option<Value>,
 }

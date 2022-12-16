@@ -217,6 +217,9 @@ impl Engine {
                 let res_json: StepResult = serde_v8::from_v8(context_scope, js_stmt_result)
                     .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
 
+                println!("res_json: {:?}", res_json);
+                debug_display(res_json.clone());
+
                 Ok(res_json)
             })();
 
@@ -324,4 +327,18 @@ fn unexpected_module_resolve_callback<'a>(
     _referrer: v8::Local<'a, v8::Module>,
 ) -> Option<v8::Local<'a, v8::Module>> {
     unreachable!()
+}
+
+fn debug_display(v: StepResult) -> Option<()> {
+    let frames = v.frames?;
+    let frames = frames.as_array()?;
+    println!("======");
+    println!("# frames: {}", frames.len());
+    for frame in frames {
+        let fnhash = frame.get("fnhash")?.as_str()?;
+        let pc = frame.get("$pc")?.as_u64()?;
+        println!("* fnhash: {}, pc: {}", fnhash, pc);
+    }
+    println!("");
+    Some(())
 }

@@ -62,9 +62,16 @@ class PristineEngineError extends Error {
 
 }
 
-function $frame_end(dead_child) {
+function debugDisplayFrame(frame: Frame) {
+	if (!frame) {
+		return "null";
+	}
+	return "[Frame, fnhash=" + frame.fnhash + ", $pc=" + frame.$pc + "]";
+}
+
+function $frame_end(dead_child: Frame) {
 	if ($frames[$frames.length - 1] !== dead_child) {
-		throw new PristineEngineError("invalid frame being dropped");
+		throw new PristineEngineError("invalid frame being dropped: dropping " + debugDisplayFrame(dead_child) + " but top frame is " + debugDisplayFrame($frames[$frames.length - 1]));
 	}
 	$frames.pop();
 }
@@ -116,12 +123,25 @@ function $suspend(until: Record<string, any>) {
 
 // ## Engine Entrypoint
 
-interface StepResult {
-	status: "SUSPEND"|"ERROR"|"DONE";
-	val?: any;
-	err?: any;
-	suspension?: Record<string, any>;
+interface SuspendStepResult {
+	status: "SUSPEND";
+	suspension: Record<string, any>;
+	current_frame: number;
+	frames: any;
 }
+
+interface ErrorStepResult {
+	status: "ERROR";
+	err: any;
+}
+
+interface DoneStepResult {
+	status: "DONE";
+	val: any;
+}
+
+
+type StepResult = SuspendStepResult | ErrorStepResult | DoneStepResult;
 
 function $step(fn): StepResult {
 	current_frame = 0;
@@ -136,6 +156,8 @@ function $step(fn): StepResult {
 			return {
 				status: "SUSPEND",
 				suspension: e.until,
+				current_frame: current_frame,
+				frames: $frames,
 			};
 		} else {
 			throw e;

@@ -135,6 +135,7 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
             status,
             val,
             suspension,
+            ..Default::default()
         })
     })?;
 
