@@ -1,5 +1,6 @@
 use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
+use cli_table::format::VerticalLine;
 use pristine_engine::{pristine_compile, StepResult};
 use pristine_internal_api::{
     ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
@@ -85,12 +86,37 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Commands::Ps {} => {
+            use cli_table::{format::Justify, Cell, Style, Table};
+
             let resp = reqwest::get(remote + "/proc/")
                 .await?
                 .json::<ProcListOutput>()
                 .await?;
 
-            println!("{:?}", resp);
+                let empty_border = cli_table::format::Border::builder().build();
+
+            let table = resp.procs.iter().map(|p| {
+                vec![
+                    p.id.clone().cell(),
+                    p.status.clone().cell(),
+                    match p.suspension.clone() {
+                        Some(s) => truncate(&s.to_string(), 64).to_string(),
+                        None => "".to_string(),
+                    }.cell(),
+                ]
+            })
+            .table()
+            .title(vec![
+                "pid".cell().bold(true).justify(Justify::Center),
+                "status".cell().bold(true),
+                "suspension".cell().bold(true),
+            ])
+            .border(empty_border)
+            .separator(cli_table::format::Separator::builder().column(Some(VerticalLine::default())).build());
+
+            cli_table::print_stdout(table)?;
+
+            // println!("{:?}", resp);
 
             Ok(())
         }
@@ -105,5 +131,12 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
     }
 }
