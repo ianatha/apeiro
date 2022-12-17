@@ -1,10 +1,14 @@
 #[cfg(test)]
 mod tests;
 
+mod db;
+mod dengine;
 mod engine;
 mod v8_helpers;
+
 use std::sync::Once;
 
+pub use dengine::DEngine;
 pub use engine::Engine;
 pub use pristine_compiler::pristine_bundle_and_compile;
 pub use pristine_compiler::pristine_compile;

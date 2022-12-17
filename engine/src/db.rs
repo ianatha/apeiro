@@ -1,5 +1,5 @@
+use crate::StepResultStatus;
 use nanoid::nanoid;
-use pristine_engine::StepResultStatus;
 use pristine_internal_api::{ProcSummary, StepResult};
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::rusqlite::params;
@@ -8,48 +8,6 @@ use serde_json;
 
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type Conn = PooledConnection<SqliteConnectionManager>;
-
-pub fn establish_connection(file: String) -> Result<DbPool, anyhow::Error> {
-    let manager = SqliteConnectionManager::file(file);
-    let pool = Pool::builder().build(manager)?;
-    Ok(pool)
-}
-
-#[cfg(test)]
-pub fn establish_connection_memory() -> Result<DbPool, anyhow::Error> {
-    let manager = SqliteConnectionManager::memory();
-    let pool = Pool::builder().build(manager)?;
-    Ok(pool)
-}
-
-pub fn init_db(pool: &DbPool) -> Result<(), anyhow::Error> {
-    let conn = pool.get()?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS procs (
-        id TEXT PRIMARY KEY,
-        src TEXT,
-        compiled_src TEXT,
-        status TEXT,
-        val TEXT,
-        suspension TEXT,
-        snapshot BLOB
-    );",
-        (),
-    )?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS mbox (
-        id TEXT PRIMARY KEY,
-        proc_id TEXT,
-        msg TEXT,
-        read BOOL
-    );",
-        (),
-    )?;
-
-    Ok(())
-}
 
 pub fn proc_new(conn: &Conn, src: &String, compiled_src: &String) -> Result<String, anyhow::Error> {
     let id = nanoid!();
