@@ -4,6 +4,7 @@ use pristine_internal_api::ProcListOutput;
 use pristine_internal_api::ProcNewOutput;
 use pristine_internal_api::ProcNewRequest;
 use pristine_internal_api::ProcSendRequest;
+use pristine_internal_api::ProcStatus;
 use pristine_internal_api::StepResult;
 use pristine_internal_api::StepResultStatus;
 use r2d2::Pool;
@@ -93,11 +94,24 @@ impl DEngine {
         ProcListOutput { procs }
     }
 
-    pub async fn proc_get(&self, pid: String) -> Result<StepResult, anyhow::Error> {
+    pub async fn proc_get(&self, pid: String) -> Result<ProcStatus, anyhow::Error> {
         let conn = self.0.db.get().expect("");
         let res = db::proc_get(&conn, &pid).map_err(|_e| anyhow!("db problem"))?;
 
-        Ok(res)
+        let executing = {
+            let locked_map = self.0.locks.read().await;
+            if let Some(proc_lock) = locked_map.get(&pid) {
+                if let Some(_proc_lock) = proc_lock.try_read().ok() {
+                    false
+                } else {
+                    true
+                }
+            } else {
+                false
+            }
+        };
+
+        Ok(ProcStatus::new(res, executing))
     }
 
     pub async fn proc_send(

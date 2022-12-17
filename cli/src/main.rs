@@ -1,7 +1,9 @@
 use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
 use pristine_engine::{pristine_compile, StepResult};
-use pristine_internal_api::{ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest};
+use pristine_internal_api::{
+    ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
+};
 use std::{path::PathBuf, string::String};
 
 #[derive(Parser)]
@@ -45,7 +47,7 @@ async fn main() -> Result<()> {
         Commands::Get { pid } => {
             let resp = reqwest::get(remote + "/proc/" + pid)
                 .await?
-                .json::<StepResult>()
+                .json::<ProcStatus>()
                 .await?;
 
             println!("{:?}", resp);

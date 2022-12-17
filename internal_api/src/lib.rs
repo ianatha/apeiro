@@ -49,3 +49,28 @@ pub struct StepResult {
     pub current_frame: Option<u64>,
     pub frames: Option<Value>,
 }
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct ProcStatus {
+    pub status: StepResultStatus,
+    pub val: Option<String>,
+    pub suspension: Option<String>,
+    pub executing: bool,
+}
+
+impl ProcStatus {
+    pub fn new(step_result: StepResult, executing: bool) -> Self {
+        ProcStatus {
+            status: step_result.status,
+            val: step_result
+                .val
+                .as_ref()
+                .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
+            suspension: step_result
+                .suspension
+                .as_ref()
+                .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
+            executing,
+        }
+    }
+}
