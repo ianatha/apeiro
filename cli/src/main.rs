@@ -5,6 +5,9 @@ use pristine_engine::{pristine_compile, StepResult};
 use pristine_internal_api::{
     ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
 };
+use reqwest_eventsource::{Event, EventSource};
+use futures::stream::StreamExt;
+
 use std::{path::PathBuf, string::String};
 
 #[derive(Parser)]
@@ -32,6 +35,9 @@ enum Commands {
     New {
         srcfile: PathBuf,
     },
+    Watch {
+        pid: String,
+    },
     Compile {
         input: PathBuf,
         #[clap(short, long)]
@@ -45,6 +51,21 @@ async fn main() -> Result<()> {
     let remote = cli.remote.unwrap_or("http://localhost:5151".to_string());
 
     match &cli.command {
+        Commands::Watch { pid } => {
+            let url = format!("{}/proc/{}/watch", remote, pid);
+            let mut es = EventSource::get(url);
+            while let Some(event) = es.next().await {
+                match event {
+                    Result::Ok(Event::Open) => println!("Connection Open!"),
+                    Result::Ok(Event::Message(message)) => println!("Message: {:#?}", message),
+                    Result::Err(err) => {
+                        println!("Error: {}", err);
+                        es.close();
+                    }
+                }
+            }
+            Ok(())
+        }
         Commands::Get { pid } => {
             let resp = reqwest::get(remote + "/proc/" + pid)
                 .await?
