@@ -8,8 +8,10 @@ use pristine_internal_api::StepResult;
 use pristine_internal_api::StepResultStatus;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use tokio::sync::RwLock;
 
 use crate::db;
+use std::collections::HashMap;
 use std::string::String;
 use std::sync::Arc;
 
@@ -25,6 +27,7 @@ impl Clone for DEngine {
 struct SharedDEngine {
     runtime_js_src: Option<fn() -> String>,
     db: Pool<SqliteConnectionManager>,
+    locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
 }
 
 impl DEngine {
@@ -34,6 +37,21 @@ impl DEngine {
     ) -> DEngine {
         let instance = Arc::new(SharedDEngine::new_inner(runtime_js_src, db));
         DEngine(instance)
+    }
+
+    async fn get_proc_lock(&self, pid: String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
+        let proc_lock = {
+            let mut locked_map = self.0.locks.write().await;
+            if let Some(proc_lock) = locked_map.get(&pid) {
+                Arc::clone(proc_lock)
+            } else {
+                let proc_lock = Arc::new(RwLock::new(()));
+                locked_map.insert(pid, proc_lock.clone());
+                proc_lock
+            }
+        };
+
+        Ok(proc_lock)
     }
 
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
@@ -94,6 +112,12 @@ impl DEngine {
         if proc.state.status != StepResultStatus::SUSPEND {
             Err(anyhow!("can only send to suspended procs"))
         } else {
+            let proc_lock = self
+                .get_proc_lock(proc_id.clone())
+                .await
+                .expect("cant lock");
+            let _proc_lock_guard = proc_lock.write().await;
+
             let mut engine =
                 crate::Engine::new_with_name(Some(crate::get_engine_runtime), proc_id.clone());
 
@@ -120,7 +144,12 @@ impl SharedDEngine {
         runtime_js_src: Option<fn() -> String>,
         db: Pool<SqliteConnectionManager>,
     ) -> SharedDEngine {
-        let instance = SharedDEngine { runtime_js_src, db };
+        let locks = Arc::new(RwLock::new(HashMap::new()));
+        let instance = SharedDEngine {
+            runtime_js_src,
+            db,
+            locks,
+        };
 
         instance.init_db().expect("Failed to initialize database");
 
