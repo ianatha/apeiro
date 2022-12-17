@@ -101,12 +101,21 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
 }
 
 pub fn proc_list(conn: &Conn) -> Result<Vec<ProcSummary>, anyhow::Error> {
-    let mut stmt = conn.prepare("SELECT id FROM procs")?;
+    let mut stmt = conn.prepare("SELECT id, status, suspension FROM procs")?;
 
     let result = stmt
         .query_map((), |row| {
             let id: String = row.get(0).unwrap();
-            Ok(ProcSummary { id })
+            let status: String = row.get(1).unwrap_or("\"CRASHED\"".to_string());
+            let status: StepResultStatus = serde_json::from_str(&status).expect("invalid status");
+            let suspension: Result<String, _> = row.get(2);
+            let suspension = if let Ok(suspension) = suspension {
+                serde_json::from_str(&suspension).unwrap_or(None)
+            } else {
+                None
+            };
+    
+            Ok(ProcSummary { id, status, suspension })
         })?
         .map(Result::unwrap)
         .collect();

@@ -1,6 +1,6 @@
 // ## Global Datastoers
 
-const $scopes: Map<number, Scope> = new Map();
+// const $scopes: Map<number, Scope> = new Map();
 let $frames: Frame[] = [];
 const $fns: Map<string, Function> = new Map();
 
@@ -22,6 +22,7 @@ function $scope(parent = undefined, frame?: Frame) {
 		return frame.scope;
 	}
 
+	log("new scope for frame " + (frame === undefined ? "undefined frame" : (frame?.fnhash ?? "nofnhash")));
 	const newScopeId = scopeIdGenerator();
 	const newScope: Scope = { };
 
@@ -43,7 +44,7 @@ function $scope(parent = undefined, frame?: Frame) {
 		frame.scope = newScope;
 	}
 
-	$scopes.set(newScopeId, new WeakRef(newScope));
+	// $scopes.set(newScopeId, new WeakRef(newScope));
 
 	return newScope;
 }
@@ -71,8 +72,10 @@ function debugDisplayFrame(frame: Frame) {
 
 function $frame_end(dead_child: Frame) {
 	if ($frames[$frames.length - 1] !== dead_child) {
-		throw new PristineEngineError("invalid frame being dropped: dropping " + debugDisplayFrame(dead_child) + " but top frame is " + debugDisplayFrame($frames[$frames.length - 1]));
+		log("invalid frame");
+		throw new PristineEngineError("invalid frame being dropped");
 	}
+	dead_child.scope = undefined;
 	$frames.pop();
 }
 
@@ -125,6 +128,7 @@ function $suspend(until: Record<string, any>) {
 
 interface SuspendStepResult {
 	status: "SUSPEND";
+	val?: any;
 	suspension: Record<string, any>;
 	current_frame: number;
 	frames: any;
@@ -143,18 +147,47 @@ interface DoneStepResult {
 
 type StepResult = SuspendStepResult | ErrorStepResult | DoneStepResult;
 
+function isGenerator(fn) {
+	return fn?.constructor?.name === "GeneratorFunction";
+}
+
+function garbage_collect() {
+	// for (const [key, value] of $scopes) {
+	// 	if (!value.deref()) {
+	// 		$scopes.delete(key);
+	// 	}
+	// }
+}
+
 function $step(fn): StepResult {
 	current_frame = 0;
+	let val = undefined;
 	try {
-		const val = fn();
-		return {
-			status: "DONE",
-			val: val,
-		};
+		if (isGenerator(fn)) {
+			let generator_instance = fn(this);
+			let attempts = 0;
+			val = generator_instance.next().value;
+			generator_instance.next().value; // this call should throw suspension
+
+			return {
+				status: "SUSPEND",
+				suspension: {$generator: true},
+				val: val,
+				current_frame: current_frame,
+				frames: $frames,
+			};
+		} else {
+			const val = fn();
+			return {
+				status: "DONE",
+				val: val,
+			};
+		}
 	} catch (e) {
 		if ($isSuspendSignal(e)) {
 			return {
 				status: "SUSPEND",
+				val,
 				suspension: e.until,
 				current_frame: current_frame,
 				frames: $frames,

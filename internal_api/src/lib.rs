@@ -1,15 +1,19 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub type PristineId = String;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewOutput {
-    pub id: String,
+    pub id: PristineId,
     pub state: StepResult,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcSummary {
-    pub id: String,
+    pub id: PristineId,
+    pub status: StepResultStatus,
+    pub suspension: Option<Value>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -33,6 +37,7 @@ pub enum StepResultStatus {
     DONE,
     SUSPEND,
     ERROR,
+    CRASHED,
 }
 
 impl std::fmt::Display for StepResultStatus {

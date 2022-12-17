@@ -38,15 +38,21 @@ pub fn establish_db_connection(
 }
 
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
+    console_subscriber::init();
+
     let cli = Cli::parse();
     let port = cli.port.unwrap_or(5151);
     let store = cli.store.unwrap_or("world.db".into());
 
-    let conn_pool = establish_db_connection(store).unwrap();
-    let dengine = DEngine::new(Some(get_engine_runtime), conn_pool);
+    let conn_pool = establish_db_connection(store)?;
+    let (dengine, mut event_loop) = DEngine::new(Some(get_engine_runtime), conn_pool)?;
 
     env_logger::init_from_env(Env::default().default_filter_or("info,swc_ecma_codegen=off"));
+
+    tokio::task::spawn(async move {
+        event_loop.run().await;
+    });
 
     println!("Starting HTTP daemon on port {}", port);
     HttpServer::new(move || {
@@ -58,9 +64,11 @@ async fn main() -> std::io::Result<()> {
             .service(handlers::proc_list)
             .service(handlers::proc_get)
             .service(handlers::proc_send)
+            .service(handlers::proc_watch)
     })
-    .bind(("127.0.0.1", port))
-    .expect("failed to bind 127.0.0.1")
+    .bind(("127.0.0.1", port))?
     .run()
-    .await
+    .await?;
+
+    Ok(())
 }

@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Ok, Result};
+use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::StepResult;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
+use crate::DEngine;
+use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::v8_helpers::stack_trace_to_string;
 use crate::v8_init;
@@ -11,11 +14,18 @@ use std::string::String;
 
 use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Engine {
     runtime_js_src: Option<fn() -> String>,
     pub mbox: Box<Vec<serde_json::Value>>,
     pid: String,
+    pub dengine: Option<DEngine>,
+}
+
+impl std::fmt::Debug for DEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DEngine").finish()
+    }
 }
 
 #[derive(Default, Debug)]
@@ -34,6 +44,7 @@ impl Engine {
             runtime_js_src: engine_runtime,
             mbox: Box::new(vec![]),
             pid: name,
+            dengine: None,
         }
     }
 
@@ -71,6 +82,9 @@ impl Engine {
                 function: usercode_callback.map_fn_to(),
             },
             v8::ExternalReference {
+                function: send_callback.map_fn_to(),
+            },
+            v8::ExternalReference {
                 pointer: engine_instance_external_ref,
             },
             v8::ExternalReference {
@@ -101,6 +115,10 @@ impl Engine {
                 .data(engine_ref.into())
                 .build(handle_scope);
 
+            let send_fn_builder = v8::FunctionTemplate::builder(send_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
+
             let usercode_fn_builder = v8::FunctionTemplate::builder(usercode_callback)
                 .data(engine_instance_ref.into())
                 .build(handle_scope);
@@ -113,6 +131,10 @@ impl Engine {
             global.set(
                 v8::String::new(handle_scope, "$recv").unwrap().into(),
                 mbox_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$send").unwrap().into(),
+                send_fn_builder.into(),
             );
 
             global.set(
@@ -191,6 +213,8 @@ impl Engine {
                     engine_instance.usercode = Some(module);
                 }
 
+                println!("before kickoff");
+
                 let js_stmt_code = v8::String::new(context_scope, &js_stmt)
                     .ok_or(anyhow!("js_stmt is too long"))?;
                 let resource_name = v8::String::new(context_scope, "js_stmt").unwrap().into();
@@ -241,6 +265,8 @@ impl Engine {
 
         match new_state {
             Result::Ok(new_state) => {
+                isolate.perform_microtask_checkpoint();
+
                 let snapshot_slice = {
                     let snapshot = isolate
                         .create_blob(FunctionCodeHandling::Keep)
@@ -251,6 +277,7 @@ impl Engine {
                 Ok((new_state, snapshot_slice))
             }
             Err(e) => {
+                println!("error: {:?}", e);
                 // we're snapshotting so no panic is caused when isolate is dropped
                 _ = isolate.create_blob(FunctionCodeHandling::Keep);
                 Err(e)
@@ -272,6 +299,17 @@ impl Engine {
             .to_rust_string_lossy(scope);
 
         println!("log: {}: {}", self.pid, message);
+
+        if let Some(dengine) = self.dengine.clone() {
+            let msg = args.get(0);
+            let msg = serde_v8::from_v8(scope, msg).unwrap();
+
+            let pid = self.pid.clone();
+            tokio::task::spawn(async move {
+                dengine.send(DEngineCmd::Log((pid, msg))).await.unwrap();
+            });
+        }
+
     }
 
     #[inline]
@@ -303,10 +341,37 @@ impl Engine {
         let first_val = serde_v8::to_v8(scope, first_val).unwrap();
         retval.set(first_val);
     }
+
+    #[inline]
+    fn send_callback(
+        &mut self,
+        scope: &mut v8::HandleScope,
+        args: v8::FunctionCallbackArguments,
+        _retval: v8::ReturnValue,
+    ) {
+        let _context = v8::Context::new(scope);
+
+        println!("maybe sending to dengine");
+        if let Some(dengine) = self.dengine.clone() {
+            println!("sending to dengine");
+            let pid = args.get(0);
+            let pid: String = pid.to_rust_string_lossy(scope);
+
+            let msg = args.get(1);
+            let msg = serde_v8::from_v8(scope, msg).unwrap();
+
+            tokio::task::spawn(async move {
+                println!("about to send {} {:?}", pid, msg);
+                let _ = dengine.proc_send(pid, ProcSendRequest { msg }).await;
+                println!("sent!!");
+            });
+        }
+    }
 }
 
 struct_method_to_v8!(log_callback -> Engine::log_callback);
 struct_method_to_v8!(mbox_callback -> Engine::mbox_callback);
+struct_method_to_v8!(send_callback -> Engine::send_callback);
 
 fn usercode_callback(
     _scope: &mut v8::HandleScope,

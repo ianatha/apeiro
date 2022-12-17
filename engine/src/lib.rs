@@ -2,7 +2,7 @@
 mod tests;
 
 mod db;
-mod dengine;
+pub mod dengine;
 mod engine;
 mod v8_helpers;
 
@@ -38,3 +38,4 @@ pub(crate) fn v8_init() {
 pub fn get_engine_runtime() -> String {
     pristine_compiler::engine_runtime_compile(include_str!("engine_runtime.ts").into()).unwrap()
 }
+
