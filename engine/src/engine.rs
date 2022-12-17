@@ -4,12 +4,12 @@ use pristine_internal_api::StepResult;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
-use crate::DEngine;
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::v8_helpers::stack_trace_to_string;
 use crate::v8_init;
 use crate::v8_str;
+use crate::DEngine;
 use std::string::String;
 
 use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
@@ -309,7 +309,6 @@ impl Engine {
                 dengine.send(DEngineCmd::Log((pid, msg))).await.unwrap();
             });
         }
-
     }
 
     #[inline]

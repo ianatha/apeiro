@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::task::Poll;
 
 use actix_web::error::{self, ErrorBadRequest};
-use actix_web::{get, post, put, web, HttpRequest, Responder, HttpResponse};
+use actix_web::{get, post, put, web, HttpRequest, HttpResponse, Responder};
 use pristine_engine::DEngine;
 use pristine_internal_api::*;
 
@@ -80,7 +80,7 @@ async fn proc_watch(
         .await
         .map_err(|_e| error::ErrorInternalServerError("db problem"))
         .unwrap();
-    
+
     let stream = async_stream::stream! {
         while res.changed().await.is_ok() {
             let val = res.borrow().clone();
@@ -90,14 +90,14 @@ async fn proc_watch(
             byt.append(&mut json);
             byt.push(b'\n');
             byt.push(b'\n');
-            
+
             let byte = web::Bytes::from(byt);
 
             yield Ok::<web::Bytes, actix_web::Error>(byte)
         };
         println!("sse stream ended");
     };
-    
+
     HttpResponse::Ok()
         .append_header(("content-type", "text/event-stream"))
         .no_chunking(4096)

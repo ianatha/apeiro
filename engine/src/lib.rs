@@ -38,4 +38,3 @@ pub(crate) fn v8_init() {
 pub fn get_engine_runtime() -> String {
     pristine_compiler::engine_runtime_compile(include_str!("engine_runtime.ts").into()).unwrap()
 }
-

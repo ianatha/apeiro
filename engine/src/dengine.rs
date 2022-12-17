@@ -9,7 +9,7 @@ use pristine_internal_api::StepResult;
 use pristine_internal_api::StepResultStatus;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use serde::{Serialize,Deserialize};
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 
@@ -79,7 +79,10 @@ impl EventLoop {
                     let dengine = self.dengine.clone();
                     println!("event loop LOG: {} -> {:?}", pid, msg);
                     tokio::task::spawn(async move {
-                        dengine.send_to_watchers(&pid, &ProcEvent::Log(msg)).await.unwrap();
+                        dengine
+                            .send_to_watchers(&pid, &ProcEvent::Log(msg))
+                            .await
+                            .unwrap();
                     });
                 }
             }
@@ -190,10 +193,9 @@ impl DEngine {
         &self,
         proc_id: String,
     ) -> Result<tokio::sync::watch::Receiver<ProcEvent>, anyhow::Error> {
-        let  watcher = self.watch(proc_id.clone()).await;
+        let watcher = self.watch(proc_id.clone()).await;
         Ok(watcher)
     }
-
 
     pub async fn proc_send_and_watch_step_result(
         &self,
@@ -201,17 +203,17 @@ impl DEngine {
         body: ProcSendRequest,
     ) -> Result<StepResult, anyhow::Error> {
         let mut watcher = self.watch(proc_id.clone()).await;
-        
+
         println!("before proc send");
         self.proc_send(proc_id.clone(), body).await?;
         println!("after proc send");
-        
+
         while watcher.changed().await.is_ok() {
             println!("watching watcher for {}", proc_id);
             match &*watcher.borrow() {
                 ProcEvent::StepResult(step_result) => {
                     println!("received step result for {}", proc_id);
-                    return Ok(step_result.clone())
+                    return Ok(step_result.clone());
                 }
                 _ => {
                     println!("received event in step request for {}", proc_id)
@@ -221,10 +223,7 @@ impl DEngine {
         Err(anyhow!("watcher closed"))
     }
 
-    pub(crate) async fn send(
-        &self,
-        cmd: DEngineCmd
-    ) -> Result<(), anyhow::Error> {
+    pub(crate) async fn send(&self, cmd: DEngineCmd) -> Result<(), anyhow::Error> {
         self.0.tx.send(cmd).await.map_err(anyhow::Error::msg)
     }
 
@@ -248,12 +247,12 @@ impl DEngine {
         proc_id: &String,
         msg: &ProcEvent,
     ) -> Result<(), anyhow::Error> {
-            let watchers_locked = self.0.watchers.read().await;
-            if let Some(watcher) = watchers_locked.get(proc_id) {
-                if !watcher.is_closed() {
-                    watcher.send(msg.clone()).unwrap();
-                }
+        let watchers_locked = self.0.watchers.read().await;
+        if let Some(watcher) = watchers_locked.get(proc_id) {
+            if !watcher.is_closed() {
+                watcher.send(msg.clone()).unwrap();
             }
+        }
         Ok(())
     }
 
@@ -279,7 +278,7 @@ impl DEngine {
 
             let mut engine =
                 crate::Engine::new_with_name(Some(crate::get_engine_runtime), proc_id.clone());
-            
+
             engine.dengine = Some(self.clone());
 
             engine.mbox.push(body.msg.clone());
@@ -297,7 +296,6 @@ impl DEngine {
             Ok(res)
         };
 
-
         println!("result: {:?}", res);
 
         let msg = if let Result::Ok(res) = &res {
@@ -311,7 +309,9 @@ impl DEngine {
             }
         };
 
-        self.send_to_watchers(proc_id, &ProcEvent::StepResult(msg)).await.unwrap();
+        self.send_to_watchers(proc_id, &ProcEvent::StepResult(msg))
+            .await
+            .unwrap();
 
         res
     }
@@ -326,7 +326,7 @@ impl DEngine {
                 None
             }
         };
-        
+
         if let Some(watcher_subscription) = watcher_subscription {
             println!("returning watch");
             watcher_subscription

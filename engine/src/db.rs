@@ -114,8 +114,12 @@ pub fn proc_list(conn: &Conn) -> Result<Vec<ProcSummary>, anyhow::Error> {
             } else {
                 None
             };
-    
-            Ok(ProcSummary { id, status, suspension })
+
+            Ok(ProcSummary {
+                id,
+                status,
+                suspension,
+            })
         })?
         .map(Result::unwrap)
         .collect();
