@@ -145,7 +145,7 @@ fn multiple_steps(input: &str, steps: Vec<StepAssertion>) {
 #[test]
 fn test_execution_recv() {
     let suspension_spec: serde_json::Value =
-        serde_json::from_str("{\"$type\":\"number\"}").unwrap();
+        serde_json::from_str("{\"$type\":[\"number\"]}").unwrap();
 
     multiple_steps(
         include_str!("fn_instrument.simple.in.ts"),

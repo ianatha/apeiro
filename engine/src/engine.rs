@@ -320,25 +320,31 @@ impl Engine {
     ) {
         let _context = v8::Context::new(scope);
 
-        if self.mbox.len() == 0 {
-            let exception_obj = v8::Object::new(scope);
-            let key_str = v8_str!(scope / "pristine_suspend");
-            let r#true = v8::Boolean::new(scope, true);
-            exception_obj.set(scope, key_str.into(), r#true.into());
-            let key_str = v8_str!(scope / "until");
-            let until_val = if args.get(0).is_null_or_undefined() {
-                r#true.into()
-            } else {
-                args.get(0)
-            };
-            exception_obj.set(scope, key_str.into(), until_val);
-            scope.throw_exception(exception_obj.into());
-            return;
+        let filter = serde_v8::from_v8(scope, args.get(0)).unwrap();
+        let filter = serde_json_matcher::from_json(filter).unwrap();
+        for (index, msg) in self.mbox.iter().enumerate() {
+            if filter.matches(msg) {
+                let msg = self.mbox.remove(index);
+                let msg = serde_v8::to_v8(scope, msg).unwrap();
+                retval.set(msg);
+                return;
+            }
         }
 
-        let first_val = self.mbox.pop().unwrap();
-        let first_val = serde_v8::to_v8(scope, first_val).unwrap();
-        retval.set(first_val);
+        // no matching value found
+        let exception_obj = v8::Object::new(scope);
+        let key_str = v8_str!(scope / "pristine_suspend");
+        let r#true = v8::Boolean::new(scope, true);
+        exception_obj.set(scope, key_str.into(), r#true.into());
+        let key_str = v8_str!(scope / "until");
+        let until_val = if args.get(0).is_null_or_undefined() {
+            r#true.into()
+        } else {
+            args.get(0)
+        };
+        exception_obj.set(scope, key_str.into(), until_val);
+        scope.throw_exception(exception_obj.into());
+        return;
     }
 
     #[inline]

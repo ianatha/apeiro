@@ -1,11 +1,11 @@
 import { test } from "http://example.com/test";
 
 function addTo(x) {
-	return x + $recv({ $type: "number" });
+	return x + $recv({ $type: ["number"] });
 }
 
 function multiplyBy(x) {
-	return x * $recv({ $type: "number" });
+	return x * $recv({ $type: ["number"] });
 }
 
 function calculator(init: number) {
@@ -15,7 +15,7 @@ function calculator(init: number) {
 
 	return {
 		incTwice: function() {
-			acc = acc + $recv({ $type: "number" });;
+			acc = acc + $recv({ $type: ["number"] });;
 			acc = addTo(acc);
 		},
 		inc: function () {
