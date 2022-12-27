@@ -39,6 +39,12 @@ fn test_fn_calls_many() {
             let __return_val = $sc1._temp$1.value + $sc1._temp$2.value;
             $frame_end($f1);
             return __return_val;
+        case 3:
+            delete $sc1._temp$1.value;
+            $f1.$pc = 4;
+        case 4:
+            delete $sc1._temp$2.value;
+            $frame_end($f1);
     }
 }, "1", null);
 "#,
@@ -98,16 +104,28 @@ fn test_fn_wrap_two_receives() {
             };
             $f1.$pc = 4;
         case 4:
-            $sc1._temp$1 = {
-                value: $recv()
-            };
+            delete $sc1._temp$1.value;
             $f1.$pc = 5;
         case 5:
-            $sc1.b = {
-                value: $sc1._temp$1.value
-            };
+            delete $sc1._temp$3.value;
             $f1.$pc = 6;
         case 6:
+            delete $sc1._temp$2.value;
+            $f1.$pc = 7;
+        case 7:
+            $sc1._temp$4 = {
+                value: $recv()
+            };
+            $f1.$pc = 8;
+        case 8:
+            $sc1.b = {
+                value: $sc1._temp$4.value
+            };
+            $f1.$pc = 9;
+        case 9:
+            delete $sc1._temp$4.value;
+            $f1.$pc = 10;
+        case 10:
             let __return_val = $sc1.a.value + $sc1.b.value;
             $frame_end($f1);
             return __return_val;
@@ -150,43 +168,43 @@ fn test_fn_wrap_two_receives() {
 //     );
 // }
 
-#[test]
-fn test_fn_multi_assign() {
-    compiler_test(
-        "function sum() {
-    const { a, b } = params()
-    return a + b;
-}",
-        folder_chain!(),
-        r#"let sum = $fn(function sum() {
-    let $f1 = $new_frame("1", null);
-    let $sc1 = $scope(undefined, $f1);
-    switch($f1.$pc){
-        case 0:
-            $sc1._temp$1 = {
-                value: params()
-            };
-            $f1.$pc = 1;
-        case 1:
-            $sc1._params = {
-                value: $sc1._temp$1.value
-            };
-            $sc1.a = {
-                value: $sc1._params.value.a
-            };
-            $sc1.b = {
-                value: $sc1._params.value.b
-            };
-            $f1.$pc = 2;
-        case 2:
-            let __return_val = $sc1.a.value + $sc1.b.value;
-            $frame_end($f1);
-            return __return_val;
-    }
-}, "1", null);
-"#,
-    );
-}
+// #[test]
+// fn test_fn_multi_assign() {
+//     compiler_test(
+//         "function sum() {
+//     const { a, b } = params()
+//     return a + b;
+// }",
+//         folder_chain!(),
+//         r#"let sum = $fn(function sum() {
+//     let $f1 = $new_frame("1", null);
+//     let $sc1 = $scope(undefined, $f1);
+//     switch($f1.$pc){
+//         case 0:
+//             $sc1._temp$1 = {
+//                 value: params()
+//             };
+//             $f1.$pc = 1;
+//         case 1:
+//             $sc1._params = {
+//                 value: $sc1._temp$1.value
+//             };
+//             $sc1.a = {
+//                 value: $sc1._params.value.a
+//             };
+//             $sc1.b = {
+//                 value: $sc1._params.value.b
+//             };
+//             $f1.$pc = 2;
+//         case 2:
+//             let __return_val = $sc1.a.value + $sc1.b.value;
+//             $frame_end($f1);
+//             return __return_val;
+//     }
+// }, "1", null);
+// "#,
+//     );
+// }
 
 #[test]
 fn test_fn_wrap_export_default() {

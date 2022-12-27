@@ -9,12 +9,30 @@ function recvNumber() {
 	return $recv(zodToJsonSchema(schema));
 }
 
+function delay(d) {
+	let i = 0;
+	while (i < d) {
+		log(i);
+		i = i + 1;
+		let j = 0;
+		while (j < 10) {
+			log(i ** j);
+			j = j + 1;
+		}
+	}
+	log("done");
+}
+
 function calculator(init: number) {
 	let acc = init;
 
 	return {
 		inc: function () {
-			acc = acc + recvNumber();
+			delay(100);
+			let input = recvNumber();
+			log(input);
+			$send("C5LPOu7JqLRjFQPnIcHb9", input);
+			acc = acc + input;
 		},
 		get: function () {
 			return acc;

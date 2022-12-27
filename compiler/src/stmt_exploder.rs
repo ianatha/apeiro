@@ -95,15 +95,19 @@ impl VisitMut for CallExprExploder {
 }
 
 #[derive(Default)]
-struct StmtExploder {}
+struct StmtExploder {
+    count: u32,
+}
 
 impl StmtExploder {
     fn expand_stmt(&mut self, mut stmt: Stmt) -> (Vec<Stmt>, Vec<Stmt>) {
         let mut a = CallExprExploder {
+            count: self.count,
             ..Default::default()
         };
         stmt.visit_mut_children_with(&mut a);
         a.pre_stmts.push(stmt);
+        self.count = a.count;
         (a.pre_stmts, a.post_stmts)
     }
 

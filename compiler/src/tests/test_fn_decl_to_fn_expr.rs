@@ -4,7 +4,7 @@ use crate::fn_decl_to_fn_expr;
 #[test]
 fn test_fn_decl_to_fn_expr_simple() {
     compiler_test(
-        "function one() { return 1;}",
+        "function one() { return 1; }",
         |_| fn_decl_to_fn_expr::folder(),
         r#"let one = function one() {
     return 1;
