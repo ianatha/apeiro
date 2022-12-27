@@ -30,7 +30,7 @@ pub fn establish_db_connection(
 
 #[cfg(test)]
 pub fn establish_db_connection(
-    file: String,
+    _file: String,
 ) -> Result<Pool<SqliteConnectionManager>, anyhow::Error> {
     let manager = SqliteConnectionManager::memory();
     let pool = Pool::builder().build(manager)?;
@@ -39,8 +39,6 @@ pub fn establish_db_connection(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    console_subscriber::init();
-
     let cli = Cli::parse();
     let port = cli.port.unwrap_or(5151);
     let store = cli.store.unwrap_or("world.db".into());

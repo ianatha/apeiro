@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# v8 = "0.55.0"
-# futures = "0.3.25"
-# serde = { version = "1.0.147", features =[ "derive" ] }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4.0.26", features = ["cargo"] }
 pristine_engine = { path = "../engine" }
@@ -17,7 +14,7 @@ actix-web = "4.2.1"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 nanoid = "0.4.0"
-serde = "1.0.144"
+serde = { version = "^1.0.100", features = ["derive"] }
 env_logger = "0.10.0"
 futures-core = "0.3.25"
 futures = "0.3.25"
