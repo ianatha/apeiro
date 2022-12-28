@@ -14,8 +14,13 @@ use std::{path::PathBuf, string::String};
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
+    /// defaults to http://localhost:5151
     #[clap(short, long)]
     remote: Option<String>,
+
+    /// output in JSON format (only supported by get)
+    #[clap(short('j'), long)]
+    output_json: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -25,22 +30,32 @@ struct Cli {
 enum Commands {
     /// List running processes
     Ps {},
+    /// Get process status
     Get {
         pid: String,
+        #[clap(short, long)]
+        value: bool,
     },
+    /// Get compiled source code of a process
     Inspect {
         pid: String,
     },
+    /// Send message to process
     Send {
         pid: String,
         message: String,
     },
+    /// Start a new process
     New {
         srcfile: PathBuf,
+        #[clap(short, long)]
+        name: Option<String>,
     },
+    /// Stream process events and logs
     Watch {
         pid: String,
     },
+    /// Compile a source file into Pristine VM
     Compile {
         input: PathBuf,
         #[clap(short, long)]
@@ -69,13 +84,23 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        Commands::Get { pid } => {
+        Commands::Get { pid, value } => {
             let resp = reqwest::get(remote.clone() + "/proc/" + pid)
                 .await?
                 .json::<ProcStatus>()
                 .await?;
 
-            println!("{:?}", resp);
+            if *value {
+                println!("{}", resp.val.unwrap_or("null".into()));
+                return Ok(())
+            }
+
+            if cli.output_json {
+                let j = serde_json::to_string(&resp)?;
+                println!("{}", j);
+            } else {
+                println!("{:?}", resp);
+            }
 
             Ok(())
         }
@@ -104,12 +129,12 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
-        Commands::New { srcfile } => {
+        Commands::New { srcfile, name } => {
             let src = std::fs::read_to_string(srcfile)?;
             let client = reqwest::Client::new();
             let resp = client
                 .post(remote + "/proc/")
-                .json(&ProcNewRequest { src })
+                .json(&ProcNewRequest { src, name: name.clone() })
                 .send()
                 .await?
                 .json::<ProcNewOutput>()
@@ -135,6 +160,7 @@ async fn main() -> Result<()> {
                 .map(|p| {
                     vec![
                         p.id.clone().cell(),
+                        p.name.clone().unwrap_or("".into()).cell(),
                         p.status.clone().cell(),
                         match p.suspension.clone() {
                             Some(s) => truncate(&s.to_string(), 64).to_string(),
@@ -146,6 +172,7 @@ async fn main() -> Result<()> {
                 .table()
                 .title(vec![
                     "pid".cell().bold(true).justify(Justify::Center),
+                    "name".cell().bold(true),
                     "status".cell().bold(true),
                     "suspension".cell().bold(true),
                 ])

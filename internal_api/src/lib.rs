@@ -12,6 +12,7 @@ pub struct ProcNewOutput {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcSummary {
     pub id: PristineId,
+    pub name: Option<String>,
     pub status: StepResultStatus,
     pub suspension: Option<Value>,
 }
@@ -24,6 +25,7 @@ pub struct ProcListOutput {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewRequest {
     pub src: String,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -84,3 +86,9 @@ impl ProcStatus {
         }
     }
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PristineError {
+    error: String,
+}
+

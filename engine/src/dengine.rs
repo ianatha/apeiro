@@ -132,7 +132,7 @@ impl DEngine {
         println!("compiled_src: {}", compiled_src);
         // let compiled_src = pristine_compile(body.src.clone()).unwrap();
 
-        let proc_id = db::proc_new(&conn, &req.src, &compiled_src).unwrap();
+        let proc_id = db::proc_new(&conn, &req.src, &req.name, &compiled_src)?;
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src);
 
@@ -373,6 +373,7 @@ impl SharedDEngine {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS procs (
             id TEXT PRIMARY KEY,
+            name TEXT UNIQUE,
             src TEXT,
             compiled_src TEXT,
             status TEXT,

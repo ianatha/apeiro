@@ -9,12 +9,12 @@ use serde_json;
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type Conn = PooledConnection<SqliteConnectionManager>;
 
-pub fn proc_new(conn: &Conn, src: &String, compiled_src: &String) -> Result<String, anyhow::Error> {
+pub fn proc_new(conn: &Conn, src: &String, name: &Option<String>, compiled_src: &String) -> Result<String, anyhow::Error> {
     let id = nanoid!();
 
     conn.execute(
-        "INSERT INTO procs (id, src, compiled_src) VALUES (?, ?, ?)",
-        &[&id, src, compiled_src],
+        "INSERT INTO procs (id, name, src, compiled_src) VALUES (?, ?, ?, ?)",
+        params![&id, name, src, compiled_src],
     )?;
 
     Ok(id)
@@ -108,7 +108,7 @@ pub fn proc_get_src(conn: &Conn, id: &String) -> Result<String, anyhow::Error> {
     Ok(result)
 }
 pub fn proc_list(conn: &Conn) -> Result<Vec<ProcSummary>, anyhow::Error> {
-    let mut stmt = conn.prepare("SELECT id, status, suspension FROM procs")?;
+    let mut stmt = conn.prepare("SELECT id, status, suspension, name FROM procs")?;
 
     let result = stmt
         .query_map((), |row| {
@@ -121,9 +121,11 @@ pub fn proc_list(conn: &Conn) -> Result<Vec<ProcSummary>, anyhow::Error> {
             } else {
                 None
             };
+            let name: Option<String> = row.get(3).unwrap_or(None);
 
             Ok(ProcSummary {
                 id,
+                name,
                 status,
                 suspension,
             })
