@@ -292,12 +292,11 @@ impl Engine {
         args: v8::FunctionCallbackArguments,
         _retval: v8::ReturnValue,
     ) {
-        let message = args
-            .get(0)
-            .to_string(scope)
-            .unwrap()
-            .to_rust_string_lossy(scope);
-
+        let message = if let Some(message) = args.get(0).to_string(scope) {
+            message.to_rust_string_lossy(scope)
+        } else {
+            "empty".into()
+        };
         println!("log: {}: {}", self.pid, message);
 
         if let Some(dengine) = self.dengine.clone() {
@@ -325,12 +324,17 @@ impl Engine {
         for (index, msg) in self.mbox.iter().enumerate() {
             if filter.matches(msg) {
                 let msg = self.mbox.remove(index);
+                println!(
+                    "mbox: {}: found match at index {}: {:?}",
+                    self.pid, index, msg
+                );
                 let msg = serde_v8::to_v8(scope, msg).unwrap();
                 retval.set(msg);
                 return;
             }
         }
 
+        println!("no recv match found");
         // no matching value found
         let exception_obj = v8::Object::new(scope);
         let key_str = v8_str!(scope / "pristine_suspend");
