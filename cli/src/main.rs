@@ -28,6 +28,9 @@ enum Commands {
     Get {
         pid: String,
     },
+    Inspect {
+        pid: String,
+    },
     Send {
         pid: String,
         message: String,
@@ -74,6 +77,9 @@ async fn main() -> Result<()> {
 
             println!("{:?}", resp);
 
+            Ok(())
+        }
+        Commands::Inspect { pid } => {
             let resp = reqwest::get(remote + "/proc/" + pid + "/debug")
                 .await?
                 .json::<ProcStatusDebug>()
