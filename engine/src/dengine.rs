@@ -5,6 +5,7 @@ use pristine_internal_api::ProcNewOutput;
 use pristine_internal_api::ProcNewRequest;
 use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::ProcStatus;
+use pristine_internal_api::ProcStatusDebug;
 use pristine_internal_api::StepResult;
 use pristine_internal_api::StepResultStatus;
 use r2d2::Pool;
@@ -179,6 +180,12 @@ impl DEngine {
         Ok(ProcStatus::new(res, executing))
     }
 
+    pub async fn proc_get_debug(&self, pid: String) -> Result<ProcStatusDebug, anyhow::Error> {
+        let conn = self.0.db.get().expect("");
+        let src = db::proc_get_src(&conn, &pid).map_err(|_e| anyhow!("db problem"))?;
+
+        Ok(ProcStatusDebug { compiled_src: src })
+    }
     pub async fn proc_send_and_watch(
         &self,
         proc_id: String,

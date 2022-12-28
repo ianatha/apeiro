@@ -74,7 +74,7 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
     let mut stmt = conn.prepare("SELECT status, val, suspension FROM procs WHERE id = ?")?;
 
     let result = stmt.query_row(&[id], |row| {
-        let status: String = row.get(0).unwrap();
+        let status: String = row.get(0)?;
         let status: StepResultStatus = serde_json::from_str(&status).unwrap();
         let val: Result<String, _> = row.get(1);
         let val = if let Ok(val) = val {
@@ -100,6 +100,13 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
     Ok(result)
 }
 
+pub fn proc_get_src(conn: &Conn, id: &String) -> Result<String, anyhow::Error> {
+    let mut stmt = conn.prepare("SELECT compiled_src FROM procs WHERE id = ?")?;
+
+    let result = stmt.query_row(&[id], |row| Ok(row.get(0)?))?;
+
+    Ok(result)
+}
 pub fn proc_list(conn: &Conn) -> Result<Vec<ProcSummary>, anyhow::Error> {
     let mut stmt = conn.prepare("SELECT id, status, suspension FROM procs")?;
 

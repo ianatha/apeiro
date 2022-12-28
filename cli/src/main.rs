@@ -4,7 +4,7 @@ use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
 use pristine_engine::{pristine_compile, StepResult};
 use pristine_internal_api::{
-    ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
+    ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus, ProcStatusDebug,
 };
 use reqwest_eventsource::{Event, EventSource};
 
@@ -67,12 +67,19 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Commands::Get { pid } => {
-            let resp = reqwest::get(remote + "/proc/" + pid)
+            let resp = reqwest::get(remote.clone() + "/proc/" + pid)
                 .await?
                 .json::<ProcStatus>()
                 .await?;
 
             println!("{:?}", resp);
+
+            let resp = reqwest::get(remote + "/proc/" + pid + "/debug")
+                .await?
+                .json::<ProcStatusDebug>()
+                .await?;
+
+            println!("{}", resp.compiled_src);
 
             Ok(())
         }

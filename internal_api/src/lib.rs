@@ -63,6 +63,11 @@ pub struct ProcStatus {
     pub executing: bool,
 }
 
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct ProcStatusDebug {
+    pub compiled_src: String,
+}
+
 impl ProcStatus {
     pub fn new(step_result: StepResult, executing: bool) -> Self {
         ProcStatus {

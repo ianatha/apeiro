@@ -38,6 +38,22 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[get("/proc/{pid}/debug")]
+async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
+    let pid: String = req
+        .match_info()
+        .get("pid")
+        .ok_or(ErrorBadRequest("no mount name"))?
+        .parse()?;
+
+    let res = dengine
+        .proc_get_debug(pid)
+        .await
+        .map_err(|_e| error::ErrorInternalServerError("db problem"))?;
+
+    Ok::<_, actix_web::Error>(web::Json(res))
+}
+
 #[put("/proc/{pid}")]
 async fn proc_send(
     req: HttpRequest,
