@@ -153,11 +153,11 @@ impl DEngine {
         })
     }
 
-    pub async fn proc_list(&self) -> ProcListOutput {
-        let conn = self.0.db.get().expect("");
-        let procs = db::proc_list(&conn).expect("");
+    pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
+        let conn = self.0.db.get()?;
+        let procs = db::proc_list(&conn)?;
 
-        ProcListOutput { procs }
+        Ok(ProcListOutput { procs })
     }
 
     pub async fn proc_get(&self, pid: String) -> Result<ProcStatus, anyhow::Error> {

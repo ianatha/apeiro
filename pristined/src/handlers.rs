@@ -35,7 +35,7 @@ async fn proc_new(
 
 #[get("/proc/")]
 async fn proc_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
-    let res = dengine.proc_list().await;
+    let res = dengine.proc_list().await.map_err(pristine_err)?;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
@@ -50,7 +50,7 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
     let res = dengine
         .proc_get(pid)
         .await
-        .map_err(|_e| error::ErrorInternalServerError("db problem"))?;
+        .map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
@@ -66,7 +66,7 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
     let res = dengine
         .proc_get_debug(pid)
         .await
-        .map_err(|_e| error::ErrorInternalServerError("db problem"))?;
+        .map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
