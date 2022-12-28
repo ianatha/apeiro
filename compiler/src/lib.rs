@@ -24,7 +24,7 @@ use anyhow::Result;
 use swc_ecma_transforms::pass::noop;
 
 pub fn engine_runtime_compile(input: String) -> Result<String> {
-    custom_pristine_compile(input, |_| noop(), false, false, true)
+    custom_pristine_compile(input, |_| noop(), false, false, false)
 }
 
 pub fn pristine_compile(input: String) -> Result<String> {

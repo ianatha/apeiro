@@ -1,8 +1,8 @@
 use swc_common::util::take::Take;
 use swc_common::Spanned;
 use swc_ecma_ast::{
-    Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module,
-    ModuleDecl, ModuleItem, VarDecl, VarDeclKind, VarDeclarator,
+    Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module, ModuleDecl,
+    ModuleItem, VarDecl, VarDeclKind, VarDeclarator,
 };
 
 use swc_ecmascript::visit::{as_folder, Fold};

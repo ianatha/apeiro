@@ -246,6 +246,65 @@ fn test_fn_wrap_export_named() {
 }
 
 #[test]
+fn test_fn_while() {
+    compiler_test(
+        "function sum(x) {
+    let state = {};
+    while (true) {
+        state = step(state);
+        if (state.done) {
+            return state.value;
+        }
+    }
+}",
+        folder_chain!(),
+        r#"let sum = $fn(function sum(x) {
+    let $f1 = $new_frame("1", null);
+    let $sc1 = $scope(undefined, $f1);
+    switch($f1.$pc){
+        case 0:
+            $sc1.state = {
+                value: {}
+            };
+            $f1.$pc = 1;
+        case 1:
+            while(true){
+                let $f2 = $new_frame("1", null);
+                let $sc2 = $scope($sc1, $f2);
+                switch($f2.$pc){
+                    case 0:
+                        $sc2._temp$1 = {
+                            value: step($sc1.state.value)
+                        };
+                        $f2.$pc = 1;
+                    case 1:
+                        $sc2.state.value = $sc2._temp$1.value;
+                        $f2.$pc = 2;
+                    case 2:
+                        if ($sc2.state.value.done) {
+                            let $f3 = $new_frame("1", null);
+                            let $sc3 = $scope($sc2, $f3);
+                            switch($f3.$pc){
+                                case 0:
+                                    let __return_val = $sc3.state.value.value;
+                                    $frame_end($f3);
+                                    return __return_val;
+                            }
+                        }
+                        $frame_end($f2);
+                }
+            }
+            $f1.$pc = 3;
+        case 3:
+            delete $sc1._temp$1.value;
+            $frame_end($f1);
+    }
+}, "1", null);
+"#,
+    );
+}
+
+#[test]
 fn test_fn_instrument() {
     compiler_test(
         include_str!("fn_instrument.simple.in.ts"),

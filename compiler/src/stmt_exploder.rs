@@ -29,13 +29,30 @@ pub fn folder() -> impl Fold {
 #[derive(Default, Debug)]
 struct CallExprExploder {
     count: u32,
+    depth: u32,
     pre_stmts: Vec<Stmt>,
     post_stmts: Vec<Stmt>,
 }
 
 impl VisitMut for CallExprExploder {
-    fn visit_mut_function(&mut self, _: &mut Function) {
-        // do nothing
+    fn visit_mut_function(&mut self, block: &mut Function) {
+        // no-op
+    }
+
+    fn visit_mut_block_stmt(&mut self, block: &mut BlockStmt) {
+        // no-op
+    }
+
+    fn visit_mut_return_stmt(&mut self, n: &mut swc_ecma_ast::ReturnStmt) {
+        self.depth += 1;
+        n.visit_mut_children_with(self);
+        self.depth -= 1;
+    }
+
+    fn visit_mut_var_decl(&mut self, n: &mut VarDecl) {
+        self.depth += 1;
+        n.visit_mut_children_with(self);
+        self.depth -= 1;
     }
 
     fn visit_mut_expr(&mut self, n: &mut Expr) {
@@ -51,42 +68,46 @@ impl VisitMut for CallExprExploder {
                     optional: false,
                 };
 
+                self.depth += 1;
                 call_expr.visit_mut_children_with(self);
+                self.depth -= 1;
 
-                self.pre_stmts.push(Stmt::Decl(Decl::Var(
-                    VarDecl {
-                        kind: swc_ecma_ast::VarDeclKind::Const,
-                        declare: false,
-                        span: DUMMY_SP,
-                        decls: vec![VarDeclarator {
-                            span: Span {
-                                lo: BytePos::DUMMY,
-                                hi: BytePos::DUMMY,
-                                ctxt: SyntaxContext::from_u32(91919),
-                            },
-                            name: ident.clone().into(),
-                            definite: false,
-                            init: Some(Box::new(Expr::Call(call_expr.clone()))),
-                        }],
-                    }
-                    .into(),
-                )));
-
-                // push delete statement
-                self.post_stmts.push(
-                    ExprStmt {
-                        span: DUMMY_SP,
-                        expr: swc_ecma_ast::UnaryExpr {
+                if self.depth > 0 {
+                    self.pre_stmts.push(Stmt::Decl(Decl::Var(
+                        VarDecl {
+                            kind: swc_ecma_ast::VarDeclKind::Const,
+                            declare: false,
                             span: DUMMY_SP,
-                            op: swc_ecma_ast::UnaryOp::Delete,
-                            arg: Box::new(Expr::Ident(ident.clone())),
+                            decls: vec![VarDeclarator {
+                                span: Span {
+                                    lo: BytePos::DUMMY,
+                                    hi: BytePos::DUMMY,
+                                    ctxt: SyntaxContext::from_u32(91919),
+                                },
+                                name: ident.clone().into(),
+                                definite: false,
+                                init: Some(Box::new(Expr::Call(call_expr.clone()))),
+                            }],
                         }
                         .into(),
-                    }
-                    .into(),
-                );
+                    )));
 
-                *n = Expr::Ident(ident)
+                    // push delete statement
+                    self.post_stmts.push(
+                        ExprStmt {
+                            span: DUMMY_SP,
+                            expr: swc_ecma_ast::UnaryExpr {
+                                span: DUMMY_SP,
+                                op: swc_ecma_ast::UnaryOp::Delete,
+                                arg: Box::new(Expr::Ident(ident.clone())),
+                            }
+                            .into(),
+                        }
+                        .into(),
+                    );
+
+                    *n = Expr::Ident(ident)
+                }
             }
             _ => {}
         }

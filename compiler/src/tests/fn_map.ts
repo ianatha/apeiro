@@ -2,10 +2,8 @@ export default function *main() {
 	let state = {};
 	while (true) {
 		yield state;
-
-		let msg = $recv({cmd: true});
+		let msg = $recv({cmd: {$type:["string"]}});
 		if (msg.cmd === "set") {
-			log("set " + msg.key);
 			state[msg.key] = msg.value;
 		}
 	}

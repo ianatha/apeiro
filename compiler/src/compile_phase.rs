@@ -150,7 +150,7 @@ impl PristineCompiler {
                 &swc::config::Options {
                     config: swc::config::Config {
                         jsc: swc::config::JscConfig {
-                            target: Some(swc_ecma_ast::EsVersion::Es5),
+                            target: Some(swc_ecma_ast::EsVersion::Es2015),
                             syntax: Some(swc_ecma_parser::Syntax::Typescript(config)),
                             ..Default::default()
                         },
