@@ -31,17 +31,20 @@ impl Clone for DEngine {
 #[derive(Debug)]
 pub(crate) struct DEngineCmdSend {
     pid: String,
+    step_id: String,
     req: ProcSendRequest,
 }
 
 #[derive(Debug)]
 pub(crate) enum DEngineCmd {
+    Broadcast(String, String, ProcEvent),
     Send(DEngineCmdSend),
-    Log((String, serde_json::Value)),
+    Log((String, String, serde_json::Value)),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ProcEvent {
+    Error(String),
     Log(serde_json::Value),
     StepResult(StepResult),
     None,
@@ -53,10 +56,12 @@ struct SharedDEngine {
     locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
     tx: mpsc::Sender<DEngineCmd>,
     watchers: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<ProcEvent>>>>,
+    watchers_exec: Arc<RwLock<HashMap<(String, String), tokio::sync::watch::Sender<ProcEvent>>>>,
 }
 
 pub struct EventLoop {
     dengine: DEngine,
+    tx: mpsc::Sender<DEngineCmd>,
     rx: mpsc::Receiver<DEngineCmd>,
 }
 
@@ -66,17 +71,42 @@ impl EventLoop {
         while let Some(message) = self.rx.recv().await {
             println!("GOT = {:?}", message);
             match message {
+                DEngineCmd::Broadcast(pid, exec_id, msg) => {
+                    let dengine = self.dengine.clone();
+                    dengine.send_to_watchers(&pid, &msg).await.unwrap();
+                    dengine.send_to_exec_watchers(&pid, &exec_id, &msg).await.unwrap();
+                }
                 DEngineCmd::Send(cmd) => {
                     let dengine = self.dengine.clone();
+                    let tx = self.tx.clone();
                     tokio::task::spawn(async move {
                         println!("inner proc send");
                         let res = dengine.inner_proc_send(&cmd.pid, &cmd.req).await;
-                        if let Err(err) = res {
-                            println!("inner proc send error {:?} -> {:?}", cmd, err);
+                        match res {
+                            Err(err) => {
+                                println!("inner proc send error {:?} -> {:?}", cmd, err);
+                                tx.send(
+                                    DEngineCmd::Broadcast(
+                                        cmd.pid.clone(),
+                                        cmd.step_id.clone(),
+                                        ProcEvent::Error(err.to_string().clone()),
+                                    ),
+                                ).await.unwrap();
+                            }
+                            Result::Ok(res) =>{
+                                println!("inner proc result {:?} -> {:?}", cmd, res);
+                                tx.send(
+                                    DEngineCmd::Broadcast(
+                                        cmd.pid.clone(),
+                                        cmd.step_id.clone(),
+                                        ProcEvent::StepResult(res),
+                                    ),
+                                ).await.unwrap();
+                            }
                         }
                     });
                 }
-                DEngineCmd::Log((pid, msg)) => {
+                DEngineCmd::Log((pid, _, msg)) => {
                     let dengine = self.dengine.clone();
                     println!("event loop LOG: {} -> {:?}", pid, msg);
                     tokio::task::spawn(async move {
@@ -97,10 +127,11 @@ impl DEngine {
         runtime_js_src: Option<fn() -> String>,
         db: Pool<SqliteConnectionManager>,
     ) -> Result<(DEngine, EventLoop)> {
-        let (shared_dengine, rx) = SharedDEngine::new_inner(runtime_js_src, db)?;
+        let (shared_dengine, rx, tx) = SharedDEngine::new_inner(runtime_js_src, db)?;
         let instance = Arc::new(shared_dengine);
         let event_loop = EventLoop {
             dengine: DEngine(instance.clone()),
+            tx,
             rx,
         };
         Ok((DEngine(instance), event_loop))
@@ -191,8 +222,11 @@ impl DEngine {
         proc_id: String,
         body: ProcSendRequest,
     ) -> Result<tokio::sync::watch::Receiver<ProcEvent>, anyhow::Error> {
+        use nanoid::nanoid;
+
+        let exec_id = nanoid!();
         let watcher = self.watch(proc_id.clone()).await;
-        self.proc_send(proc_id, body).await?;
+        self.proc_send(proc_id, Some(exec_id), body).await?;
         Ok(watcher)
     }
 
@@ -209,10 +243,13 @@ impl DEngine {
         proc_id: String,
         body: ProcSendRequest,
     ) -> Result<StepResult, anyhow::Error> {
-        let mut watcher = self.watch(proc_id.clone()).await;
+        use nanoid::nanoid;
+
+        let exec_id = nanoid!();
+        let mut watcher = self.watch_exec(proc_id.clone(), exec_id.clone()).await;
 
         println!("before proc send");
-        self.proc_send(proc_id.clone(), body).await?;
+        self.proc_send(proc_id.clone(), Some(exec_id), body).await?;
         println!("after proc send");
 
         while watcher.changed().await.is_ok() {
@@ -220,13 +257,23 @@ impl DEngine {
             match &*watcher.borrow() {
                 ProcEvent::StepResult(step_result) => {
                     println!("received step result for {}", proc_id);
+                    println!("terminating");
                     return Ok(step_result.clone());
                 }
-                _ => {
-                    println!("received event in step request for {}", proc_id)
+                ProcEvent::Error(err) => {
+                    println!("received error for {}", proc_id);
+                    println!("terminating");
+                    return Err(anyhow!(err.clone()));
+                }
+                ProcEvent::Log(log) => {
+                    println!("received event in step request for {}: {:?}", proc_id, log);
+                }
+                ProcEvent::None => {
+                    println!("received none for {}", proc_id);
                 }
             }
         }
+        println!("terminating");
         Err(anyhow!("watcher closed"))
     }
 
@@ -237,16 +284,22 @@ impl DEngine {
     pub async fn proc_send(
         &self,
         proc_id: String,
+        exec_id: Option<String>,
         body: ProcSendRequest,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<String, anyhow::Error> {
+        use nanoid::nanoid;
+
+        let exec_id = exec_id.unwrap_or(nanoid!());
         self.0
             .tx
             .send(DEngineCmd::Send(DEngineCmdSend {
                 pid: proc_id,
+                step_id: exec_id.clone(),
                 req: body,
             }))
             .await?;
-        Ok(())
+
+        Ok(exec_id)
     }
 
     pub async fn send_to_watchers(
@@ -254,12 +307,33 @@ impl DEngine {
         proc_id: &String,
         msg: &ProcEvent,
     ) -> Result<(), anyhow::Error> {
+        println!("trying to read watchers to send {:?}", msg);
         let watchers_locked = self.0.watchers.read().await;
         if let Some(watcher) = watchers_locked.get(proc_id) {
             if !watcher.is_closed() {
+                println!("sending to watcher for {} {:?}", proc_id, msg);
                 watcher.send(msg.clone()).unwrap();
             }
         }
+        println!("sent {:?}", msg);
+        Ok(())
+    }
+
+    pub async fn send_to_exec_watchers(
+        &self,
+        proc_id: &String,
+        exec_id: &String,
+        msg: &ProcEvent,
+    ) -> Result<(), anyhow::Error> {
+        println!("trying to read watchers to send {:?}", msg);
+        let watchers_locked = self.0.watchers_exec.read().await;
+        if let Some(watcher) = watchers_locked.get(&(proc_id.clone(), exec_id.clone())) {
+            if !watcher.is_closed() {
+                println!("sending to watcher for {} {} {:?}", proc_id, exec_id, msg);
+                watcher.send(msg.clone()).unwrap();
+            }
+        }
+        println!("sent {:?}", msg);
         Ok(())
     }
 
@@ -305,21 +379,6 @@ impl DEngine {
 
         println!("result: {:?}", res);
 
-        let msg = if let Result::Ok(res) = &res {
-            res.clone()
-        } else {
-            println!("error: {:?}", res);
-            StepResult {
-                status: StepResultStatus::ERROR,
-                val: Some(serde_json::Value::String(format!("{:?}", res))),
-                ..Default::default()
-            }
-        };
-
-        self.send_to_watchers(proc_id, &ProcEvent::StepResult(msg))
-            .await
-            .unwrap();
-
         res
     }
 
@@ -340,8 +399,31 @@ impl DEngine {
         } else {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers.write().await;
-            watchers_locked.insert(pid, tx);
+            watchers_locked.insert(pid.clone(), tx);
+            println!("returning new watch -- total watchers for {} = {}", pid, watchers_locked.len());
+            rx
+        }
+    }
+
+    pub async fn watch_exec(&self, pid: String, exec_id: String) -> tokio::sync::watch::Receiver<ProcEvent> {
+        println!("waiting for watch creation");
+        let watcher_subscription = {
+            let watchers_locked = self.0.watchers_exec.read().await;
+            if let Some(watcher) = watchers_locked.get(&(pid.clone(), exec_id.clone())) {
+                Some(watcher.subscribe())
+            } else {
+                None
+            }
+        };
+
+        if let Some(watcher_subscription) = watcher_subscription {
             println!("returning watch");
+            watcher_subscription
+        } else {
+            let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
+            let mut watchers_locked = self.0.watchers_exec.write().await;
+            watchers_locked.insert((pid.clone(), exec_id.clone()), tx);
+            println!("returning new watch -- total watchers for ({},{}) = {}", pid, exec_id, watchers_locked.len());
             rx
         }
     }
@@ -351,20 +433,21 @@ impl SharedDEngine {
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
         db: Pool<SqliteConnectionManager>,
-    ) -> Result<(SharedDEngine, mpsc::Receiver<DEngineCmd>)> {
+    ) -> Result<(SharedDEngine, mpsc::Receiver<DEngineCmd>, mpsc::Sender<DEngineCmd>)> {
         let (tx, rx) = mpsc::channel(32);
 
         let instance = SharedDEngine {
             runtime_js_src,
             db,
             locks: Arc::new(RwLock::new(HashMap::new())),
-            tx,
+            tx: tx.clone(),
             watchers: Arc::new(RwLock::new(HashMap::new())),
+            watchers_exec: Arc::new(RwLock::new(HashMap::new())),
         };
 
         instance.init_db()?;
 
-        Ok((instance, rx))
+        Ok((instance, rx, tx))
     }
 
     fn init_db(&self) -> Result<(), anyhow::Error> {

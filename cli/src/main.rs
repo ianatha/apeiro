@@ -133,9 +133,9 @@ async fn main() -> Result<()> {
                 .put(remote + "/proc/" + pid)
                 .json(&ProcSendRequest { msg })
                 .send()
-                .await?
-                .json::<StepResult>()
                 .await?;
+            
+            let resp = result_or_error::<StepResult>(resp).await;
 
             println!("{:?}", resp);
 

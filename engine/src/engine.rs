@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Ok, Result};
 use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::StepResult;
+use tokio::task;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
@@ -305,7 +306,8 @@ impl Engine {
 
             let pid = self.pid.clone();
             tokio::task::spawn(async move {
-                dengine.send(DEngineCmd::Log((pid, msg))).await.unwrap();
+                // TODO: 2nd pid should be exec
+                dengine.send(DEngineCmd::Log((pid.clone(), pid, msg))).await.unwrap();
             });
         }
     }
@@ -371,7 +373,7 @@ impl Engine {
 
             tokio::task::spawn(async move {
                 println!("about to send {} {:?}", pid, msg);
-                let _ = dengine.proc_send(pid, ProcSendRequest { msg }).await;
+                let _ = dengine.proc_send(pid, None, ProcSendRequest { msg }).await;
                 println!("sent!!");
             });
         }

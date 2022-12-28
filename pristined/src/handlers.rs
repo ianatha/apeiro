@@ -86,7 +86,7 @@ async fn proc_send(
     let res = dengine
         .proc_send_and_watch_step_result(pid, body.into_inner())
         .await
-        .map_err(|_e| error::ErrorInternalServerError("db problem"))?;
+        .map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
