@@ -4,8 +4,9 @@ use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
 use pristine_engine::{pristine_compile, StepResult};
 use pristine_internal_api::{
-    ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus, ProcStatusDebug,
+    ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus, ProcStatusDebug, PristineError,
 };
+use reqwest::Response;
 use reqwest_eventsource::{Event, EventSource};
 
 use std::{path::PathBuf, string::String};
@@ -61,6 +62,17 @@ enum Commands {
         #[clap(short, long)]
         output: Option<PathBuf>,
     },
+}
+
+async fn result_or_error<T>(r: Response) -> Result<T, PristineError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    if r.status().is_success() {
+        Result::<T, PristineError>::Ok(r.json::<T>().await.unwrap())
+    } else {
+        r.json::<Result::<T, PristineError>>().await.unwrap()
+    }
 }
 
 #[tokio::main]
@@ -136,9 +148,9 @@ async fn main() -> Result<()> {
                 .post(remote + "/proc/")
                 .json(&ProcNewRequest { src, name: name.clone() })
                 .send()
-                .await?
-                .json::<ProcNewOutput>()
                 .await?;
+            
+            let resp = result_or_error::<ProcNewOutput>(resp).await;
 
             println!("{:?}", resp);
 

@@ -3,6 +3,22 @@ use actix_web::{get, post, put, web, HttpRequest, HttpResponse, Responder};
 use pristine_engine::DEngine;
 use pristine_internal_api::*;
 
+fn pristine_err(e: anyhow::Error) -> PristineError {
+    PristineError(e)
+}
+
+struct PristineError(anyhow::Error);
+
+impl From<PristineError> for actix_web::Error {
+    fn from(e: PristineError) -> Self {
+        error::ErrorBadRequest(serde_json::json!{{
+            "Err": {
+                "error": e.0.to_string()
+            }
+        }})
+    }
+}
+
 #[post("/proc/")]
 async fn proc_new(
     _req: HttpRequest,
@@ -12,7 +28,8 @@ async fn proc_new(
     let res = dengine
         .proc_new(body.into_inner())
         .await
-        .expect("failed to run");
+        .map_err(pristine_err)?;
+
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
