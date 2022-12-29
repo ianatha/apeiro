@@ -91,4 +91,3 @@ impl ProcStatus {
 pub struct PristineError {
     error: String,
 }
-

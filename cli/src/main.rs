@@ -4,7 +4,8 @@ use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
 use pristine_engine::{pristine_compile, StepResult};
 use pristine_internal_api::{
-    ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus, ProcStatusDebug, PristineError,
+    PristineError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
+    ProcStatusDebug,
 };
 use reqwest::Response;
 use reqwest_eventsource::{Event, EventSource};
@@ -38,14 +39,9 @@ enum Commands {
         value: bool,
     },
     /// Get compiled source code of a process
-    Inspect {
-        pid: String,
-    },
+    Inspect { pid: String },
     /// Send message to process
-    Send {
-        pid: String,
-        message: String,
-    },
+    Send { pid: String, message: String },
     /// Start a new process
     New {
         srcfile: PathBuf,
@@ -53,9 +49,7 @@ enum Commands {
         name: Option<String>,
     },
     /// Stream process events and logs
-    Watch {
-        pid: String,
-    },
+    Watch { pid: String },
     /// Compile a source file into Pristine VM
     Compile {
         input: PathBuf,
@@ -71,7 +65,7 @@ where
     if r.status().is_success() {
         Result::<T, PristineError>::Ok(r.json::<T>().await.unwrap())
     } else {
-        r.json::<Result::<T, PristineError>>().await.unwrap()
+        r.json::<Result<T, PristineError>>().await.unwrap()
     }
 }
 
@@ -104,7 +98,7 @@ async fn main() -> Result<()> {
 
             if *value {
                 println!("{}", resp.val.unwrap_or("null".into()));
-                return Ok(())
+                return Ok(());
             }
 
             if cli.output_json {
@@ -134,7 +128,7 @@ async fn main() -> Result<()> {
                 .json(&ProcSendRequest { msg })
                 .send()
                 .await?;
-            
+
             let resp = result_or_error::<StepResult>(resp).await;
 
             println!("{:?}", resp);
@@ -146,10 +140,13 @@ async fn main() -> Result<()> {
             let client = reqwest::Client::new();
             let resp = client
                 .post(remote + "/proc/")
-                .json(&ProcNewRequest { src, name: name.clone() })
+                .json(&ProcNewRequest {
+                    src,
+                    name: name.clone(),
+                })
                 .send()
                 .await?;
-            
+
             let resp = result_or_error::<ProcNewOutput>(resp).await;
 
             println!("{:?}", resp);

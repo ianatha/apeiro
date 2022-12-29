@@ -11,7 +11,7 @@ struct PristineError(anyhow::Error);
 
 impl From<PristineError> for actix_web::Error {
     fn from(e: PristineError) -> Self {
-        error::ErrorBadRequest(serde_json::json!{{
+        error::ErrorBadRequest(serde_json::json! {{
             "Err": {
                 "error": e.0.to_string()
             }
@@ -47,10 +47,7 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    let res = dengine
-        .proc_get(pid)
-        .await
-        .map_err(pristine_err)?;
+    let res = dengine.proc_get(pid).await.map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
@@ -63,10 +60,7 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    let res = dengine
-        .proc_get_debug(pid)
-        .await
-        .map_err(pristine_err)?;
+    let res = dengine.proc_get_debug(pid).await.map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
