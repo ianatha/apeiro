@@ -9,7 +9,12 @@ use serde_json;
 pub type DbPool = Pool<SqliteConnectionManager>;
 pub type Conn = PooledConnection<SqliteConnectionManager>;
 
-pub fn proc_new(conn: &Conn, src: &String, name: &Option<String>, compiled_src: &String) -> Result<String, anyhow::Error> {
+pub fn proc_new(
+    conn: &Conn,
+    src: &String,
+    name: &Option<String>,
+    compiled_src: &String,
+) -> Result<String, anyhow::Error> {
     let id = nanoid!();
 
     conn.execute(
@@ -26,8 +31,10 @@ pub fn proc_update(
     state: &StepResult,
     snapshot: &Vec<u8>,
 ) -> Result<(), anyhow::Error> {
+    let frames_json = serde_json::to_string(&state.frames).unwrap();
+
     conn.execute(
-        "UPDATE procs SET status=?, val=?, suspension=?, snapshot=? WHERE id=?",
+        "UPDATE procs SET status=?, val=?, suspension=?, snapshot=?, frames=? WHERE id=?",
         params![
             serde_json::to_string(&state.status).unwrap(),
             state
@@ -39,6 +46,7 @@ pub fn proc_update(
                 .as_ref()
                 .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
             snapshot,
+            frames_json,
             id
         ],
     )?;
@@ -71,7 +79,8 @@ pub fn proc_get_details(conn: &Conn, id: &String) -> Result<ProcDetails, anyhow:
 }
 
 pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
-    let mut stmt = conn.prepare("SELECT status, val, suspension FROM procs WHERE id = ?")?;
+    let mut stmt =
+        conn.prepare("SELECT status, val, suspension, frames FROM procs WHERE id = ?")?;
 
     let result = stmt.query_row(&[id], |row| {
         let status: String = row.get(0)?;
@@ -88,11 +97,18 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
         } else {
             None
         };
+        let frames: Result<String, _> = row.get(3);
+        let frames = if let Ok(frames) = frames {
+            serde_json::from_str(&frames).unwrap_or(None)
+        } else {
+            None
+        };
 
         Ok(StepResult {
             status,
             val,
             suspension,
+            frames,
             ..Default::default()
         })
     })?;

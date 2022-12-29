@@ -1,7 +1,9 @@
 use anyhow::{anyhow, Ok, Result};
 use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::StepResult;
+use serde_json::Value;
 use tokio::task;
+use v8::CreateParams;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
 
@@ -32,6 +34,7 @@ impl std::fmt::Debug for DEngine {
 #[derive(Default, Debug)]
 pub struct EngineInstance<'a> {
     pub usercode: Option<v8::Local<'a, v8::Module>>,
+    pub frames: Option<v8::Local<'a, v8::Value>>,
 }
 
 impl Engine {
@@ -60,7 +63,10 @@ impl Engine {
         snapshot: Option<Vec<u8>>,
         js_stmt: String,
     ) -> Result<(StepResult, Vec<u8>)> {
-        let mut engine_instance = EngineInstance { usercode: None };
+        let mut engine_instance = EngineInstance {
+            usercode: None,
+            frames: None,
+        };
         let align = std::mem::align_of::<usize>();
         let layout = std::alloc::Layout::from_size_align(
             std::mem::size_of::<*mut v8::OwnedIsolate>(),
@@ -307,8 +313,213 @@ impl Engine {
             let pid = self.pid.clone();
             tokio::task::spawn(async move {
                 // TODO: 2nd pid should be exec
-                dengine.send(DEngineCmd::Log((pid.clone(), pid, msg))).await.unwrap();
+                dengine
+                    .send(DEngineCmd::Log((pid.clone(), pid, msg)))
+                    .await
+                    .unwrap();
             });
+        }
+    }
+
+    pub async fn step_process_fast(
+        &mut self,
+        src: Option<String>,
+        js_stmt: String,
+        frames: Option<Value>,
+    ) -> Result<StepResult> {
+        let mut engine_instance = EngineInstance {
+            usercode: None,
+            frames: None,
+        };
+        let align = std::mem::align_of::<usize>();
+        let layout = std::alloc::Layout::from_size_align(
+            std::mem::size_of::<*mut v8::OwnedIsolate>(),
+            align,
+        )
+        .unwrap();
+        assert!(layout.size() > 0);
+
+        let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
+        let engine_instance_external_ref = (&engine_instance as *const _) as *mut std::ffi::c_void;
+
+        let isolate = Isolate::new(CreateParams::default());
+        let mut isolate = self.setup_isolate(isolate);
+        let new_state: Result<StepResult> = {
+            let handle_scope = &mut HandleScope::new(&mut isolate);
+
+            let engine_ref = v8::External::new(handle_scope, engine_external_ref);
+            let engine_instance_ref = v8::External::new(handle_scope, engine_instance_external_ref);
+
+            let log_callback_fn_builder = v8::FunctionTemplate::builder(log_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
+
+            let mbox_fn_builder = v8::FunctionTemplate::builder(mbox_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
+
+            let send_fn_builder = v8::FunctionTemplate::builder(send_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
+
+            let frames_fn_builder = v8::FunctionTemplate::builder(frames_callback)
+                .data(engine_instance_ref.into())
+                .build(handle_scope);
+
+            let usercode_fn_builder = v8::FunctionTemplate::builder(usercode_callback)
+                .data(engine_instance_ref.into())
+                .build(handle_scope);
+
+            let global = v8::ObjectTemplate::new(handle_scope);
+            global.set(
+                v8::String::new(handle_scope, "log").unwrap().into(),
+                log_callback_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$recv").unwrap().into(),
+                mbox_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$send").unwrap().into(),
+                send_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$get_frames").unwrap().into(),
+                frames_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$usercode").unwrap().into(),
+                usercode_fn_builder.into(),
+            );
+
+            let context = v8::Context::new_from_template(handle_scope, global);
+            let context_scope = &mut ContextScope::new(handle_scope, context);
+
+            let context_scope = &mut v8::TryCatch::new(context_scope);
+            let new_state = (|| {
+                let null = v8::null(context_scope).into();
+
+                if let Some(src) = src {
+                    if let Some(engine_runtime_fn) = self.runtime_js_src {
+                        let engine_runtime = engine_runtime_fn();
+                        let engine_runtime = v8_str!(context_scope / &engine_runtime);
+
+                        let engine_resource_name = v8_str!(context_scope / "engine").into();
+
+                        let script_origin = &ScriptOrigin::new(
+                            context_scope,
+                            engine_resource_name,
+                            0,
+                            0,
+                            false,
+                            0,
+                            null,
+                            false,
+                            false,
+                            false,
+                        );
+
+                        let engine_script =
+                            Script::compile(context_scope, engine_runtime, Some(script_origin))
+                                .ok_or(anyhow!("207"))?;
+                        _ = engine_script
+                            .run(context_scope)
+                            .ok_or(anyhow!("couldnt run engine script"))?;
+                    }
+
+                    let src_code = v8::String::new(context_scope, src.as_str())
+                        .ok_or(anyhow!("src is too long"))?;
+
+                    let resource_name = v8::String::new(context_scope, "src").unwrap().into();
+
+                    let script_origin = &ScriptOrigin::new(
+                        context_scope,
+                        resource_name,
+                        0,
+                        0,
+                        false,
+                        0,
+                        null,
+                        false,
+                        false,
+                        true,
+                    );
+
+                    let script = v8::script_compiler::Source::new(src_code, Some(&script_origin));
+
+                    let module =
+                        v8::script_compiler::compile_module(context_scope, script).unwrap();
+
+                    let module_i1 = module
+                        .instantiate_module(context_scope, unexpected_module_resolve_callback);
+                    assert_eq!(module_i1, Some(true));
+                    assert_eq!(module.get_status(), v8::ModuleStatus::Instantiated);
+
+                    let _module_instance = module.evaluate(context_scope).unwrap();
+
+                    engine_instance.usercode = Some(module);
+                    engine_instance.frames = Some(serde_v8::to_v8(context_scope, frames).unwrap());
+                }
+
+                println!("before kickoff");
+
+                let js_stmt_code = v8::String::new(context_scope, &js_stmt)
+                    .ok_or(anyhow!("js_stmt is too long"))?;
+                let resource_name = v8::String::new(context_scope, "js_stmt").unwrap().into();
+                let null = v8::null(context_scope).into();
+
+                let script_origin = &ScriptOrigin::new(
+                    context_scope,
+                    resource_name,
+                    0,
+                    0,
+                    false,
+                    0,
+                    null,
+                    false,
+                    false,
+                    false,
+                );
+
+                let js_stmt_script =
+                    Script::compile(context_scope, js_stmt_code, Some(script_origin))
+                        .ok_or(anyhow!("209"))?;
+                let js_stmt_result = js_stmt_script.run(context_scope).ok_or(anyhow!("210"))?;
+
+                let res_json: StepResult = serde_v8::from_v8(context_scope, js_stmt_result)
+                    .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
+
+                println!("res_json: {:?}", res_json);
+                debug_display(res_json.clone());
+
+                Ok(res_json)
+            })();
+
+            match (context_scope.exception(), context_scope.message()) {
+                (Some(exception), Some(message)) => {
+                    let exception_str = exception.to_string(context_scope).unwrap();
+                    let exception_str = exception_str.to_rust_string_lossy(context_scope);
+
+                    let stack_trace_str = message.get_stack_trace(context_scope).unwrap();
+                    let stack_trace_str = stack_trace_to_string(context_scope, stack_trace_str);
+                    Err(anyhow!("Exception: {} {}", exception_str, stack_trace_str))
+                }
+                _ => match new_state {
+                    Result::Ok(new_state) => Ok(new_state),
+                    Err(e) => Err(e),
+                },
+            }
+        };
+
+        match new_state {
+            Result::Ok(new_state) => {
+                isolate.perform_microtask_checkpoint();
+                Ok(new_state)
+            }
+            Err(e) => {
+                println!("error: {:?}", e);
+                Err(e)
+            }
         }
     }
 
@@ -383,6 +594,19 @@ impl Engine {
 struct_method_to_v8!(log_callback -> Engine::log_callback);
 struct_method_to_v8!(mbox_callback -> Engine::mbox_callback);
 struct_method_to_v8!(send_callback -> Engine::send_callback);
+
+fn frames_callback(
+    scope: &mut v8::HandleScope,
+    args: v8::FunctionCallbackArguments,
+    mut retval: v8::ReturnValue,
+) {
+    let external = v8::Local::<v8::External>::try_from(args.data()).unwrap();
+    let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
+    let val = struct_instance
+        .frames
+        .unwrap_or({ v8::Array::new(scope, 0).into() });
+    retval.set(val);
+}
 
 fn usercode_callback(
     _scope: &mut v8::HandleScope,

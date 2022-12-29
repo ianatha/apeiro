@@ -74,7 +74,10 @@ impl EventLoop {
                 DEngineCmd::Broadcast(pid, exec_id, msg) => {
                     let dengine = self.dengine.clone();
                     dengine.send_to_watchers(&pid, &msg).await.unwrap();
-                    dengine.send_to_exec_watchers(&pid, &exec_id, &msg).await.unwrap();
+                    dengine
+                        .send_to_exec_watchers(&pid, &exec_id, &msg)
+                        .await
+                        .unwrap();
                 }
                 DEngineCmd::Send(cmd) => {
                     let dengine = self.dengine.clone();
@@ -85,23 +88,23 @@ impl EventLoop {
                         match res {
                             Err(err) => {
                                 println!("inner proc send error {:?} -> {:?}", cmd, err);
-                                tx.send(
-                                    DEngineCmd::Broadcast(
-                                        cmd.pid.clone(),
-                                        cmd.step_id.clone(),
-                                        ProcEvent::Error(err.to_string().clone()),
-                                    ),
-                                ).await.unwrap();
+                                tx.send(DEngineCmd::Broadcast(
+                                    cmd.pid.clone(),
+                                    cmd.step_id.clone(),
+                                    ProcEvent::Error(err.to_string().clone()),
+                                ))
+                                .await
+                                .unwrap();
                             }
-                            Result::Ok(res) =>{
+                            Result::Ok(res) => {
                                 println!("inner proc result {:?} -> {:?}", cmd, res);
-                                tx.send(
-                                    DEngineCmd::Broadcast(
-                                        cmd.pid.clone(),
-                                        cmd.step_id.clone(),
-                                        ProcEvent::StepResult(res),
-                                    ),
-                                ).await.unwrap();
+                                tx.send(DEngineCmd::Broadcast(
+                                    cmd.pid.clone(),
+                                    cmd.step_id.clone(),
+                                    ProcEvent::StepResult(res),
+                                ))
+                                .await
+                                .unwrap();
                             }
                         }
                     });
@@ -167,21 +170,43 @@ impl DEngine {
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src);
 
-        let (res, snapshot) = engine
-            .step_process(
-                Some(compiled_src),
-                None,
-                "$step($usercode().default)".into(),
-            )
-            .await
-            .unwrap();
+        #[cfg(v8_snapshots)]
+        {
+            let (res, snapshot) = engine
+                .step_process(
+                    Some(compiled_src),
+                    None,
+                    "$step($usercode().default)".into(),
+                )
+                .await
+                .unwrap();
 
-        db::proc_update(&conn, &proc_id, &res, &snapshot).unwrap();
+            db::proc_update(&conn, &proc_id, &res, &snapshot).unwrap();
 
-        Ok(ProcNewOutput {
-            id: proc_id,
-            state: res,
-        })
+            Ok(ProcNewOutput {
+                id: proc_id,
+                state: res,
+            })
+        }
+
+        #[cfg(not(v8_snapshots))]
+        {
+            let res = engine
+                .step_process_fast(
+                    Some(compiled_src),
+                    "$step($usercode().default)".into(),
+                    None,
+                )
+                .await
+                .unwrap();
+
+            db::proc_update(&conn, &proc_id, &res, &vec![]).unwrap();
+
+            Ok(ProcNewOutput {
+                id: proc_id,
+                state: res,
+            })
+        }
     }
 
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
@@ -364,17 +389,35 @@ impl DEngine {
 
             engine.mbox.push(body.msg.clone());
 
-            let (res, snapshot) = engine
-                .step_process(
-                    Some(proc.compiled_src),
-                    Some(proc.snapshot),
-                    "$step($usercode().default)".into(),
-                )
-                .await?;
+            #[cfg(v8_snapshots)]
+            {
+                let (res, snapshot) = engine
+                    .step_process(
+                        Some(proc.compiled_src),
+                        Some(proc.snapshot),
+                        "$step($usercode().default)".into(),
+                    )
+                    .await?;
 
-            db::proc_update(&conn, &proc_id, &res, &snapshot)?;
+                db::proc_update(&conn, &proc_id, &res, &snapshot)?;
 
-            Ok(res)
+                Ok(res)
+            }
+
+            #[cfg(not(v8_snapshots))]
+            {
+                let res = engine
+                    .step_process_fast(
+                        Some(proc.compiled_src),
+                        "$step($usercode().default)".into(),
+                        proc.state.frames,
+                    )
+                    .await?;
+
+                db::proc_update(&conn, &proc_id, &res, &vec![])?;
+
+                Ok(res)
+            }
         };
 
         println!("result: {:?}", res);
@@ -400,12 +443,20 @@ impl DEngine {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers.write().await;
             watchers_locked.insert(pid.clone(), tx);
-            println!("returning new watch -- total watchers for {} = {}", pid, watchers_locked.len());
+            println!(
+                "returning new watch -- total watchers for {} = {}",
+                pid,
+                watchers_locked.len()
+            );
             rx
         }
     }
 
-    pub async fn watch_exec(&self, pid: String, exec_id: String) -> tokio::sync::watch::Receiver<ProcEvent> {
+    pub async fn watch_exec(
+        &self,
+        pid: String,
+        exec_id: String,
+    ) -> tokio::sync::watch::Receiver<ProcEvent> {
         println!("waiting for watch creation");
         let watcher_subscription = {
             let watchers_locked = self.0.watchers_exec.read().await;
@@ -423,7 +474,12 @@ impl DEngine {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers_exec.write().await;
             watchers_locked.insert((pid.clone(), exec_id.clone()), tx);
-            println!("returning new watch -- total watchers for ({},{}) = {}", pid, exec_id, watchers_locked.len());
+            println!(
+                "returning new watch -- total watchers for ({},{}) = {}",
+                pid,
+                exec_id,
+                watchers_locked.len()
+            );
             rx
         }
     }
@@ -433,7 +489,11 @@ impl SharedDEngine {
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
         db: Pool<SqliteConnectionManager>,
-    ) -> Result<(SharedDEngine, mpsc::Receiver<DEngineCmd>, mpsc::Sender<DEngineCmd>)> {
+    ) -> Result<(
+        SharedDEngine,
+        mpsc::Receiver<DEngineCmd>,
+        mpsc::Sender<DEngineCmd>,
+    )> {
         let (tx, rx) = mpsc::channel(32);
 
         let instance = SharedDEngine {
@@ -462,7 +522,8 @@ impl SharedDEngine {
             status TEXT,
             val TEXT,
             suspension TEXT,
-            snapshot BLOB
+            snapshot BLOB,
+            frames TEXT
         );",
             (),
         )?;
