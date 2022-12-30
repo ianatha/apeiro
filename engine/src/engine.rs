@@ -22,7 +22,7 @@ use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
 pub struct Engine {
     runtime_js_src: Option<fn() -> String>,
     pub mbox: Box<Vec<serde_json::Value>>,
-    pid: String,
+    proc_id: String,
     pub dengine: Option<DEngine>,
 }
 
@@ -48,7 +48,7 @@ impl Engine {
         Engine {
             runtime_js_src: engine_runtime,
             mbox: Box::new(vec![]),
-            pid: name,
+            proc_id: name,
             dengine: None,
         }
     }
@@ -305,17 +305,17 @@ impl Engine {
         } else {
             "empty".into()
         };
-        event!(Level::INFO, "log: {}: {}", self.pid, message);
+        event!(Level::INFO, "log: {}: {}", self.proc_id, message);
 
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
             let msg = serde_v8::from_v8(scope, msg).unwrap();
 
-            let pid = self.pid.clone();
+            let proc_id = self.proc_id.clone();
             tokio::task::spawn(async move {
-                // TODO: 2nd pid should be exec
+                // TODO: 2nd proc_id should be exec
                 dengine
-                    .send(DEngineCmd::Log((pid.clone(), pid, msg)))
+                    .send(DEngineCmd::Log((proc_id.clone(), proc_id, msg)))
                     .await
                     .unwrap();
             });
@@ -541,7 +541,7 @@ impl Engine {
                 event!(
                     Level::INFO,
                     "mbox: {}: found match at index {}: {:?}",
-                    self.pid, index, msg
+                    self.proc_id, index, msg
                 );
                 let msg = serde_v8::to_v8(scope, msg).unwrap();
                 retval.set(msg);
@@ -578,15 +578,15 @@ impl Engine {
         event!(Level::INFO, "maybe sending to dengine");
         if let Some(dengine) = self.dengine.clone() {
             event!(Level::INFO, "sending to dengine");
-            let pid = args.get(0);
-            let pid: String = pid.to_rust_string_lossy(scope);
+            let proc_id = args.get(0);
+            let proc_id: String = proc_id.to_rust_string_lossy(scope);
 
             let msg = args.get(1);
             let msg = serde_v8::from_v8(scope, msg).unwrap();
 
             tokio::task::spawn(async move {
-                event!(Level::INFO, "about to send {} {:?}", pid, msg);
-                let _ = dengine.proc_send(pid, None, ProcSendRequest { msg }).await;
+                event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
+                let _ = dengine.proc_send(proc_id, None, ProcSendRequest { msg }).await;
                 event!(Level::INFO, "sent!!");
             });
         }
@@ -606,7 +606,7 @@ fn frames_callback(
     let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
     let val = struct_instance
         .frames
-        .unwrap_or({ v8::Array::new(scope, 0).into() });
+        .unwrap_or(v8::Array::new(scope, 0).into());
     retval.set(val);
 }
 

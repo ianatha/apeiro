@@ -20,7 +20,7 @@ use swc_ecma_minifier::option::{
 };
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith;
-use tracing::{event, Level, instrument};
+use tracing::{event, Level};
 
 use crate::compile_phase::PristineCompiler;
 
@@ -165,17 +165,6 @@ fn do_test(
 
     let cm = cm;
     Ok(get_bundle(cm, modules, minify))
-}
-
-pub fn pristine_bundle_and_compile_fs(main_file: String) -> Result<String, Error> {
-    let minify = false;
-    let mut entries = HashMap::default();
-    entries.insert("main".to_string(), FileName::Real(main_file.clone().into()));
-
-    let compiler = Lrc::new(crate::compile_phase::PristineCompiler::new());
-
-    let cm = compiler.cm.clone();
-    do_test(compiler.clone(), cm, entries, false, minify, None)
 }
 
 pub fn pristine_bundle_and_compile(src: String) -> Result<String, Error> {

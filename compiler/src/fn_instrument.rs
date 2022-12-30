@@ -49,7 +49,7 @@ use swc_ecmascript::{
     ast::Lit,
     visit::{as_folder, Fold},
 };
-use tracing::{event, Level, instrument};
+use tracing::{event, Level};
 
 use crate::utils::ast_to_hash;
 
@@ -588,7 +588,6 @@ impl VisitMut for WrapFunctions {
     }
 
     fn visit_mut_expr(&mut self, expr: &mut Expr) {
-        // println!("_____expr: {:?}", expr);
         if let Expr::Fn(fn_expr) = expr {
             let hash = ast_to_hash(fn_expr);
             self.fn_hash.push(hash);

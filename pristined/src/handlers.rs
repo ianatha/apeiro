@@ -43,48 +43,48 @@ async fn proc_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respo
 }
 
 #[instrument]
-#[get("/proc/{pid}")]
+#[get("/proc/{proc_id}")]
 async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
-    let pid: String = req
+    let proc_id: String = req
         .match_info()
-        .get("pid")
+        .get("proc_id")
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    let res = dengine.proc_get(pid).await.map_err(pristine_err)?;
+    let res = dengine.proc_get(proc_id).await.map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
 #[instrument]
-#[get("/proc/{pid}/debug")]
+#[get("/proc/{proc_id}/debug")]
 async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
-    let pid: String = req
+    let proc_id: String = req
         .match_info()
-        .get("pid")
+        .get("proc_id")
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    let res = dengine.proc_get_debug(pid).await.map_err(pristine_err)?;
+    let res = dengine.proc_get_debug(proc_id).await.map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
 #[instrument]
-#[put("/proc/{pid}")]
+#[put("/proc/{proc_id}")]
 async fn proc_send(
     req: HttpRequest,
     body: web::Json<ProcSendRequest>,
     dengine: web::Data<DEngine>,
 ) -> impl Responder {
-    let pid: String = req
+    let proc_id: String = req
         .match_info()
-        .get("pid")
-        .ok_or(ErrorBadRequest("no pid"))?
+        .get("proc_id")
+        .ok_or(ErrorBadRequest("no proc_id"))?
         .parse()?;
 
     let res = dengine
-        .proc_send_and_watch_step_result(pid, body.into_inner())
+        .proc_send_and_watch_step_result(proc_id, body.into_inner())
         .await
         .map_err(pristine_err)?;
 
@@ -92,22 +92,22 @@ async fn proc_send(
 }
 
 #[instrument]
-#[get("/proc/{pid}/watch")]
+#[get("/proc/{proc_id}/watch")]
 async fn proc_watch(
     req: HttpRequest,
     // body: web::Json<ProcSendRequest>,
     dengine: web::Data<DEngine>,
 ) -> impl Responder {
-    let pid: String = req
+    let proc_id: String = req
         .match_info()
-        .get("pid")
-        .ok_or(ErrorBadRequest("no pid"))
+        .get("proc_id")
+        .ok_or(ErrorBadRequest("no proc_id"))
         .unwrap()
         .parse()
         .unwrap();
 
     let mut res = dengine
-        .proc_watch(pid)
+        .proc_watch(proc_id)
         .await
         .map_err(|_e| error::ErrorInternalServerError("db problem"))
         .unwrap();

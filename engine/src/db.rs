@@ -1,12 +1,11 @@
 use crate::StepResultStatus;
 use nanoid::nanoid;
 use pristine_internal_api::{ProcSummary, StepResult};
-use r2d2::{Pool, PooledConnection};
+use r2d2::PooledConnection;
 use r2d2_sqlite::rusqlite::params;
 use r2d2_sqlite::SqliteConnectionManager;
 use serde_json;
 
-pub type DbPool = Pool<SqliteConnectionManager>;
 pub type Conn = PooledConnection<SqliteConnectionManager>;
 
 pub fn proc_new(

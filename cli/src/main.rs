@@ -34,14 +34,14 @@ enum Commands {
     Ps {},
     /// Get process status
     Get {
-        pid: String,
+        proc_id: String,
         #[clap(short, long)]
         value: bool,
     },
     /// Get compiled source code of a process
-    Inspect { pid: String },
+    Inspect { proc_id: String },
     /// Send message to process
-    Send { pid: String, message: String },
+    Send { proc_id: String, message: String },
     /// Start a new process
     New {
         srcfile: PathBuf,
@@ -49,7 +49,7 @@ enum Commands {
         name: Option<String>,
     },
     /// Stream process events and logs
-    Watch { pid: String },
+    Watch { proc_id: String },
     /// Compile a source file into Pristine VM
     Compile {
         input: PathBuf,
@@ -69,8 +69,8 @@ where
     }
 }
 
-async fn watch(remote: &String, pid: &String) -> Result<()> {
-    let url = format!("{}/proc/{}/watch", remote, pid);
+async fn watch(remote: &String, proc_id: &String) -> Result<()> {
+    let url = format!("{}/proc/{}/watch", remote, proc_id);
     let mut es = EventSource::get(url);
     while let Some(event) = es.next().await {
         match event {
@@ -85,8 +85,8 @@ async fn watch(remote: &String, pid: &String) -> Result<()> {
     Ok(())
 }
 
-async fn get(remote: &String, pid: &String, value: &bool, output_json: bool) -> Result<()> {
-    let resp = reqwest::get(remote.clone() + "/proc/" + pid)
+async fn get(remote: &String, proc_id: &String, value: &bool, output_json: bool) -> Result<()> {
+    let resp = reqwest::get(remote.clone() + "/proc/" + proc_id)
         .await?
         .json::<ProcStatus>()
         .await?;
@@ -105,8 +105,8 @@ async fn get(remote: &String, pid: &String, value: &bool, output_json: bool) -> 
 
     Ok(())
 }
-async fn inspect(remote: String, pid: &String) -> Result<()> {
-    let resp = reqwest::get(remote + "/proc/" + pid + "/debug")
+async fn inspect(remote: String, proc_id: &String) -> Result<()> {
+    let resp = reqwest::get(remote + "/proc/" + proc_id + "/debug")
         .await?
         .json::<ProcStatusDebug>()
         .await?;
@@ -116,11 +116,11 @@ async fn inspect(remote: String, pid: &String) -> Result<()> {
     Ok(())
 }
 
-async fn send(remote: String, pid: &String, message: &String) -> Result<()> {
+async fn send(remote: String, proc_id: &String, message: &String) -> Result<()> {
     let msg = serde_json::from_str(message)?;
     let client = reqwest::Client::new();
     let resp = client
-        .put(remote + "/proc/" + pid)
+        .put(remote + "/proc/" + proc_id)
         .json(&ProcSendRequest { msg })
         .send()
         .await?;
@@ -151,7 +151,7 @@ async fn new(remote: String, srcfile: &PathBuf, name: &Option<String>) -> Result
     Ok(())
 }
 
-async fn ps(remote: String, output_json: bool) -> Result<()> {
+async fn ps(remote: String, _output_json: bool) -> Result<()> {
     use cli_table::{format::Justify, Cell, Style, Table};
 
     let resp = reqwest::get(remote + "/proc/")
@@ -178,7 +178,7 @@ async fn ps(remote: String, output_json: bool) -> Result<()> {
         })
         .table()
         .title(vec![
-            "pid".cell().bold(true).justify(Justify::Center),
+            "proc_id".cell().bold(true).justify(Justify::Center),
             "name".cell().bold(true),
             "status".cell().bold(true),
             "suspension".cell().bold(true),
@@ -215,10 +215,10 @@ async fn main() -> Result<()> {
     let remote = cli.remote.unwrap_or("http://localhost:5151".to_string());
 
     match &cli.command {
-        Commands::Watch { pid } => watch(&remote, pid).await,
-        Commands::Get { pid, value } => get(&remote, pid, value, cli.output_json).await,
-        Commands::Inspect { pid } => inspect(remote, pid).await,
-        Commands::Send { pid, message } => send(remote, pid, message).await,
+        Commands::Watch { proc_id } => watch(&remote, proc_id).await,
+        Commands::Get { proc_id, value } => get(&remote, proc_id, value, cli.output_json).await,
+        Commands::Inspect { proc_id } => inspect(remote, proc_id).await,
+        Commands::Send { proc_id, message } => send(remote, proc_id, message).await,
         Commands::New { srcfile, name } => new(remote, srcfile, name).await,
         Commands::Ps {} => ps(remote, cli.output_json).await,
         Commands::Compile { input, output } => compile(input, output).await,

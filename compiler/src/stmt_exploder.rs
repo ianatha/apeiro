@@ -35,11 +35,11 @@ struct CallExprExploder {
 }
 
 impl VisitMut for CallExprExploder {
-    fn visit_mut_function(&mut self, block: &mut Function) {
+    fn visit_mut_function(&mut self, _block: &mut Function) {
         // no-op
     }
 
-    fn visit_mut_block_stmt(&mut self, block: &mut BlockStmt) {
+    fn visit_mut_block_stmt(&mut self, _block: &mut BlockStmt) {
         // no-op
     }
 

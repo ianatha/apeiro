@@ -30,7 +30,7 @@ impl Clone for DEngine {
 
 #[derive(Debug)]
 pub(crate) struct DEngineCmdSend {
-    pid: String,
+    proc_id: String,
     step_id: String,
     req: ProcSendRequest,
 }
@@ -70,17 +70,18 @@ pub struct EventLoop {
 use tracing::{Level, event, instrument};
 
 impl EventLoop {
-    #[instrument]
+    #[instrument(name="dengine::eventloop")]
     pub async fn run(&mut self) {
         event!(Level::INFO, "Event loop started");
         while let Some(message) = self.rx.recv().await {
-            event!(Level::INFO, "{:?}", message);
+            event!(Level::INFO, "received event loop message");
+            event!(Level::INFO, message = ?message);
             match message {
-                DEngineCmd::Broadcast(pid, exec_id, msg) => {
+                DEngineCmd::Broadcast(proc_id, exec_id, msg) => {
                     let dengine = self.dengine.clone();
-                    dengine.send_to_watchers(&pid, &msg).await.unwrap();
+                    dengine.send_to_watchers(&proc_id, &msg).await.unwrap();
                     dengine
-                        .send_to_exec_watchers(&pid, &exec_id, &msg)
+                        .send_to_exec_watchers(&proc_id, &exec_id, &msg)
                         .await
                         .unwrap();
                 }
@@ -88,11 +89,11 @@ impl EventLoop {
                     let dengine = self.dengine.clone();
                     let tx = self.tx.clone();
                     tokio::task::spawn(async move {
-                        let res = dengine.inner_proc_send(&cmd.pid, &cmd.req).await;
+                        let res = dengine.inner_proc_send(&cmd.proc_id, &cmd.req).await;
                         match res {
                             Err(err) => {
                                 tx.send(DEngineCmd::Broadcast(
-                                    cmd.pid.clone(),
+                                    cmd.proc_id.clone(),
                                     cmd.step_id.clone(),
                                     ProcEvent::Error(err.to_string().clone()),
                                 ))
@@ -101,7 +102,7 @@ impl EventLoop {
                             }
                             Result::Ok(res) => {
                                 tx.send(DEngineCmd::Broadcast(
-                                    cmd.pid.clone(),
+                                    cmd.proc_id.clone(),
                                     cmd.step_id.clone(),
                                     ProcEvent::StepResult(res),
                                 ))
@@ -111,12 +112,12 @@ impl EventLoop {
                         }
                     });
                 }
-                DEngineCmd::Log((pid, _, msg)) => {
+                DEngineCmd::Log((proc_id, _, msg)) => {
                     let dengine = self.dengine.clone();
-                    event!(Level::INFO, "log: {}: {:?}", pid, msg);
+                    event!(Level::INFO, "log: {}: {:?}", proc_id, msg);
                     tokio::task::spawn(async move {
                         dengine
-                            .send_to_watchers(&pid, &ProcEvent::Log(msg))
+                            .send_to_watchers(&proc_id, &ProcEvent::Log(msg))
                             .await
                             .unwrap();
                     });
@@ -143,14 +144,14 @@ impl DEngine {
     }
 
     #[instrument]
-    async fn get_proc_lock(&self, pid: String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
+    async fn get_proc_lock(&self, proc_id: String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
         let proc_lock = {
             let mut locked_map = self.0.locks.write().await;
-            if let Some(proc_lock) = locked_map.get(&pid) {
+            if let Some(proc_lock) = locked_map.get(&proc_id) {
                 Arc::clone(proc_lock)
             } else {
                 let proc_lock = Arc::new(RwLock::new(()));
-                locked_map.insert(pid, proc_lock.clone());
+                locked_map.insert(proc_id, proc_lock.clone());
                 proc_lock
             }
         };
@@ -220,13 +221,13 @@ impl DEngine {
     }
 
     #[instrument]
-    pub async fn proc_get(&self, pid: String) -> Result<ProcStatus, anyhow::Error> {
+    pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
         let conn = self.0.db.get().expect("");
-        let res = db::proc_get(&conn, &pid).map_err(|_e| anyhow!("db problem"))?;
+        let res = db::proc_get(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
 
         let executing = {
             let locked_map = self.0.locks.read().await;
-            if let Some(proc_lock) = locked_map.get(&pid) {
+            if let Some(proc_lock) = locked_map.get(&proc_id) {
                 if let Some(_proc_lock) = proc_lock.try_read().ok() {
                     false
                 } else {
@@ -241,9 +242,9 @@ impl DEngine {
     }
 
     #[instrument]
-    pub async fn proc_get_debug(&self, pid: String) -> Result<ProcStatusDebug, anyhow::Error> {
+    pub async fn proc_get_debug(&self, proc_id: String) -> Result<ProcStatusDebug, anyhow::Error> {
         let conn = self.0.db.get().expect("");
-        let src = db::proc_get_src(&conn, &pid).map_err(|_e| anyhow!("db problem"))?;
+        let src = db::proc_get_src(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
 
         Ok(ProcStatusDebug { compiled_src: src })
     }
@@ -327,7 +328,7 @@ impl DEngine {
         self.0
             .tx
             .send(DEngineCmd::Send(DEngineCmdSend {
-                pid: proc_id,
+                proc_id: proc_id,
                 step_id: exec_id.clone(),
                 req: body,
             }))
@@ -438,11 +439,11 @@ impl DEngine {
     }
 
     #[instrument]
-    pub async fn watch(&self, pid: String) -> tokio::sync::watch::Receiver<ProcEvent> {
+    pub async fn watch(&self, proc_id: String) -> tokio::sync::watch::Receiver<ProcEvent> {
         event!(Level::INFO, "waiting for watch creation");
         let watcher_subscription = {
             let watchers_locked = self.0.watchers.read().await;
-            if let Some(watcher) = watchers_locked.get(&pid) {
+            if let Some(watcher) = watchers_locked.get(&proc_id) {
                 Some(watcher.subscribe())
             } else {
                 None
@@ -455,10 +456,10 @@ impl DEngine {
         } else {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers.write().await;
-            watchers_locked.insert(pid.clone(), tx);
+            watchers_locked.insert(proc_id.clone(), tx);
             event!(Level::INFO,
                 "returning new watch -- total watchers for {} = {}",
-                pid,
+                proc_id,
                 watchers_locked.len()
             );
             rx
@@ -468,13 +469,13 @@ impl DEngine {
     #[instrument]
     pub async fn watch_exec(
         &self,
-        pid: String,
+        proc_id: String,
         exec_id: String,
     ) -> tokio::sync::watch::Receiver<ProcEvent> {
         event!(Level::INFO, "waiting for watch creation");
         let watcher_subscription = {
             let watchers_locked = self.0.watchers_exec.read().await;
-            if let Some(watcher) = watchers_locked.get(&(pid.clone(), exec_id.clone())) {
+            if let Some(watcher) = watchers_locked.get(&(proc_id.clone(), exec_id.clone())) {
                 Some(watcher.subscribe())
             } else {
                 None
@@ -487,10 +488,10 @@ impl DEngine {
         } else {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers_exec.write().await;
-            watchers_locked.insert((pid.clone(), exec_id.clone()), tx);
+            watchers_locked.insert((proc_id.clone(), exec_id.clone()), tx);
             event!(Level::INFO,
                 "returning new watch -- total watchers for ({},{}) = {}",
-                pid,
+                proc_id,
                 exec_id,
                 watchers_locked.len()
             );
