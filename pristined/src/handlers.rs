@@ -2,6 +2,7 @@ use actix_web::error::{self, ErrorBadRequest};
 use actix_web::{get, post, put, web, HttpRequest, HttpResponse, Responder};
 use pristine_engine::DEngine;
 use pristine_internal_api::*;
+use tracing::{event, instrument, Level};
 
 fn pristine_err(e: anyhow::Error) -> PristineError {
     PristineError(e)
@@ -19,6 +20,7 @@ impl From<PristineError> for actix_web::Error {
     }
 }
 
+#[instrument]
 #[post("/proc/")]
 async fn proc_new(
     _req: HttpRequest,
@@ -33,12 +35,14 @@ async fn proc_new(
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[instrument]
 #[get("/proc/")]
 async fn proc_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let res = dengine.proc_list().await.map_err(pristine_err)?;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[instrument]
 #[get("/proc/{pid}")]
 async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let pid: String = req
@@ -52,6 +56,7 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[instrument]
 #[get("/proc/{pid}/debug")]
 async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let pid: String = req
@@ -65,6 +70,7 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[instrument]
 #[put("/proc/{pid}")]
 async fn proc_send(
     req: HttpRequest,
@@ -85,6 +91,7 @@ async fn proc_send(
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[instrument]
 #[get("/proc/{pid}/watch")]
 async fn proc_watch(
     req: HttpRequest,
@@ -108,7 +115,7 @@ async fn proc_watch(
     let stream = async_stream::stream! {
         while res.changed().await.is_ok() {
             let val = res.borrow().clone();
-            println!("sending update to sse");
+            event!(Level::INFO, "sending update to sse");
             let mut byt: Vec<u8> = vec![b'd', b'a', b't', b'a', b':', b' '];
             let mut json = serde_json::to_vec(&val).unwrap();
             byt.append(&mut json);
@@ -119,7 +126,7 @@ async fn proc_watch(
 
             yield Ok::<web::Bytes, actix_web::Error>(byte)
         };
-        println!("sse stream ended");
+        event!(Level::INFO, "sse stream ended");
     };
 
     HttpResponse::Ok()

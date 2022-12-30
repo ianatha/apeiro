@@ -2,7 +2,8 @@ use anyhow::{anyhow, Ok, Result};
 use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::StepResult;
 use serde_json::Value;
-use tokio::task;
+use tracing::instrument;
+use tracing::{event, Level};
 use v8::CreateParams;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
@@ -220,7 +221,8 @@ impl Engine {
                     engine_instance.usercode = Some(module);
                 }
 
-                println!("before kickoff");
+                
+                event!(Level::INFO, "before kickoff");
 
                 let js_stmt_code = v8::String::new(context_scope, &js_stmt)
                     .ok_or(anyhow!("js_stmt is too long"))?;
@@ -248,8 +250,7 @@ impl Engine {
                 let res_json: StepResult = serde_v8::from_v8(context_scope, js_stmt_result)
                     .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
 
-                println!("res_json: {:?}", res_json);
-                debug_display(res_json.clone());
+                event!(Level::INFO, "res_json: {:?}", res_json);
 
                 Ok(res_json)
             })();
@@ -284,7 +285,7 @@ impl Engine {
                 Ok((new_state, snapshot_slice))
             }
             Err(e) => {
-                println!("error: {:?}", e);
+                event!(Level::INFO, "error: {:?}", e);
                 // we're snapshotting so no panic is caused when isolate is dropped
                 _ = isolate.create_blob(FunctionCodeHandling::Keep);
                 Err(e)
@@ -304,7 +305,7 @@ impl Engine {
         } else {
             "empty".into()
         };
-        println!("log: {}: {}", self.pid, message);
+        event!(Level::INFO, "log: {}: {}", self.pid, message);
 
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
@@ -461,7 +462,7 @@ impl Engine {
                     engine_instance.frames = Some(serde_v8::to_v8(context_scope, frames).unwrap());
                 }
 
-                println!("before kickoff");
+                event!(Level::INFO, "before kickoff");
 
                 let js_stmt_code = v8::String::new(context_scope, &js_stmt)
                     .ok_or(anyhow!("js_stmt is too long"))?;
@@ -489,8 +490,7 @@ impl Engine {
                 let res_json: StepResult = serde_v8::from_v8(context_scope, js_stmt_result)
                     .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
 
-                println!("res_json: {:?}", res_json);
-                debug_display(res_json.clone());
+                event!(Level::INFO, "res_json: {:?}", res_json);
 
                 Ok(res_json)
             })();
@@ -517,13 +517,14 @@ impl Engine {
                 Ok(new_state)
             }
             Err(e) => {
-                println!("error: {:?}", e);
+                event!(Level::ERROR, "error: {:?}", e);
                 Err(e)
             }
         }
     }
 
     #[inline]
+    #[instrument]
     fn mbox_callback(
         &mut self,
         scope: &mut v8::HandleScope,
@@ -537,7 +538,8 @@ impl Engine {
         for (index, msg) in self.mbox.iter().enumerate() {
             if filter.matches(msg) {
                 let msg = self.mbox.remove(index);
-                println!(
+                event!(
+                    Level::INFO,
                     "mbox: {}: found match at index {}: {:?}",
                     self.pid, index, msg
                 );
@@ -547,7 +549,7 @@ impl Engine {
             }
         }
 
-        println!("no recv match found");
+        event!(Level::INFO, "no recv match found");
         // no matching value found
         let exception_obj = v8::Object::new(scope);
         let key_str = v8_str!(scope / "pristine_suspend");
@@ -573,9 +575,9 @@ impl Engine {
     ) {
         let _context = v8::Context::new(scope);
 
-        println!("maybe sending to dengine");
+        event!(Level::INFO, "maybe sending to dengine");
         if let Some(dengine) = self.dengine.clone() {
-            println!("sending to dengine");
+            event!(Level::INFO, "sending to dengine");
             let pid = args.get(0);
             let pid: String = pid.to_rust_string_lossy(scope);
 
@@ -583,9 +585,9 @@ impl Engine {
             let msg = serde_v8::from_v8(scope, msg).unwrap();
 
             tokio::task::spawn(async move {
-                println!("about to send {} {:?}", pid, msg);
+                event!(Level::INFO, "about to send {} {:?}", pid, msg);
                 let _ = dengine.proc_send(pid, None, ProcSendRequest { msg }).await;
-                println!("sent!!");
+                event!(Level::INFO, "sent!!");
             });
         }
     }
@@ -627,18 +629,4 @@ fn unexpected_module_resolve_callback<'a>(
     _referrer: v8::Local<'a, v8::Module>,
 ) -> Option<v8::Local<'a, v8::Module>> {
     unreachable!()
-}
-
-fn debug_display(v: StepResult) -> Option<()> {
-    let frames = v.frames?;
-    let frames = frames.as_array()?;
-    println!("======");
-    println!("# frames: {}", frames.len());
-    for frame in frames {
-        let fnhash = frame.get("fnhash")?.as_str()?;
-        let pc = frame.get("$pc")?.as_u64()?;
-        println!("* fnhash: {}, pc: {}", fnhash, pc);
-    }
-    println!("");
-    Some(())
 }

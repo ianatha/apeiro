@@ -2156,6 +2156,7 @@ dependencies = [
  "serde_v8",
  "tokio",
  "tokio-test",
+ "tracing",
  "v8",
 ]
 
@@ -2190,6 +2191,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

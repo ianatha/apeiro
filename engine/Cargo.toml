@@ -18,6 +18,7 @@ r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 futures-core = "0.3.25"
 serde_json_matcher = "0.1.4"
+tracing = "0.1.37"
 
 [dev-dependencies]
 tokio-test = "0.4.2"

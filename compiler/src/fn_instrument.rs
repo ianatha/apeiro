@@ -49,6 +49,7 @@ use swc_ecmascript::{
     ast::Lit,
     visit::{as_folder, Fold},
 };
+use tracing::{event, Level, instrument};
 
 use crate::utils::ast_to_hash;
 
@@ -285,7 +286,7 @@ impl WrapFunctions {
                             .into(),
                         );
                     } else {
-                        println!("{:?}", decl);
+                        event!(Level::INFO, "{:?}", decl);
                         // TODO
                         todo!();
                         // println!("todo008");
@@ -293,7 +294,7 @@ impl WrapFunctions {
                     }
                 } else {
                     // TODO
-                    println!("{:?}", decl);
+                    event!(Level::INFO, "{:?}", decl);
                     todo!();
                     // println!("todo009");
                     // return stmt.take();
@@ -544,7 +545,8 @@ impl VisitMut for WrapFunctions {
                     }
                     .into();
                 } else {
-                    println!(
+                    event!(
+                        Level::INFO, 
                         "import doesn't begin with pristine {:?}",
                         import.src.raw.as_ref().unwrap().to_string()
                     )

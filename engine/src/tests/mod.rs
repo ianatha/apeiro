@@ -1,3 +1,5 @@
+use tracing::{event, Level};
+
 use crate::{Engine, StepResultStatus};
 
 #[tokio::test]
@@ -101,7 +103,7 @@ fn deno_exec(input: &str) {
         .unwrap();
 
     let output = child.wait_with_output().unwrap();
-    println!("{}", output.status);
+    event!(Level::INFO, "{}", output.status);
 }
 
 #[derive(Default)]

@@ -20,6 +20,7 @@ use swc_ecma_minifier::option::{
 };
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith;
+use tracing::{event, Level, instrument};
 
 use crate::compile_phase::PristineCompiler;
 
@@ -121,7 +122,7 @@ fn do_test(
 
     let mut modules = bundler.bundle(entries)?;
 
-    println!("Bundled as {} modules", modules.len());
+    event!(Level::INFO, "Bundled as {} modules", modules.len());
 
     #[cfg(feature = "concurrent")]
     rayon::spawn(move || {
@@ -235,7 +236,7 @@ pub struct Loader {
 
 impl Load for Loader {
     fn load(&self, f: &FileName) -> Result<ModuleData, Error> {
-        println!("load {:?}", f);
+        event!(Level::INFO, "load {:?}", f);
         // let fm = match f {
         //     FileName::Real(path) => self.cm.load_file(path)?,
         //     _ => unreachable!(),

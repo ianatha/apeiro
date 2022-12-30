@@ -13,6 +13,7 @@ use anyhow::{anyhow, Result};
 use swc_ecma_ast::{Module, Program};
 use swc_ecma_parser::{Syntax, TsConfig};
 use swc_ecma_transforms::pass::noop;
+use tracing::{instrument, event, Level};
 
 use crate::helpers::{Helpers, HELPERS};
 use crate::{
@@ -25,6 +26,12 @@ pub struct PristineCompiler {
     compiler: Compiler,
 }
 
+impl std::fmt::Debug for PristineCompiler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PristineCompiler").finish()
+    }
+}
+
 pub fn custom_pristine_compile<P>(
     input: String,
     folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
@@ -35,7 +42,7 @@ pub fn custom_pristine_compile<P>(
 where
     P: swc_ecmascript::visit::Fold,
 {
-    let mut compiler = PristineCompiler::new();
+    let compiler = PristineCompiler::new();
     GLOBALS.set(&Globals::new(), || {
         compiler.custom_pristine_compile_string(
             input,
@@ -57,6 +64,7 @@ impl PristineCompiler {
         }
     }
 
+    #[instrument]
     pub fn load_module_transpiled(
         &self,
         f: &FileName,
@@ -66,7 +74,7 @@ impl PristineCompiler {
             FileName::Anon => special_main.clone().unwrap(),
             FileName::Real(path) => fs::read_to_string(path)?,
             FileName::Url(url) => {
-                println!("fetching url {:?}", url);
+                event!(Level::INFO, "fetching url {:?}", url);
                 let success = false;
                 let mut attempts = 0;
                 let mut result: Option<String> = None;
@@ -76,11 +84,11 @@ impl PristineCompiler {
                         result = Some(res);
                         break;
                     }
-                    println!("failed, attempting again");
+                    event!(Level::INFO, "fetching url {:?} failed", url);
                     std::thread::sleep(core::time::Duration::from_millis(200));
                     attempts = attempts + 1;
                 }
-                println!("fetched {}", url);
+                event!(Level::INFO, "fecthed url {:?}", url);
                 result.unwrap()
             }
             _ => unreachable!(),
@@ -93,7 +101,7 @@ impl PristineCompiler {
         };
 
         let compiled_str = if should_compile {
-            println!("compiling");
+            event!(Level::INFO, "compiling");
             self.custom_pristine_compile_string(
                 contents,
                 |_| {
@@ -177,6 +185,7 @@ impl PristineCompiler {
         })
     }
 
+    #[instrument]
     pub fn parse(&self, input: String) -> (Lrc<SourceFile>, Program) {
         let cm: Lrc<SourceMap> = Default::default();
         let compiler = Compiler::new(cm.clone());
