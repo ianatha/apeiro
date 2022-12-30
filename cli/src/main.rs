@@ -127,7 +127,10 @@ async fn send(remote: String, proc_id: &String, message: &String) -> Result<()> 
 
     let resp = result_or_error::<StepResult>(resp).await;
 
-    println!("{:?}", resp);
+    match resp {
+        Result::Ok(resp) => println!("{}", resp),
+        Err(e) => println!("error: {:?}", e),
+    }
 
     Ok(())
 }

@@ -6,7 +6,7 @@ use clap::{command, Parser};
 use pristine_engine::{get_engine_runtime, DEngine};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use tracing::{instrument, event, Level, span};
+use tracing::Level;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

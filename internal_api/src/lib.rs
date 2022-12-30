@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use colored::Colorize;
 
 pub type PristineId = String;
 
@@ -44,7 +45,12 @@ pub enum StepResultStatus {
 
 impl std::fmt::Display for StepResultStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            StepResultStatus::DONE => write!(f, "{}", "DONE".green()),
+            StepResultStatus::SUSPEND => write!(f, "{}", "SUSPEND".yellow()),
+            StepResultStatus::ERROR => write!(f, "{}", "ERROR".red()),
+            StepResultStatus::CRASHED => write!(f, "{}", "CRASHED".red()),
+        }
     }
 }
 
@@ -55,6 +61,16 @@ pub struct StepResult {
     pub suspension: Option<Value>,
     pub current_frame: Option<u64>,
     pub frames: Option<Value>,
+}
+
+impl std::fmt::Display for StepResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let val = match &self.val {
+            Some(v) => serde_json::to_string_pretty(v).unwrap(),
+            None => "".to_string(),
+        };
+        f.write_fmt(format_args!("{}: {}\n{}: {}", "status".bold(), self.status, "val".bold(), val))
+    }
 }
 
 impl std::fmt::Debug for StepResult {
