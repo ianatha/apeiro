@@ -3,10 +3,10 @@ mod handlers;
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use clap::{command, Parser};
-use env_logger::Env;
 use pristine_engine::{get_engine_runtime, DEngine};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use tracing::{instrument, event, Level, span};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -39,6 +39,13 @@ pub fn establish_db_connection(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW | tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .with_max_level(Level::TRACE)
+        .with_env_filter("pristine_engine=trace,pristined=trace")
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
     let cli = Cli::parse();
     let port = cli.port.unwrap_or(5151);
     let store = cli.store.unwrap_or("world.db".into());
@@ -46,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
     let conn_pool = establish_db_connection(store)?;
     let (dengine, mut event_loop) = DEngine::new(Some(get_engine_runtime), conn_pool)?;
 
-    env_logger::init_from_env(Env::default().default_filter_or("info,swc_ecma_codegen=off"));
+
 
     tokio::task::spawn(async move {
         event_loop.run().await;

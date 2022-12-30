@@ -2,7 +2,7 @@ use actix_web::error::{self, ErrorBadRequest};
 use actix_web::{get, post, put, web, HttpRequest, HttpResponse, Responder};
 use pristine_engine::DEngine;
 use pristine_internal_api::*;
-use tracing::{event, instrument, Level};
+use tracing::{event, Level};
 
 fn pristine_err(e: anyhow::Error) -> PristineError {
     PristineError(e)
@@ -20,7 +20,6 @@ impl From<PristineError> for actix_web::Error {
     }
 }
 
-#[instrument]
 #[post("/proc/")]
 async fn proc_new(
     _req: HttpRequest,
@@ -35,14 +34,12 @@ async fn proc_new(
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[instrument]
 #[get("/proc/")]
 async fn proc_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let res = dengine.proc_list().await.map_err(pristine_err)?;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[instrument]
 #[get("/proc/{proc_id}")]
 async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let proc_id: String = req
@@ -56,7 +53,6 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[instrument]
 #[get("/proc/{proc_id}/debug")]
 async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let proc_id: String = req
@@ -70,7 +66,6 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[instrument]
 #[put("/proc/{proc_id}")]
 async fn proc_send(
     req: HttpRequest,
@@ -91,7 +86,6 @@ async fn proc_send(
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[instrument]
 #[get("/proc/{proc_id}/watch")]
 async fn proc_watch(
     req: HttpRequest,

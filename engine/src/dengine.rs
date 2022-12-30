@@ -13,6 +13,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use tracing::trace;
 
 use crate::db;
 use std::collections::HashMap;
@@ -60,7 +61,6 @@ struct SharedDEngine {
     watchers_exec: Arc<RwLock<HashMap<(String, String), tokio::sync::watch::Sender<ProcEvent>>>>,
 }
 
-#[derive(Debug)]
 pub struct EventLoop {
     dengine: DEngine,
     tx: mpsc::Sender<DEngineCmd>,
@@ -70,11 +70,10 @@ pub struct EventLoop {
 use tracing::{Level, event, instrument};
 
 impl EventLoop {
-    #[instrument(name="dengine::eventloop")]
+    #[instrument(name="eventloop", skip(self))]
     pub async fn run(&mut self) {
         event!(Level::INFO, "Event loop started");
         while let Some(message) = self.rx.recv().await {
-            event!(Level::INFO, "received event loop message");
             event!(Level::INFO, message = ?message);
             match message {
                 DEngineCmd::Broadcast(proc_id, exec_id, msg) => {
@@ -128,7 +127,6 @@ impl EventLoop {
 }
 
 impl DEngine {
-    #[instrument]
     pub fn new(
         runtime_js_src: Option<fn() -> String>,
         db: Pool<SqliteConnectionManager>,
@@ -143,7 +141,7 @@ impl DEngine {
         Ok((DEngine(instance), event_loop))
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn get_proc_lock(&self, proc_id: String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
         let proc_lock = {
             let mut locked_map = self.0.locks.write().await;
@@ -159,7 +157,7 @@ impl DEngine {
         Ok(proc_lock)
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let conn = self.0.db.get().map_err(|_e| anyhow!("no conn"))?;
 
@@ -212,7 +210,7 @@ impl DEngine {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
         let conn = self.0.db.get()?;
         let procs = db::proc_list(&conn)?;
@@ -220,7 +218,7 @@ impl DEngine {
         Ok(ProcListOutput { procs })
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
         let conn = self.0.db.get().expect("");
         let res = db::proc_get(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
@@ -241,7 +239,7 @@ impl DEngine {
         Ok(ProcStatus::new(res, executing))
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_get_debug(&self, proc_id: String) -> Result<ProcStatusDebug, anyhow::Error> {
         let conn = self.0.db.get().expect("");
         let src = db::proc_get_src(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
@@ -249,7 +247,7 @@ impl DEngine {
         Ok(ProcStatusDebug { compiled_src: src })
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_send_and_watch(
         &self,
         proc_id: String,
@@ -263,7 +261,7 @@ impl DEngine {
         Ok(watcher)
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_watch(
         &self,
         proc_id: String,
@@ -272,7 +270,7 @@ impl DEngine {
         Ok(watcher)
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_send_and_watch_step_result(
         &self,
         proc_id: String,
@@ -286,16 +284,13 @@ impl DEngine {
         self.proc_send(proc_id.clone(), Some(exec_id), body).await?;
 
         while watcher.changed().await.is_ok() {
-            event!(Level::INFO, "watching watcher for {}", proc_id);
-            match &*watcher.borrow() {
+            let msg = &*watcher.borrow();
+            trace!(?msg);
+            match msg {
                 ProcEvent::StepResult(step_result) => {
-                    event!(Level::INFO, "received step result for {}", proc_id);
-                    event!(Level::INFO, "terminating");
                     return Ok(step_result.clone());
                 }
                 ProcEvent::Error(err) => {
-                    event!(Level::INFO, "received error for {}", proc_id);
-                    event!(Level::INFO, "terminating");
                     return Err(anyhow!(err.clone()));
                 }
                 ProcEvent::Log(log) => {
@@ -306,16 +301,15 @@ impl DEngine {
                 }
             }
         }
-        event!(Level::INFO, "terminating");
         Err(anyhow!("watcher closed"))
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub(crate) async fn send(&self, cmd: DEngineCmd) -> Result<(), anyhow::Error> {
         self.0.tx.send(cmd).await.map_err(anyhow::Error::msg)
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn proc_send(
         &self,
         proc_id: String,
@@ -337,44 +331,42 @@ impl DEngine {
         Ok(exec_id)
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn send_to_watchers(
         &self,
         proc_id: &String,
         msg: &ProcEvent,
     ) -> Result<(), anyhow::Error> {
-        event!(Level::INFO, "trying to read watchers to send {:?}", msg);
+        trace!("acquiring read lock on watchers");
         let watchers_locked = self.0.watchers.read().await;
         if let Some(watcher) = watchers_locked.get(proc_id) {
             if !watcher.is_closed() {
-                event!(Level::INFO, "sending to watcher {} {:?}", proc_id, msg);
                 watcher.send(msg.clone()).unwrap();
+                trace!("sent");
             }
         }
-        event!(Level::INFO, "sent {:?}", msg);
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn send_to_exec_watchers(
         &self,
         proc_id: &String,
         exec_id: &String,
         msg: &ProcEvent,
     ) -> Result<(), anyhow::Error> {
-        event!(Level::INFO, "trying to read exec watchers to send {:?}", msg);
+        trace!("acquiring read lock on exec_watchers");
         let watchers_locked = self.0.watchers_exec.read().await;
         if let Some(watcher) = watchers_locked.get(&(proc_id.clone(), exec_id.clone())) {
             if !watcher.is_closed() {
-                event!(Level::INFO, "trying to read exec watchers to send {} {} {:?}", proc_id, exec_id, msg);
                 watcher.send(msg.clone()).unwrap();
+                trace!("sent");
             }
         }
-        event!(Level::INFO, "sent {:?}", msg);
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn inner_proc_send(
         &self,
         proc_id: &String,
@@ -438,7 +430,7 @@ impl DEngine {
         res
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn watch(&self, proc_id: String) -> tokio::sync::watch::Receiver<ProcEvent> {
         event!(Level::INFO, "waiting for watch creation");
         let watcher_subscription = {
@@ -466,7 +458,7 @@ impl DEngine {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     pub async fn watch_exec(
         &self,
         proc_id: String,
@@ -501,7 +493,6 @@ impl DEngine {
 }
 
 impl SharedDEngine {
-    #[instrument]
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
         db: Pool<SqliteConnectionManager>,
@@ -526,7 +517,7 @@ impl SharedDEngine {
         Ok((instance, rx, tx))
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     fn init_db(&self) -> Result<(), anyhow::Error> {
         let conn = self.db.get()?;
 
