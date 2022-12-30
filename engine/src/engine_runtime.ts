@@ -19,10 +19,12 @@ const scopeIdGenerator = function() {
 
 function $scope(parent = undefined, frame?: Frame) {
 	if (frame?.scope) {
+		if (parent) {
+			Object.setPrototypeOf(frame.scope, parent);
+		}
 		return frame.scope;
 	}
 
-	log("new scope for frame " + (frame === undefined ? "undefined frame" : (frame?.fnhash ?? "nofnhash")));
 	const newScopeId = scopeIdGenerator();
 	const newScope: Scope = { };
 
