@@ -1,8 +1,8 @@
-use crate::{bundle_phase::pristine_bundle_and_compile_fs, pristine_bundle_and_compile};
+use crate::pristine_bundle_and_compile;
 
 #[test]
 fn test_bundle() {
-    let out = pristine_bundle_and_compile_fs("./src/tests/fn_bundle.main.ts".into()).unwrap();
+    let out = pristine_bundle_and_compile("./src/tests/fn_bundle.main.ts".into()).unwrap();
     println!("{}", out);
     // compiler_test(
     //     include_str!("fn_instrument.simple.in.ts"),
