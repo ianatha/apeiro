@@ -16,6 +16,8 @@ pub struct ProcSummary {
     pub name: Option<String>,
     pub status: StepResultStatus,
     pub suspension: Option<Value>,
+    pub snapshot_size: u32,
+    pub snapshot_v2_size: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

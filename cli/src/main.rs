@@ -175,8 +175,9 @@ async fn ps(remote: String, _output_json: bool) -> Result<()> {
                 match p.suspension.clone() {
                     Some(s) => truncate(&s.to_string(), 64).to_string(),
                     None => "".to_string(),
-                }
-                .cell(),
+                }.cell(),
+                format!("{:.3} KB", (p.snapshot_size as f32 / 1024.0)).cell(),
+                format!("{:.3} KB", (p.snapshot_v2_size as f32 / 1024.0)).cell(),
             ]
         })
         .table()
@@ -185,6 +186,8 @@ async fn ps(remote: String, _output_json: bool) -> Result<()> {
             "name".cell().bold(true),
             "status".cell().bold(true),
             "suspension".cell().bold(true),
+            "snapshot size".cell().bold(true),
+            "snapshot v2 size".cell().bold(true),
         ])
         .border(empty_border)
         .separator(
