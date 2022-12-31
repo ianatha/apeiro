@@ -26,6 +26,7 @@ use swc_ecma_ast::Null;
 use swc_ecma_ast::ObjectLit;
 use swc_ecma_ast::ObjectPat;
 use swc_ecma_ast::ObjectPatProp;
+use swc_ecma_ast::Param;
 use swc_ecma_ast::Pat;
 use swc_ecma_ast::Prop;
 use swc_ecma_ast::ReturnStmt;
@@ -401,6 +402,10 @@ struct VarRewriter<'a> {
 }
 
 impl<'a> VisitMut for VarRewriter<'a> {
+    fn visit_mut_params(&mut self, _params: &mut Vec<Param>) {
+        //noop
+    }
+
     fn visit_mut_pat(&mut self, pat: &mut Pat) {
         let mut target_ident = None;
         if let Pat::Ident(ident) = pat {

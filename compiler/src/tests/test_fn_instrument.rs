@@ -312,3 +312,18 @@ fn test_fn_instrument() {
         include_str!("fn_instrument.simple.out.js"),
     );
 }
+
+
+#[test]
+fn test_rewrite_vars() {
+    compiler_test(
+        "function a() {
+    let msg = 90;
+    function test(msg, msg2) {
+    }
+}",
+        folder_chain!(),
+        r#""#,
+    );
+
+}
