@@ -163,13 +163,12 @@ function garbage_collect() {
 
 function $step(fn): StepResult {
 	current_frame = 0;
-	$frames = $get_frames();
+	if (!$frames || $frames.length == 0) {
+		$frames = $get_frames();
+	}
 	if ($frames === null || $frames === undefined) {
 		log("no frames");
 		$frames = [];
-	} else {
-		log("found frames " + $frames.length);
-		log(JSON.stringify($frames));
 	}
 	let val = undefined;
 	try {
