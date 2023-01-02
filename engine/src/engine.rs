@@ -2,7 +2,7 @@ use anyhow::{anyhow, Ok, Result};
 use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::StepResult;
 use serde_json::Value;
-use tracing::{instrument, event, Level};
+use tracing::{event, instrument, Level};
 use v8::CreateParams;
 use v8::MapFnTo;
 use v8::ScriptOrigin;
@@ -585,7 +585,9 @@ impl Engine {
 
             tokio::task::spawn(async move {
                 event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
-                let _ = dengine.proc_send(proc_id, None, ProcSendRequest { msg }).await;
+                let _ = dengine
+                    .proc_send(proc_id, None, ProcSendRequest { msg })
+                    .await;
                 event!(Level::INFO, "sent!!");
             });
         }

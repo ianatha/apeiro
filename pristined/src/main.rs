@@ -40,7 +40,10 @@ pub fn establish_db_connection(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::NEW | tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .with_span_events(
+            tracing_subscriber::fmt::format::FmtSpan::NEW
+                | tracing_subscriber::fmt::format::FmtSpan::CLOSE,
+        )
         .with_max_level(Level::TRACE)
         .with_env_filter("pristine_engine=trace,pristined=trace")
         .finish();
@@ -52,8 +55,6 @@ async fn main() -> anyhow::Result<()> {
 
     let conn_pool = establish_db_connection(store)?;
     let (dengine, mut event_loop) = DEngine::new(Some(get_engine_runtime), conn_pool)?;
-
-
 
     tokio::task::spawn(async move {
         event_loop.run().await;

@@ -61,7 +61,10 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    let res = dengine.proc_get_debug(proc_id).await.map_err(pristine_err)?;
+    let res = dengine
+        .proc_get_debug(proc_id)
+        .await
+        .map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }

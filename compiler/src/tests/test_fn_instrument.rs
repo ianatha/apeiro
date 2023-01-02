@@ -313,7 +313,6 @@ fn test_fn_instrument() {
     );
 }
 
-
 #[test]
 fn test_rewrite_vars() {
     compiler_test(
@@ -325,5 +324,4 @@ fn test_rewrite_vars() {
         folder_chain!(),
         r#""#,
     );
-
 }

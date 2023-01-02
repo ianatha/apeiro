@@ -13,7 +13,7 @@ use anyhow::{anyhow, Result};
 use swc_ecma_ast::{Module, Program};
 use swc_ecma_parser::{Syntax, TsConfig};
 use swc_ecma_transforms::pass::noop;
-use tracing::{instrument, event, Level};
+use tracing::{event, instrument, Level};
 
 use crate::helpers::{Helpers, HELPERS};
 use crate::{

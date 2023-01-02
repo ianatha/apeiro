@@ -551,7 +551,7 @@ impl VisitMut for WrapFunctions {
                     .into();
                 } else {
                     event!(
-                        Level::INFO, 
+                        Level::INFO,
                         "import doesn't begin with pristine {:?}",
                         import.src.raw.as_ref().unwrap().to_string()
                     )

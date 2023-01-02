@@ -67,10 +67,10 @@ pub struct EventLoop {
     rx: mpsc::Receiver<DEngineCmd>,
 }
 
-use tracing::{Level, event, instrument};
+use tracing::{event, instrument, Level};
 
 impl EventLoop {
-    #[instrument(name="eventloop", skip(self))]
+    #[instrument(name = "eventloop", skip(self))]
     pub async fn run(&mut self) {
         event!(Level::INFO, "Event loop started");
         while let Some(message) = self.rx.recv().await {
@@ -294,7 +294,12 @@ impl DEngine {
                     return Err(anyhow!(err.clone()));
                 }
                 ProcEvent::Log(log) => {
-                    event!(Level::INFO, "received event in step request for {}: {:?}", proc_id, log);
+                    event!(
+                        Level::INFO,
+                        "received event in step request for {}: {:?}",
+                        proc_id,
+                        log
+                    );
                 }
                 ProcEvent::None => {
                     event!(Level::INFO, "received none for {}", proc_id);
@@ -449,7 +454,8 @@ impl DEngine {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers.write().await;
             watchers_locked.insert(proc_id.clone(), tx);
-            event!(Level::INFO,
+            event!(
+                Level::INFO,
                 "returning new watch -- total watchers for {} = {}",
                 proc_id,
                 watchers_locked.len()
@@ -481,7 +487,8 @@ impl DEngine {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers_exec.write().await;
             watchers_locked.insert((proc_id.clone(), exec_id.clone()), tx);
-            event!(Level::INFO,
+            event!(
+                Level::INFO,
                 "returning new watch -- total watchers for ({},{}) = {}",
                 proc_id,
                 exec_id,

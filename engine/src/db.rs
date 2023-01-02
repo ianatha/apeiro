@@ -123,7 +123,9 @@ pub fn proc_get_src(conn: &Conn, id: &String) -> Result<String, anyhow::Error> {
     Ok(result)
 }
 pub fn proc_list(conn: &Conn) -> Result<Vec<ProcSummary>, anyhow::Error> {
-    let mut stmt = conn.prepare("SELECT id, status, suspension, name, length(snapshot), length(frames) FROM procs")?;
+    let mut stmt = conn.prepare(
+        "SELECT id, status, suspension, name, length(snapshot), length(frames) FROM procs",
+    )?;
 
     let result = stmt
         .query_map((), |row| {

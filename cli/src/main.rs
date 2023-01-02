@@ -175,7 +175,8 @@ async fn ps(remote: String, _output_json: bool) -> Result<()> {
                 match p.suspension.clone() {
                     Some(s) => truncate(&s.to_string(), 64).to_string(),
                     None => "".to_string(),
-                }.cell(),
+                }
+                .cell(),
                 format!("{:.3} KB", (p.snapshot_size as f32 / 1024.0)).cell(),
                 format!("{:.3} KB", (p.snapshot_v2_size as f32 / 1024.0)).cell(),
             ]
