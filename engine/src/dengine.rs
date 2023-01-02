@@ -171,43 +171,23 @@ impl DEngine {
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src);
 
-        #[cfg(v8_snapshots)]
-        {
-            let (res, snapshot) = engine
-                .step_process(
-                    Some(compiled_src),
-                    None,
-                    "$step($usercode().default)".into(),
-                )
-                .await
-                .unwrap();
+        let (res, snapshot) = engine
+            .step_process(
+                Some(compiled_src),
+                None,
+                None,
+                "$step($usercode().default)".into(),
+                true,
+            )
+            .await
+            .unwrap();
 
-            db::proc_update(&conn, &proc_id, &res, &snapshot).unwrap();
+        db::proc_update(&conn, &proc_id, &res, &snapshot.unwrap_or(vec![])).unwrap();
 
-            Ok(ProcNewOutput {
-                id: proc_id,
-                state: res,
-            })
-        }
-
-        #[cfg(not(v8_snapshots))]
-        {
-            let res = engine
-                .step_process_fast(
-                    Some(compiled_src),
-                    "$step($usercode().default)".into(),
-                    None,
-                )
-                .await
-                .unwrap();
-
-            db::proc_update(&conn, &proc_id, &res, &vec![]).unwrap();
-
-            Ok(ProcNewOutput {
-                id: proc_id,
-                state: res,
-            })
-        }
+        Ok(ProcNewOutput {
+            id: proc_id,
+            state: res,
+        })
     }
 
     #[instrument(skip(self))]
@@ -399,35 +379,19 @@ impl DEngine {
 
             engine.mbox.push(body.msg.clone());
 
-            #[cfg(v8_snapshots)]
-            {
-                let (res, snapshot) = engine
-                    .step_process(
-                        Some(proc.compiled_src),
-                        Some(proc.snapshot),
-                        "$step($usercode().default)".into(),
-                    )
-                    .await?;
+            let (res, snapshot) = engine
+                .step_process(
+                    Some(proc.compiled_src),
+                    proc.snapshot,
+                    proc.state.frames,
+                    "$step($usercode().default)".into(),
+                    true,
+                )
+                .await?;
 
-                db::proc_update(&conn, &proc_id, &res, &snapshot)?;
+            db::proc_update(&conn, &proc_id, &res, &snapshot.unwrap_or(vec![]))?;
 
-                Ok(res)
-            }
-
-            #[cfg(not(v8_snapshots))]
-            {
-                let res = engine
-                    .step_process_fast(
-                        Some(proc.compiled_src),
-                        "$step($usercode().default)".into(),
-                        proc.state.frames,
-                    )
-                    .await?;
-
-                db::proc_update(&conn, &proc_id, &res, &vec![])?;
-
-                Ok(res)
-            }
+            Ok(res)
         };
 
         event!(Level::INFO, "result: {:?}", res);

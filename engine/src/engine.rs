@@ -61,37 +61,6 @@ impl Engine {
         &mut self,
         src: Option<String>,
         snapshot: Option<Vec<u8>>,
-        js_stmt: String,
-    ) -> Result<(StepResult, Vec<u8>)> {
-        match self
-            .step_process_inner(src, snapshot, None, js_stmt, true)
-            .await
-        {
-            Result::Ok((step_result, snapshot)) => Ok((step_result, snapshot.unwrap())),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn step_process_fast(
-        &mut self,
-        src: Option<String>,
-        js_stmt: String,
-        frames: Option<Value>,
-    ) -> Result<StepResult> {
-        match self
-            .step_process_inner(src, None, frames, js_stmt, false)
-            .await
-        {
-            Result::Ok((step_result, None)) => Ok(step_result),
-            Err(e) => Err(e),
-            _ => Err(anyhow!("Unexpected snapshot")),
-        }
-    }
-
-    async fn step_process_inner(
-        &mut self,
-        src: Option<String>,
-        snapshot: Option<Vec<u8>>,
         frames: Option<Value>,
         js_stmt: String,
         use_v8_snapshot: bool,

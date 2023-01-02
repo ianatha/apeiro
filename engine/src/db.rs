@@ -55,7 +55,7 @@ pub fn proc_update(
 
 pub struct ProcDetails {
     pub compiled_src: String,
-    pub snapshot: Vec<u8>,
+    pub snapshot: Option<Vec<u8>>,
     pub state: StepResult,
 }
 
@@ -66,7 +66,7 @@ pub fn proc_get_details(conn: &Conn, id: &String) -> Result<ProcDetails, anyhow:
 
     let result = stmt.query_row(&[id], |row| {
         let compiled_src: String = row.get(0)?;
-        let snapshot: Vec<u8> = row.get(1)?;
+        let snapshot: Option<Vec<u8>> = row.get(1)?;
         Ok(ProcDetails {
             compiled_src,
             snapshot,
