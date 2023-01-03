@@ -2,7 +2,7 @@ use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
 use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
-use pristine_engine::{pristine_compile, StepResult};
+use pristine_engine::{pristine_compile, StepResult, StepResultStatus};
 use pristine_internal_api::{
     PristineError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
     ProcStatusDebug,
@@ -38,10 +38,19 @@ enum Commands {
         #[clap(short, long)]
         value: bool,
     },
+    Cleanup {},
+    Rm {
+        proc_id: String,
+    },
     /// Get compiled source code of a process
-    Inspect { proc_id: String },
+    Inspect {
+        proc_id: String,
+    },
     /// Send message to process
-    Send { proc_id: String, message: String },
+    Send {
+        proc_id: String,
+        message: String,
+    },
     /// Start a new process
     New {
         srcfile: PathBuf,
@@ -49,7 +58,9 @@ enum Commands {
         name: Option<String>,
     },
     /// Stream process events and logs
-    Watch { proc_id: String },
+    Watch {
+        proc_id: String,
+    },
     /// Compile a source file into Pristine VM
     Compile {
         input: PathBuf,
@@ -75,12 +86,16 @@ async fn watch(remote: &String, proc_id: &String) -> Result<()> {
     while let Some(event) = es.next().await {
         match event {
             Result::Ok(Event::Open) => println!("Connection Open!"),
-            Result::Ok(Event::Message(message)) => println!("Message: {:#?}", message),
+            Result::Ok(Event::Message(message)) => {
+                // let msg = serde_json::from_str(message.data.as_str()).unwrap();
+                println!("{}", message.data);
+            }
             Result::Err(err) => {
                 println!("Error: {}", err);
                 es.close();
             }
         }
+        println!("")
     }
     Ok(())
 }
@@ -105,13 +120,56 @@ async fn get(remote: &String, proc_id: &String, value: &bool, output_json: bool)
 
     Ok(())
 }
+
+async fn api_rm(remote: String, proc_id: &String) -> Result<()> {
+    let client = reqwest::Client::new();
+    client
+        .delete(remote + "/proc/" + proc_id)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    Ok(())
+}
+
+async fn rm(remote: String, proc_id: &String) -> Result<()> {
+    api_rm(remote.clone(), proc_id).await?;
+    println!("Deleted {:?}.", proc_id);
+
+    Ok(())
+}
+
+async fn cleanup(remote: String) -> Result<()> {
+    let resp = reqwest::get(remote.clone() + "/proc/")
+        .await?
+        .json::<ProcListOutput>()
+        .await?;
+
+    let mut deleted = 0;
+    for proc in resp.procs {
+        if proc.status == StepResultStatus::CRASHED {
+            api_rm(remote.clone(), &proc.id).await?;
+            deleted = deleted + 1;
+        }
+    }
+
+    println!("deleted {} crashed processes", deleted);
+
+    Ok(())
+}
+
 async fn inspect(remote: String, proc_id: &String) -> Result<()> {
     let resp = reqwest::get(remote + "/proc/" + proc_id + "/debug")
         .await?
         .json::<ProcStatusDebug>()
         .await?;
 
-    println!("{}", resp.compiled_src);
+    let funcs = serde_json::to_string_pretty(&resp.funcs).unwrap();
+    let frames = serde_json::to_string_pretty(&resp.frames).unwrap();
+    println!(
+        "{}\n======\n{}\n=====\n{}",
+        funcs, frames, resp.compiled_src
+    );
 
     Ok(())
 }
@@ -222,6 +280,8 @@ async fn main() -> Result<()> {
     let remote = cli.remote.unwrap_or("http://localhost:5151".to_string());
 
     match &cli.command {
+        Commands::Cleanup {} => cleanup(remote).await,
+        Commands::Rm { proc_id } => rm(remote, proc_id).await,
         Commands::Watch { proc_id } => watch(&remote, proc_id).await,
         Commands::Get { proc_id, value } => get(&remote, proc_id, value, cli.output_json).await,
         Commands::Inspect { proc_id } => inspect(remote, proc_id).await,

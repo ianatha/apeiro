@@ -142,14 +142,14 @@ impl DEngine {
     }
 
     #[instrument(skip(self))]
-    async fn get_proc_lock(&self, proc_id: String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
+    async fn get_proc_lock(&self, proc_id: &String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
         let proc_lock = {
             let mut locked_map = self.0.locks.write().await;
-            if let Some(proc_lock) = locked_map.get(&proc_id) {
+            if let Some(proc_lock) = locked_map.get(proc_id) {
                 Arc::clone(proc_lock)
             } else {
                 let proc_lock = Arc::new(RwLock::new(()));
-                locked_map.insert(proc_id, proc_lock.clone());
+                locked_map.insert(proc_id.clone(), proc_lock.clone());
                 proc_lock
             }
         };
@@ -171,18 +171,9 @@ impl DEngine {
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src);
 
-        let (res, snapshot) = engine
-            .step_process(
-                Some(compiled_src),
-                None,
-                None,
-                "$step($usercode().default)".into(),
-                true,
-            )
-            .await
-            .unwrap();
+        let res = engine.step_process(compiled_src, None).await.unwrap();
 
-        db::proc_update(&conn, &proc_id, &res, &snapshot.unwrap_or(vec![])).unwrap();
+        db::proc_update(&conn, &proc_id, &res, &vec![]).unwrap();
 
         Ok(ProcNewOutput {
             id: proc_id,
@@ -199,13 +190,10 @@ impl DEngine {
     }
 
     #[instrument(skip(self))]
-    pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
-        let conn = self.0.db.get().expect("");
-        let res = db::proc_get(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
-
+    pub async fn proc_is_executing(&self, proc_id: &String) -> Result<bool, anyhow::Error> {
         let executing = {
             let locked_map = self.0.locks.read().await;
-            if let Some(proc_lock) = locked_map.get(&proc_id) {
+            if let Some(proc_lock) = locked_map.get(proc_id) {
                 if let Some(_proc_lock) = proc_lock.try_read().ok() {
                     false
                 } else {
@@ -216,15 +204,33 @@ impl DEngine {
             }
         };
 
+        Ok(executing)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
+        let conn = self.0.db.get().expect("");
+        let res = db::proc_get(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
+
+        let executing = self.proc_is_executing(&proc_id).await?;
+
         Ok(ProcStatus::new(res, executing))
+    }
+
+    #[instrument]
+    pub async fn proc_delete(&self, proc_id: String) -> Result<(), anyhow::Error> {
+        let conn = self.0.db.get().expect("");
+        db::proc_delete(&conn, &proc_id)?;
+
+        Ok(())
     }
 
     #[instrument(skip(self))]
     pub async fn proc_get_debug(&self, proc_id: String) -> Result<ProcStatusDebug, anyhow::Error> {
         let conn = self.0.db.get().expect("");
-        let src = db::proc_get_src(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
+        let proc_status_debug = db::proc_inspect(&conn, &proc_id)?;
 
-        Ok(ProcStatusDebug { compiled_src: src })
+        Ok(proc_status_debug)
     }
 
     #[instrument(skip(self))]
@@ -364,10 +370,7 @@ impl DEngine {
         let res = if proc.state.status != StepResultStatus::SUSPEND {
             Err(anyhow!("can only send to suspended procs"))
         } else {
-            let proc_lock = self
-                .get_proc_lock(proc_id.clone())
-                .await
-                .expect("cant lock");
+            let proc_lock = self.get_proc_lock(proc_id).await.expect("cant lock");
             let _proc_lock_guard = proc_lock.write().await;
 
             event!(Level::INFO, "after proc lock guard");
@@ -379,17 +382,11 @@ impl DEngine {
 
             engine.mbox.push(body.msg.clone());
 
-            let (res, snapshot) = engine
-                .step_process(
-                    Some(proc.compiled_src),
-                    proc.snapshot,
-                    proc.state.frames,
-                    "$step($usercode().default)".into(),
-                    true,
-                )
+            let res = engine
+                .step_process(proc.compiled_src, proc.state.frames)
                 .await?;
 
-            db::proc_update(&conn, &proc_id, &res, &snapshot.unwrap_or(vec![]))?;
+            db::proc_update(&conn, &proc_id, &res, &vec![])?;
 
             Ok(res)
         };
@@ -502,7 +499,8 @@ impl SharedDEngine {
             val TEXT,
             suspension TEXT,
             snapshot BLOB,
-            frames TEXT
+            frames TEXT,
+            funcs TEXT
         );",
             (),
         )?;

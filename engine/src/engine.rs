@@ -33,6 +33,7 @@ impl std::fmt::Debug for DEngine {
 
 #[derive(Default, Debug)]
 pub struct EngineInstance<'a> {
+    pub enginecode: Option<v8::Local<'a, v8::Module>>,
     pub usercode: Option<v8::Local<'a, v8::Module>>,
     pub frames: Option<v8::Local<'a, v8::Value>>,
 }
@@ -57,18 +58,8 @@ impl Engine {
         isolate
     }
 
-    pub async fn step_process(
-        &mut self,
-        src: Option<String>,
-        snapshot: Option<Vec<u8>>,
-        frames: Option<Value>,
-        js_stmt: String,
-        use_v8_snapshot: bool,
-    ) -> Result<(StepResult, Option<Vec<u8>>)> {
-        let mut engine_instance = EngineInstance {
-            usercode: None,
-            frames: None,
-        };
+    pub async fn step_process(&mut self, src: String, frames: Option<Value>) -> Result<StepResult> {
+        let mut engine_instance = EngineInstance::default();
         let align = std::mem::align_of::<usize>();
         let layout = std::alloc::Layout::from_size_align(
             std::mem::size_of::<*mut v8::OwnedIsolate>(),
@@ -80,46 +71,7 @@ impl Engine {
         let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
         let engine_instance_external_ref = (&engine_instance as *const _) as *mut std::ffi::c_void;
 
-        let (mut isolate, snapshot_existed) = if use_v8_snapshot {
-            let refs = v8::ExternalReferences::new(&[
-                v8::ExternalReference {
-                    function: log_callback.map_fn_to(),
-                },
-                v8::ExternalReference {
-                    function: mbox_callback.map_fn_to(),
-                },
-                v8::ExternalReference {
-                    function: usercode_callback.map_fn_to(),
-                },
-                v8::ExternalReference {
-                    function: send_callback.map_fn_to(),
-                },
-                v8::ExternalReference {
-                    function: frames_callback.map_fn_to(),
-                },
-                v8::ExternalReference {
-                    pointer: engine_instance_external_ref,
-                },
-                v8::ExternalReference {
-                    pointer: engine_external_ref,
-                },
-            ]);
-            let refs: &'static v8::ExternalReferences = Box::leak(Box::new(refs));
-
-            let (snapshot_creator, snapshot_existed) = match snapshot {
-                Some(snapshot) => (
-                    Isolate::snapshot_creator_from_existing_snapshot(snapshot, Some(refs)),
-                    true,
-                ),
-                None => (Isolate::snapshot_creator(Some(refs)), false),
-            };
-            (self.setup_isolate(snapshot_creator), snapshot_existed)
-        } else {
-            (
-                self.setup_isolate(Isolate::new(CreateParams::default())),
-                false,
-            )
-        };
+        let mut isolate = self.setup_isolate(Isolate::new(CreateParams::default()));
 
         let new_state: Result<StepResult> = {
             let handle_scope = &mut HandleScope::new(&mut isolate);
@@ -170,112 +122,49 @@ impl Engine {
             );
 
             let context = v8::Context::new_from_template(handle_scope, global);
-            if use_v8_snapshot {
-                handle_scope.set_default_context(context);
-            }
             let context_scope = &mut ContextScope::new(handle_scope, context);
 
             match frames {
                 Some(frames) => {
-                    engine_instance.frames = Some(serde_v8::to_v8(context_scope, frames).unwrap());
+                    engine_instance.frames =
+                        Some(serde_pristine::to_v8(context_scope, frames).unwrap());
                 }
                 None => {}
             }
 
             let context_scope = &mut v8::TryCatch::new(context_scope);
             let new_state = (|| {
-                let null = v8::null(context_scope).into();
+                if let Some(engine_runtime_fn) = self.runtime_js_src {
+                    let engine_runtime = engine_runtime_fn();
+                    let enginecode_module =
+                        instantiate_module(context_scope, "engine".into(), engine_runtime).unwrap();
+                    engine_instance.enginecode = Some(enginecode_module);
 
-                if let Some(src) = src {
-                    if !use_v8_snapshot || !snapshot_existed {
-                        if let Some(engine_runtime_fn) = self.runtime_js_src {
-                            let engine_runtime = engine_runtime_fn();
-                            let engine_runtime = v8_str!(context_scope / &engine_runtime);
-
-                            let engine_resource_name = v8_str!(context_scope / "engine").into();
-
-                            let script_origin = &ScriptOrigin::new(
-                                context_scope,
-                                engine_resource_name,
-                                0,
-                                0,
-                                false,
-                                0,
-                                null,
-                                false,
-                                false,
-                                false,
-                            );
-
-                            let engine_script =
-                                Script::compile(context_scope, engine_runtime, Some(script_origin))
-                                    .ok_or(anyhow!("207"))?;
-                            _ = engine_script
-                                .run(context_scope)
-                                .ok_or(anyhow!("couldnt run engine script"))?;
-                        }
-                    }
-
-                    let src_code = v8::String::new(context_scope, src.as_str())
-                        .ok_or(anyhow!("src is too long"))?;
-
-                    let resource_name = v8::String::new(context_scope, "src").unwrap().into();
-
-                    let script_origin = &ScriptOrigin::new(
+                    let global = context.global(context_scope);
+                    export_symbols_to_global(
                         context_scope,
-                        resource_name,
-                        0,
-                        0,
-                        false,
-                        0,
-                        null,
-                        false,
-                        false,
-                        true,
+                        enginecode_module,
+                        global,
+                        vec!["$fn", "$new_frame", "$scope", "$frame_end"],
                     );
-
-                    let script = v8::script_compiler::Source::new(src_code, Some(&script_origin));
-
-                    let module =
-                        v8::script_compiler::compile_module(context_scope, script).unwrap();
-
-                    let module_i1 = module
-                        .instantiate_module(context_scope, unexpected_module_resolve_callback);
-                    assert_eq!(module_i1, Some(true));
-                    assert_eq!(module.get_status(), v8::ModuleStatus::Instantiated);
-
-                    let _module_instance = module.evaluate(context_scope).unwrap();
-
-                    engine_instance.usercode = Some(module);
                 }
+
+                let usercode_module =
+                    instantiate_module(context_scope, "usercode".into(), src).unwrap();
+                engine_instance.usercode = Some(usercode_module);
 
                 event!(Level::INFO, "before kickoff");
 
-                let js_stmt_code = v8::String::new(context_scope, &js_stmt)
-                    .ok_or(anyhow!("js_stmt is too long"))?;
-                let resource_name = v8::String::new(context_scope, "js_stmt").unwrap().into();
-                let null = v8::null(context_scope).into();
+                let engine_entrypoint =
+                    get_module_default(context_scope, engine_instance.enginecode.unwrap())?;
+                let undefined = v8::undefined(context_scope).into();
+                let js_stmt_result = engine_entrypoint
+                    .call(context_scope, undefined, &[])
+                    .ok_or(anyhow!("no result from $step"))?;
 
-                let script_origin = &ScriptOrigin::new(
-                    context_scope,
-                    resource_name,
-                    0,
-                    0,
-                    false,
-                    0,
-                    null,
-                    false,
-                    false,
-                    false,
-                );
-
-                let js_stmt_script =
-                    Script::compile(context_scope, js_stmt_code, Some(script_origin))
-                        .ok_or(anyhow!("209"))?;
-                let js_stmt_result = js_stmt_script.run(context_scope).ok_or(anyhow!("210"))?;
-
-                let res_json: StepResult = serde_v8::from_v8(context_scope, js_stmt_result)
-                    .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
+                let res_json: StepResult =
+                    serde_pristine::from_v8(context_scope, js_stmt_result)
+                        .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
 
                 event!(Level::INFO, "res_json: {:?}", res_json);
 
@@ -301,22 +190,10 @@ impl Engine {
         match new_state {
             Result::Ok(new_state) => {
                 isolate.perform_microtask_checkpoint();
-
-                let snapshot_slice = if use_v8_snapshot {
-                    let snapshot = isolate
-                        .create_blob(FunctionCodeHandling::Keep)
-                        .ok_or(anyhow!("could not create snapshot"))?;
-                    Some((&*snapshot).to_vec())
-                } else {
-                    None
-                };
-
-                Ok((new_state, snapshot_slice))
+                Ok(new_state)
             }
             Err(e) => {
                 event!(Level::INFO, "error: {:?}", e);
-                // we're snapshotting so no panic is caused when isolate is dropped
-                _ = isolate.create_blob(FunctionCodeHandling::Keep);
                 Err(e)
             }
         }
@@ -338,7 +215,7 @@ impl Engine {
 
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
-            let msg = serde_v8::from_v8(scope, msg).unwrap();
+            let msg = serde_pristine::from_v8(scope, msg).unwrap();
 
             let proc_id = self.proc_id.clone();
             tokio::task::spawn(async move {
@@ -361,7 +238,7 @@ impl Engine {
     ) {
         let _context = v8::Context::new(scope);
 
-        let filter = serde_v8::from_v8(scope, args.get(0)).unwrap();
+        let filter = serde_pristine::from_v8(scope, args.get(0)).unwrap();
         let filter = serde_json_matcher::from_json(filter).unwrap();
         for (index, msg) in self.mbox.iter().enumerate() {
             if filter.matches(msg) {
@@ -373,7 +250,7 @@ impl Engine {
                     index,
                     msg
                 );
-                let msg = serde_v8::to_v8(scope, msg).unwrap();
+                let msg = serde_pristine::to_v8(scope, msg).unwrap();
                 retval.set(msg);
                 return;
             }
@@ -412,7 +289,7 @@ impl Engine {
             let proc_id: String = proc_id.to_rust_string_lossy(scope);
 
             let msg = args.get(1);
-            let msg = serde_v8::from_v8(scope, msg).unwrap();
+            let msg = serde_pristine::from_v8(scope, msg).unwrap();
 
             tokio::task::spawn(async move {
                 event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
@@ -422,6 +299,19 @@ impl Engine {
                 event!(Level::INFO, "sent!!");
             });
         }
+    }
+}
+
+fn export_symbols_to_global<'a>(
+    scope: &mut v8::TryCatch<'a, v8::HandleScope>,
+    enginecode_module: v8::Local<v8::Module>,
+    global: v8::Local<v8::Object>,
+    vec: Vec<&str>,
+) {
+    for fn_name in vec {
+        let fn_func = get_module_fn(scope, enginecode_module, fn_name).unwrap();
+        let fn_key = v8_str!(scope, fn_name);
+        global.set(scope, fn_key, fn_func.into());
     }
 }
 
@@ -461,4 +351,56 @@ fn unexpected_module_resolve_callback<'a>(
     _referrer: v8::Local<'a, v8::Module>,
 ) -> Option<v8::Local<'a, v8::Module>> {
     unreachable!()
+}
+
+pub fn get_module_fn<'a>(
+    scope: &mut v8::TryCatch<'a, v8::HandleScope>,
+    module: v8::Local<v8::Module>,
+    name: &str,
+) -> Result<v8::Local<'a, v8::Function>, anyhow::Error> {
+    let namespace_obj = module.get_module_namespace().to_object(scope).unwrap();
+    let name_v8 = v8::String::new(scope, name).unwrap();
+    let exported_value = namespace_obj.get(scope, name_v8.into()).unwrap();
+    if exported_value.is_function() {
+        let function: v8::Local<'a, v8::Function> = unsafe { v8::Local::cast(exported_value) };
+        Ok(function)
+    } else {
+        Err(anyhow!("{} not a function in module", name))
+    }
+}
+
+pub fn get_module_default<'a>(
+    scope: &mut v8::TryCatch<'a, v8::HandleScope>,
+    module: v8::Local<v8::Module>,
+) -> Result<v8::Local<'a, v8::Function>, anyhow::Error> {
+    get_module_fn(scope, module, "default")
+}
+
+pub fn instantiate_module<'a>(
+    scope: &mut v8::HandleScope<'a>,
+    name: String,
+    src: String,
+) -> Result<v8::Local<'a, v8::Module>, anyhow::Error> {
+    let null = v8::null(scope).into();
+
+    let src = v8::String::new(scope, src.as_str()).unwrap();
+    let name = v8::String::new(scope, name.as_str()).unwrap();
+    let script_origin =
+        &v8::ScriptOrigin::new(scope, name.into(), 0, 0, false, 0, null, false, false, true);
+    let script = v8::script_compiler::Source::new(src, Some(&script_origin));
+    let module = v8::script_compiler::compile_module(scope, script).unwrap();
+    let module_instantiation = module.instantiate_module(scope, unexpected_module_resolve_callback);
+    if module_instantiation == Some(true) && module.get_status() == v8::ModuleStatus::Instantiated {
+        let _module_instance = module.evaluate(scope).unwrap();
+        if module.get_status() == v8::ModuleStatus::Evaluated {
+            Ok(module)
+        } else {
+            let e = module.get_exception();
+            let exception = e.to_string(scope).unwrap();
+            let exception = exception.to_rust_string_lossy(scope);
+            Err(anyhow!(exception))
+        }
+    } else {
+        Err(anyhow!("module instantiation failed"))
+    }
 }

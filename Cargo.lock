@@ -349,6 +349,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "bencher"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dfdb4953a096c551ce9ace855a604d702e6e62d77fac690575ae347571717f5"
+
+[[package]]
 name = "better_scoped_tls"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2189,7 +2195,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_json_matcher",
- "serde_v8",
+ "serde_pristine",
  "tokio",
  "tokio-test",
  "tracing",
@@ -2699,6 +2705,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_pristine"
+version = "0.75.0"
+dependencies = [
+ "bencher",
+ "bytes",
+ "derive_more",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "smallvec",
+ "v8",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2708,20 +2728,6 @@ dependencies = [
  "itoa 1.0.4",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "serde_v8"
-version = "0.75.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81957fca74f7a393a726341b70a797b28e2ef09890958c94d87c9cd7a8ffe4a7"
-dependencies = [
- "bytes",
- "derive_more",
- "serde",
- "serde_bytes",
- "smallvec",
- "v8",
 ]
 
 [[package]]

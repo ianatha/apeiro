@@ -2,7 +2,8 @@
 
 // const $scopes: Map<number, Scope> = new Map();
 let $frames: Frame[] = [];
-const $fns: Map<string, Function> = new Map();
+type FunctionRef = any;
+const $fns: Map<string, FunctionRef> = new Map();
 
 // ## Scopes
 
@@ -17,7 +18,7 @@ const scopeIdGenerator = function() {
 	return () => { return i++; };
 }();
 
-function $scope(parent = undefined, frame?: Frame) {
+export function $scope(parent = undefined, frame?: Frame) {
 	if (frame?.scope) {
 		if (parent) {
 			Object.setPrototypeOf(frame.scope, parent);
@@ -26,7 +27,9 @@ function $scope(parent = undefined, frame?: Frame) {
 	}
 
 	const newScopeId = scopeIdGenerator();
-	const newScope: Scope = { };
+	const newScope: Scope = {
+		$$scope_id: newScopeId,
+	 };
 
 	Object.defineProperty(newScope, SYMBOL_SCOPE_ID, {
 		value: newScopeId,
@@ -72,7 +75,7 @@ function debugDisplayFrame(frame: Frame) {
 	return "[Frame, fnhash=" + frame.fnhash + ", $pc=" + frame.$pc + "]";
 }
 
-function $frame_end(dead_child: Frame) {
+export function $frame_end(dead_child: Frame) {
 	if ($frames[$frames.length - 1] !== dead_child) {
 		log("invalid frame");
 		throw new PristineEngineError("invalid frame being dropped");
@@ -83,7 +86,7 @@ function $frame_end(dead_child: Frame) {
 
 var current_frame = 0;
 
-function $new_frame(fnhash, last_fn_hash) {
+export function $new_frame(fnhash, last_fn_hash) {
 	if ($frames[current_frame]) {
 		if ($frames[current_frame].fnhash !== fnhash) {
 			throw new PristineEngineError("illegal frame restoration, targetting wrong fn");
@@ -99,8 +102,15 @@ function $new_frame(fnhash, last_fn_hash) {
 
 // ## Function Declartions
 
-function $fn(fn, hash, in_scope) {
-	$fns.set(hash, new WeakRef(fn));
+
+export function $fn(fn, hash, in_scope) {
+	$fns.set(hash, {
+		id: hash,
+		in_scope: in_scope,
+		src: fn.toString(),
+		ref: new WeakRef(fn)
+	});
+	fn.id = hash;
 	return fn;
 }
 
@@ -134,6 +144,7 @@ interface SuspendStepResult {
 	suspension: Record<string, any>;
 	current_frame: number;
 	frames: any;
+	funcs: any;
 }
 
 interface ErrorStepResult {
@@ -161,7 +172,11 @@ function garbage_collect() {
 	// }
 }
 
-function $step(fn): StepResult {
+export default function $step(): StepResult {
+	log("hello from $step3");
+	log("hello from $step3, 2nd");
+	log("hello from $step3, 3rd");
+	let fn = $usercode().default;
 	current_frame = 0;
 	if (!$frames || $frames.length == 0) {
 		$frames = $get_frames();
@@ -184,6 +199,7 @@ function $step(fn): StepResult {
 				val: val,
 				current_frame: current_frame,
 				frames: $frames,
+				funcs: $fns,
 			};
 		} else {
 			const val = fn();
@@ -194,12 +210,15 @@ function $step(fn): StepResult {
 		}
 	} catch (e) {
 		if ($isSuspendSignal(e)) {
+			log("hello from $step3, before return");
+
 			return {
 				status: "SUSPEND",
 				val,
 				suspension: e.until,
 				current_frame: current_frame,
 				frames: $frames,
+				funcs: $fns,
 			};
 		} else {
 			throw e;

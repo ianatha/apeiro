@@ -11,7 +11,7 @@ tokio = { version = "1", features = ["full"] }
 pristine_compiler = { path = "../compiler" }
 pristine_internal_api = { path = "../internal_api"}
 serde = { version = "^1.0.100", features = ["derive"] }
-serde_v8 = "0.75.0"
+serde_pristine = { path = "../serde" }
 serde_json = "1.0.89"
 nanoid = "0.4.0"
 r2d2 = "0.8.10"

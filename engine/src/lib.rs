@@ -36,5 +36,7 @@ pub(crate) fn v8_init() {
 }
 
 pub fn get_engine_runtime() -> String {
-    pristine_compiler::engine_runtime_compile(include_str!("engine_runtime.ts").into()).unwrap()
+    let code =
+        std::fs::read_to_string(std::path::Path::new("engine/src/engine_runtime.ts")).unwrap();
+    pristine_compiler::engine_runtime_compile(code.into()).unwrap()
 }

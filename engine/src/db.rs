@@ -1,6 +1,7 @@
 use crate::StepResultStatus;
+use anyhow::anyhow;
 use nanoid::nanoid;
-use pristine_internal_api::{ProcSummary, StepResult};
+use pristine_internal_api::{ProcStatusDebug, ProcSummary, StepResult};
 use r2d2::PooledConnection;
 use r2d2_sqlite::rusqlite::params;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -31,9 +32,10 @@ pub fn proc_update(
     snapshot: &Vec<u8>,
 ) -> Result<(), anyhow::Error> {
     let frames_json = serde_json::to_string(&state.frames).unwrap();
+    let funcs_json = serde_json::to_string(&state.funcs).unwrap();
 
     conn.execute(
-        "UPDATE procs SET status=?, val=?, suspension=?, snapshot=?, frames=? WHERE id=?",
+        "UPDATE procs SET status=?, val=?, suspension=?, snapshot=?, frames=?, funcs=? WHERE id=?",
         params![
             serde_json::to_string(&state.status).unwrap(),
             state
@@ -46,6 +48,7 @@ pub fn proc_update(
                 .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
             snapshot,
             frames_json,
+            funcs_json,
             id
         ],
     )?;
@@ -115,10 +118,34 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
     Ok(result)
 }
 
-pub fn proc_get_src(conn: &Conn, id: &String) -> Result<String, anyhow::Error> {
-    let mut stmt = conn.prepare("SELECT compiled_src FROM procs WHERE id = ?")?;
+pub fn proc_delete(conn: &Conn, id: &String) -> Result<(), anyhow::Error> {
+    let mut stmt = conn.prepare("DELETE FROM procs WHERE id = ?")?;
 
-    let result = stmt.query_row(&[id], |row| Ok(row.get(0)?))?;
+    let count = stmt.execute(params![id])?;
+
+    if count == 1 {
+        Ok(())
+    } else {
+        Err(anyhow!("proc not found"))
+    }
+}
+
+pub fn proc_inspect(conn: &Conn, id: &String) -> Result<ProcStatusDebug, anyhow::Error> {
+    let mut stmt = conn.prepare("SELECT frames, compiled_src, funcs FROM procs WHERE id = ?")?;
+
+    let result = stmt.query_row(&[id], |row| {
+        let frames: String = row.get(0)?;
+        let compiled_src = row.get(1)?;
+        let frames = serde_json::from_str(&frames.as_str()).unwrap();
+        let funcs: String = row.get(2)?;
+        let funcs = serde_json::from_str(&funcs.as_str()).unwrap();
+
+        Ok(ProcStatusDebug {
+            funcs,
+            frames,
+            compiled_src,
+        })
+    })?;
 
     Ok(result)
 }

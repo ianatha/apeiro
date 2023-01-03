@@ -1,5 +1,5 @@
 use actix_web::error::{self, ErrorBadRequest};
-use actix_web::{get, post, put, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse, Responder};
 use pristine_engine::DEngine;
 use pristine_internal_api::*;
 use tracing::{event, Level};
@@ -51,6 +51,19 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
     let res = dengine.proc_get(proc_id).await.map_err(pristine_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
+}
+
+#[delete("/proc/{proc_id}")]
+async fn proc_delete(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
+    let proc_id: String = req
+        .match_info()
+        .get("proc_id")
+        .ok_or(ErrorBadRequest("no mount name"))?
+        .parse()?;
+
+    dengine.proc_delete(proc_id).await.map_err(pristine_err)?;
+
+    Ok::<_, actix_web::Error>("")
 }
 
 #[get("/proc/{proc_id}/debug")]

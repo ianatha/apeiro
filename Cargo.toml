@@ -6,4 +6,5 @@ members = [
 	"pristined",
 	"internal_api",
 	"cli",
+	"serde"
 ]

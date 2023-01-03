@@ -63,6 +63,7 @@ pub struct StepResult {
     pub suspension: Option<Value>,
     pub current_frame: Option<u64>,
     pub frames: Option<Value>,
+    pub funcs: Option<Value>,
 }
 
 impl std::fmt::Display for StepResult {
@@ -117,7 +118,9 @@ pub struct ProcStatus {
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ProcStatusDebug {
+    pub frames: Option<Value>,
     pub compiled_src: String,
+    pub funcs: Option<Value>,
 }
 
 impl ProcStatus {
