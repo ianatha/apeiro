@@ -200,9 +200,16 @@ impl Engine {
                     .call(context_scope, undefined, &[])
                     .ok_or(anyhow!("no result from $step"))?;
 
-                let new_fns = js_stmt_result.to_object(context_scope).unwrap();
+                let js_stmt_result_obj = js_stmt_result.to_object(context_scope).unwrap();
                 let fns_key = v8::String::new(context_scope, "funcs").unwrap();
-                let new_fns = new_fns.get(context_scope, fns_key.into()).unwrap();
+                let new_fns = js_stmt_result_obj
+                    .get(context_scope, fns_key.into())
+                    .unwrap();
+
+                let val_key = v8::String::new(context_scope, "val").unwrap();
+                let new_val = js_stmt_result_obj
+                    .get(context_scope, val_key.into())
+                    .unwrap();
 
                 let counter = RefCell::new(0);
                 let res_json = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
@@ -217,6 +224,27 @@ impl Engine {
                     let mut res_json: StepResult =
                         serde_pristine::from_v8(context_scope, js_stmt_result).unwrap();
                     res_json.funcs = Some(new_fns);
+
+                    if res_json.val.is_some() {
+                        println!("$$$$$$ postprocessing res_json.val");
+                        let new_val = serde_pristine::resolve_ref(context_scope, new_val);
+
+                        let global = context_scope.get_current_context().global(context_scope);
+                        let disable_references_key =
+                            v8::String::new(context_scope, "$$disable_references").unwrap();
+                        let true_val = v8::Boolean::new(context_scope, true);
+                        assert!(global
+                            .set(
+                                context_scope,
+                                disable_references_key.into(),
+                                true_val.into()
+                            )
+                            .unwrap());
+
+                        let json_val: serde_json::Value =
+                            serde_pristine::from_v8(context_scope, new_val).unwrap();
+                        res_json.val = Some(json_val);
+                    }
 
                     println!(
                         "\n\n\n\nres_json: {}\n\n\n\n\n\n",
@@ -406,15 +434,13 @@ fn funcs_callback(
 ) {
     let external = v8::Local::<v8::External>::try_from(args.data()).unwrap();
     let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
-    let val = struct_instance
-        .funcs
-        .unwrap_or({
-            let obj = v8::Object::new(scope);
-            let scope_last_id_key = v8_str!(scope, "$scopeLastId");
-            let scope_last_id_val = v8::Integer::new(scope, 0);
-            obj.set(scope, scope_last_id_key, scope_last_id_val.into());
-            obj
-        });
+    let val = struct_instance.funcs.unwrap_or({
+        let obj = v8::Object::new(scope);
+        let scope_last_id_key = v8_str!(scope, "$scopeLastId");
+        let scope_last_id_val = v8::Integer::new(scope, 0);
+        obj.set(scope, scope_last_id_key, scope_last_id_val.into());
+        obj
+    });
     retval.set(val.into());
 }
 

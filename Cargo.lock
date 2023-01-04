@@ -2715,6 +2715,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "serde_v8",
  "smallvec",
  "v8",
 ]
@@ -2729,6 +2730,20 @@ dependencies = [
  "itoa 1.0.4",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_v8"
+version = "0.75.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81957fca74f7a393a726341b70a797b28e2ef09890958c94d87c9cd7a8ffe4a7"
+dependencies = [
+ "bytes",
+ "derive_more",
+ "serde",
+ "serde_bytes",
+ "smallvec",
+ "v8",
 ]
 
 [[package]]

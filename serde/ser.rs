@@ -1,7 +1,6 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate serde;
 
-use std::collections::HashMap;
 use std::convert::TryInto;
 
 use self::serde::ser;
@@ -700,8 +699,9 @@ fn get_from_scope_cache<'s>(
     scope: &mut v8::HandleScope<'s>,
     obj_id: i32,
 ) -> Option<v8::Local<'s, v8::Object>> {
-    let v8_obj_cache_key = v8::String::new(scope, "__obj_cache").unwrap();
+    println!("\n\n### get_from_scope_cache {}", obj_id);
     let global = scope.get_current_context().global(scope);
+    let v8_obj_cache_key = v8::String::new(scope, "__obj_cache").unwrap();
     let v8_obj_cache = global.get(scope, v8_obj_cache_key.into()).unwrap();
     let v8_obj_cache = if v8_obj_cache.is_undefined() {
         return None;
@@ -723,6 +723,7 @@ pub fn resolve_ref<'s>(
     obj: v8::Local<'s, v8::Value>,
 ) -> v8::Local<'s, v8::Value> {
     if obj.is_array() {
+        println!("\n\n### array resolve_ref");
         let arr: v8::Local<'s, v8::Array> = unsafe { v8::Local::cast(obj) };
         let len = arr.length();
         if len == 0 {
@@ -735,14 +736,19 @@ pub fn resolve_ref<'s>(
         }
         return arr.into();
     } else if obj.is_object() {
+        println!("\n\n### obj resolve_ref");
         let obj = obj.to_object(scope).unwrap();
         // if contains key $$__$$obj_id_ref, then get_from_scope_cache
         let v8_obj_id_key = v8::String::new(scope, "$$__$$obj_id_ref").unwrap();
         let v8_obj_id = obj.get(scope, v8_obj_id_key.into()).unwrap();
         if !v8_obj_id.is_null_or_undefined() {
+            println!("#### yes, ref");
             let v8_obj_id = v8_obj_id.to_integer(scope).unwrap().value() as i32;
             let v8_obj_cache = get_from_scope_cache(scope, v8_obj_id);
             return v8_obj_cache.expect("obj_id_ref not found in cache").into();
+        } else {
+            println!("#### not a ref, {}", v8_obj_id.to_rust_string_lossy(scope));
+            v8_println(scope, obj.into());
         }
 
         let indices = obj
@@ -773,4 +779,13 @@ pub fn resolve_ref<'s>(
         return obj.into();
     }
     return obj;
+}
+
+fn v8_println<'s>(
+    context_scope: &mut v8::HandleScope<'s, v8::Context>,
+    v8_value: v8::Local<'s, v8::Value>,
+) {
+    let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
+    let json = serde_json::to_string_pretty(&value).unwrap();
+    println!("{}", json);
 }

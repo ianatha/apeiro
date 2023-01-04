@@ -393,6 +393,13 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de> for &'x mut Deserializer<'a, 'b,
         let obj =
             v8::Local::<v8::Object>::try_from(self.input).map_err(|_| Error::ExpectedObject)?;
 
+        let global = self.scope.get_current_context().global(self.scope);
+        let disable_references_key = v8::String::new(self.scope, "$$disable_references").unwrap();
+        let disable_references = global
+            .get(self.scope, disable_references_key.into())
+            .map(|x| x.boolean_value(self.scope))
+            .unwrap_or(false);
+
         let maybe_terminate = OBJ_COUNT_DE.with(|count: &RefCell<i32>| {
             let mut count = count.borrow_mut();
             if *count != -1 {
@@ -408,10 +415,14 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de> for &'x mut Deserializer<'a, 'b,
                     assert!(obj.set(self.scope, public_key.into(), val.into()).unwrap());
                     None
                 } else {
-                    Some(ObjectReference {
-                        pos: 0,
-                        obj_id_ref: priv_val.int32_value(self.scope).unwrap(),
-                    })
+                    if !disable_references {
+                        Some(ObjectReference {
+                            pos: 0,
+                            obj_id_ref: priv_val.int32_value(self.scope).unwrap(),
+                        })
+                    } else {
+                        None
+                    }
                 }
             } else {
                 None
