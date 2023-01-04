@@ -2,110 +2,6 @@ use tracing::{event, Level};
 
 use crate::{Engine, StepResultStatus};
 
-#[tokio::test]
-async fn it_maintains_state() {
-    let src = include_str!("counter.js").to_string();
-    let mut engine = Engine::new_with_name(None, "test_01".into());
-
-    let (mut state, mut snapshot) = engine
-        .step_process(
-            Some(src),
-            None,
-            "let counter = $usercode().default; counter.i(); log(\"hello\"); counter.g()"
-                .to_string(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(state.val.unwrap(), 1);
-
-    for n in 2..100 {
-        (state, snapshot) = engine
-            .step_process(None, Some(snapshot), "counter.i(); counter.g()".to_string())
-            .await
-            .unwrap();
-
-        assert_eq!(state.val.unwrap(), n);
-    }
-}
-
-#[tokio::test]
-async fn it_catches_exceptions() {
-    let src = include_str!("counter.js").to_string();
-    let mut engine = Engine::new(None);
-
-    let (state, snapshot) = engine
-        .step_process(
-            Some(src),
-            None,
-            "let counter = $usercode().default; counter.i(); counter.g()".to_string(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(state.val.unwrap(), 1);
-
-    let result = engine
-        .step_process(None, Some(snapshot), "bad_code_here()".to_string())
-        .await;
-
-    match result {
-        Ok(_) => panic!("expected an error"),
-        Err(e) => assert_eq!(e.to_string(), "Exception: ReferenceError: bad_code_here is not defined at js_stmt (<unknown>, line 1, column 1)"),
-    }
-}
-
-#[tokio::test]
-async fn test_execution() {
-    let src = include_str!("counter.js").to_string();
-    let mut engine = Engine::new(None);
-
-    let (state, snapshot) = engine
-        .step_process(
-            Some(src),
-            None,
-            "let counter = $usercode().default; counter.i(); counter.g()".to_string(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(state.val.unwrap(), 1);
-
-    let result = engine
-        .step_process(None, Some(snapshot), "bad_code_here()".to_string())
-        .await;
-
-    match result {
-        Ok(_) => panic!("expected an error"),
-        Err(e) => assert_eq!(e.to_string(), "Exception: ReferenceError: bad_code_here is not defined at js_stmt (<unknown>, line 1, column 1)"),
-    }
-}
-
-// for development-time debugging of engine_runtime
-#[allow(unused)]
-fn deno_exec(input: &str) {
-    let src_user_out = pristine_compiler::pristine_compile(input.to_string()).unwrap();
-
-    let js_stmt = r#"$step(main);"#;
-    let mut all_src = String::new();
-    all_src.push_str(crate::get_engine_runtime().as_str());
-    all_src.push_str(&src_user_out);
-    all_src.push_str(js_stmt);
-
-    std::fs::write("./test_for_deno.js", all_src).expect("Unable to read file");
-
-    let child = std::process::Command::new("/usr/bin/env")
-        .args(["deno", "run", "--inspect-brk", "./test_for_deno.js"])
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
-        .spawn()
-        .unwrap();
-
-    let output = child.wait_with_output().unwrap();
-    event!(Level::INFO, "{}", output.status);
-}
-
 #[derive(Default)]
 struct StepAssertion {
     before_mbox: Vec<serde_json::Value>,
@@ -116,21 +12,16 @@ struct StepAssertion {
 
 fn multiple_steps(input: &str, steps: Vec<StepAssertion>) {
     let src_user_out = pristine_compiler::pristine_compile(input.to_string()).unwrap();
-    let js_stmt = r#"$step($usercode().default);"#;
-
     let mut engine = crate::Engine::new(Some(crate::get_engine_runtime));
 
-    let mut snapshot = None;
+    let mut funcs = None;
+    let mut frames = None;
 
     for assertion_step in steps {
         engine.mbox = assertion_step.before_mbox.into();
 
-        let (state, new_snapshot) = tokio_test::block_on(engine.step_process(
-            Some(src_user_out.clone()),
-            snapshot,
-            js_stmt.to_string(),
-        ))
-        .unwrap();
+        let (state, new_snapshot) =
+            tokio_test::block_on(engine.step_process(src_user_out.clone(), funcs, frames)).unwrap();
 
         assert_eq!(assertion_step.after_status, state.status);
         if let Some(after_suspension) = assertion_step.after_suspension {
@@ -140,7 +31,14 @@ fn multiple_steps(input: &str, steps: Vec<StepAssertion>) {
             assert_eq!(after_value, state.val.unwrap());
         }
 
-        snapshot = Some(new_snapshot);
+        funcs = new_snapshot.funcs;
+        frames = new_snapshot.frames;
+
+        println!(
+            "\n\n\nfuncs: {}\nframes: {}",
+            serde_json::to_string_pretty(&funcs).unwrap(),
+            serde_json::to_string_pretty(&frames).unwrap()
+        );
     }
 }
 
@@ -172,3 +70,5 @@ fn test_execution_recv() {
         ],
     );
 }
+
+// thread 'tests::test_execution_recv' panicked at 'called `Result::unwrap()` on an `Err` value: Exception: Error: illegal frame restoration, targetting wrong fn, given 9159223381570806684 but it should have been 17061346647277084122 at engine ($new_frame, line 84, column 19)at usercode (secondary, line 127, column 27)at usercode (<unknown>, line 159, column 13)at engine ($step, line 150, column 26)', engine/src/tests/mod.rs:24:92

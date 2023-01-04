@@ -118,7 +118,7 @@ var current_frame = 0;
 export function $new_frame(fnhash, last_fn_hash) {
 	if ($frames[current_frame]) {
 		if ($frames[current_frame].fnhash !== fnhash) {
-			throw new PristineEngineError("illegal frame restoration, targetting wrong fn");
+			throw new PristineEngineError("illegal frame restoration, targetting wrong fn, given " + fnhash + " but it should have been " + $frames[current_frame].fnhash);
 		}
 		current_frame++;
 		return $frames[current_frame - 1];
@@ -161,7 +161,7 @@ class PristineSignal {
 	}
 }
 
-function $isSuspendSignal(e: any): e is PristineSignal {
+export function $isSuspendSignal(e: any): e is PristineSignal {
 	return e instanceof PristineSignal || e.pristine_suspend === true;
 }
 

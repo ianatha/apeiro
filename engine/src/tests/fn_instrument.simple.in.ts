@@ -1,5 +1,3 @@
-import { test } from "http://example.com/test";
-
 function addTo(x) {
 	return x + $recv({ $type: ["number"] });
 }

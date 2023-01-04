@@ -188,7 +188,13 @@ impl Engine {
                         context_scope,
                         enginecode_module,
                         global,
-                        vec!["$fn", "$new_frame", "$scope", "$frame_end"],
+                        vec![
+                            "$fn",
+                            "$new_frame",
+                            "$scope",
+                            "$frame_end",
+                            "$isSuspendSignal",
+                        ],
                     );
                 }
 

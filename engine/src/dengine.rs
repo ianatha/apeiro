@@ -61,7 +61,7 @@ struct SharedDEngine {
     tx: mpsc::Sender<DEngineCmd>,
     watchers: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<ProcEvent>>>>,
     watchers_exec: Arc<RwLock<HashMap<(String, String), tokio::sync::watch::Sender<ProcEvent>>>>,
-    proc_subscriptions: Arc<RwLock<HashMap<String, Vec<serde_json::Value>>>>
+    proc_subscriptions: Arc<RwLock<HashMap<String, Vec<serde_json::Value>>>>,
 }
 
 pub struct EventLoop {
@@ -165,10 +165,15 @@ impl DEngine {
         Ok(proc_lock)
     }
 
-    pub async fn process_post_step_suspension(&self, proc_id: &String, suspension: &serde_json::Value) {
+    pub async fn process_post_step_suspension(
+        &self,
+        proc_id: &String,
+        suspension: &serde_json::Value,
+    ) {
         if let Some(subscription) = suspension.get("$subscribe") {
             println!("subscription detected");
-            self.subscribe_proc_to_events(proc_id.clone(), subscription.clone()).await;
+            self.subscribe_proc_to_events(proc_id.clone(), subscription.clone())
+                .await;
         }
     }
 
@@ -191,7 +196,8 @@ impl DEngine {
         db::proc_update(&conn, &proc_id, &res, &engine_status).unwrap();
 
         if let Some(suspension) = &res.suspension {
-            self.process_post_step_suspension(&proc_id, suspension).await;
+            self.process_post_step_suspension(&proc_id, suspension)
+                .await;
         };
 
         Ok(ProcNewOutput {
@@ -325,15 +331,20 @@ impl DEngine {
         let procs = db::proc_list(&conn)?;
         for proc in procs {
             if let Some(suspension) = proc.suspension {
-                self.process_post_step_suspension(&proc.id, &suspension).await;
+                self.process_post_step_suspension(&proc.id, &suspension)
+                    .await;
             }
-        };
+        }
 
         Ok(())
     }
 
     pub async fn tick(&self) -> Result<(), anyhow::Error> {
-        self.0.tx.send(DEngineCmd::Tick).await.map_err(anyhow::Error::msg)
+        self.0
+            .tx
+            .send(DEngineCmd::Tick)
+            .await
+            .map_err(anyhow::Error::msg)
     }
 
     #[instrument(skip(self))]
@@ -431,7 +442,10 @@ impl DEngine {
             if let Some(suspension) = &res.suspension {
                 if let Some(generator_tag) = suspension.get("$generator") {
                     if generator_tag.as_bool().unwrap_or(false) {
-                        println!("advacing {} because of $generator: {:?}", proc_id, res.suspension);
+                        println!(
+                            "advacing {} because of $generator: {:?}",
+                            proc_id, res.suspension
+                        );
                         self.send(DEngineCmd::Send(DEngineCmdSend {
                             proc_id: proc_id.clone(),
                             step_id: "generator_step".to_string(),
@@ -445,7 +459,8 @@ impl DEngine {
                     }
                 } else if let Some(subscription) = suspension.get("$subscribe") {
                     println!("subscription detected");
-                    self.subscribe_proc_to_events(proc_id.clone(), subscription.clone()).await;
+                    self.subscribe_proc_to_events(proc_id.clone(), subscription.clone())
+                        .await;
                 }
             };
 
