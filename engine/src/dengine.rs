@@ -392,6 +392,23 @@ impl DEngine {
 
             db::proc_update(&conn, &proc_id, &res, &engine_status)?;
 
+            if let Some(suspension) = &res.suspension {
+                if let Some(generator_tag) = suspension.get("$generator") {
+                    if generator_tag.as_bool().unwrap_or(false) {
+                        self.send(DEngineCmd::Send(DEngineCmdSend {
+                            proc_id: proc_id.clone(),
+                            step_id: "generator_step".to_string(),
+                            req: ProcSendRequest {
+                                msg: serde_json::json!({
+                                    "$generator": true,
+                                }),
+                            },
+                        }))
+                        .await?;
+                    }
+                }
+            };
+
             Ok(res)
         };
 

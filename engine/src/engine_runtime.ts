@@ -223,9 +223,8 @@ export default function $step(): StepResult {
 	try {
 		if (isGenerator(fn)) {
 			let generator_instance = fn(this);
-			let attempts = 0;
 			val = generator_instance.next().value;
-			generator_instance.next().value; // this call should throw suspension
+			generator_instance.next().value;
 			return {
 				status: "SUSPEND",
 				suspension: {$generator: true},
