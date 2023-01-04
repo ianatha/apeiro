@@ -1,7 +1,7 @@
 use crate::StepResultStatus;
 use anyhow::anyhow;
 use nanoid::nanoid;
-use pristine_internal_api::{ProcStatusDebug, ProcSummary, StepResult};
+use pristine_internal_api::{EngineStatus, ProcStatusDebug, ProcSummary, StepResult};
 use r2d2::PooledConnection;
 use r2d2_sqlite::rusqlite::params;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -29,13 +29,13 @@ pub fn proc_update(
     conn: &Conn,
     id: &String,
     state: &StepResult,
-    snapshot: &Vec<u8>,
+    engine_status: &EngineStatus,
 ) -> Result<(), anyhow::Error> {
-    let frames_json = serde_json::to_string(&state.frames).unwrap();
-    let funcs_json = serde_json::to_string(&state.funcs).unwrap();
+    let frames_json = serde_json::to_string(&engine_status.frames).unwrap();
+    let funcs_json = serde_json::to_string(&engine_status.funcs).unwrap();
 
     conn.execute(
-        "UPDATE procs SET status=?, val=?, suspension=?, snapshot=?, frames=?, funcs=? WHERE id=?",
+        "UPDATE procs SET status=?, val=?, suspension=?, frames=?, funcs=? WHERE id=?",
         params![
             serde_json::to_string(&state.status).unwrap(),
             state
@@ -46,7 +46,6 @@ pub fn proc_update(
                 .suspension
                 .as_ref()
                 .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
-            snapshot,
             frames_json,
             funcs_json,
             id
@@ -58,21 +57,25 @@ pub fn proc_update(
 
 pub struct ProcDetails {
     pub compiled_src: String,
-    pub snapshot: Option<Vec<u8>>,
+    pub engine_status: EngineStatus,
     pub state: StepResult,
 }
 
 pub fn proc_get_details(conn: &Conn, id: &String) -> Result<ProcDetails, anyhow::Error> {
-    let mut stmt = conn.prepare("SELECT compiled_src, snapshot FROM procs WHERE id = ?")?;
+    let mut stmt = conn.prepare("SELECT compiled_src, frames, funcs FROM procs WHERE id = ?")?;
 
     let state = proc_get(conn, id)?;
 
     let result = stmt.query_row(&[id], |row| {
         let compiled_src: String = row.get(0)?;
-        let snapshot: Option<Vec<u8>> = row.get(1)?;
+        let frames: String = row.get(1)?;
+        let frames: Option<serde_json::Value> = serde_json::from_str(&frames).unwrap();
+        let funcs: String = row.get(2)?;
+        let funcs: Option<serde_json::Value> = serde_json::from_str(&funcs).unwrap();
+        let engine_status = EngineStatus { frames, funcs };
         Ok(ProcDetails {
             compiled_src,
-            snapshot,
+            engine_status,
             state,
         })
     })?;
@@ -81,8 +84,8 @@ pub fn proc_get_details(conn: &Conn, id: &String) -> Result<ProcDetails, anyhow:
 }
 
 pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
-    let mut stmt =
-        conn.prepare("SELECT status, val, suspension, frames, funcs FROM procs WHERE id = ?")?;
+    let mut stmt = conn.prepare("SELECT status, val, suspension FROM procs WHERE id = ?")?;
+    // frames, funcs
 
     let result = stmt.query_row(&[id], |row| {
         let status: String = row.get(0)?;
@@ -99,25 +102,24 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
         } else {
             None
         };
-        let frames: Result<String, _> = row.get(3);
-        let frames = if let Ok(frames) = frames {
-            serde_json::from_str(&frames).unwrap_or(None)
-        } else {
-            None
-        };
-        let funcs: Result<String, _> = row.get(4);
-        let funcs = if let Ok(funcs) = funcs {
-            serde_json::from_str(&funcs).unwrap_or(None)
-        } else {
-            None
-        };
+
+        // let frames: Result<String, _> = row.get(3);
+        // let frames = if let Ok(frames) = frames {
+        //     serde_json::from_str(&frames).unwrap_or(None)
+        // } else {
+        //     None
+        // };
+        // let funcs: Result<String, _> = row.get(4);
+        // let funcs = if let Ok(funcs) = funcs {
+        //     serde_json::from_str(&funcs).unwrap_or(None)
+        // } else {
+        //     None
+        // };
 
         Ok(StepResult {
             status,
             val,
             suspension,
-            frames,
-            funcs,
         })
     })?;
 

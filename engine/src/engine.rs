@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Ok, Result};
+use pristine_internal_api::EngineStatus;
 use pristine_internal_api::ProcSendRequest;
 use pristine_internal_api::StepResult;
 use serde_json::Value;
@@ -66,7 +67,7 @@ impl Engine {
         src: String,
         funcs: Option<Value>,
         frames: Option<Value>,
-    ) -> Result<StepResult> {
+    ) -> Result<(StepResult, EngineStatus)> {
         let mut engine_instance = EngineInstance::default();
         let align = std::mem::align_of::<usize>();
         let layout = std::alloc::Layout::from_size_align(
@@ -81,7 +82,7 @@ impl Engine {
 
         let mut isolate = self.setup_isolate(Isolate::new(CreateParams::default()));
 
-        let new_state: Result<StepResult> = {
+        let new_state: Result<(StepResult, EngineStatus)> = {
             let handle_scope = &mut HandleScope::new(&mut isolate);
 
             let engine_ref = v8::External::new(handle_scope, engine_external_ref);
@@ -141,20 +142,22 @@ impl Engine {
             let context_scope = &mut ContextScope::new(handle_scope, context);
 
             if let Some(funcs) = funcs {
-                let v8_funcs = serde_pristine::to_v8(context_scope, funcs).unwrap();
-                let v8_funcs = serde_pristine::resolve_ref(context_scope, v8_funcs);
-                println!("v8_funcs = {:#?}", v8_type(v8_funcs));
-                engine_instance.funcs = Some(v8_funcs.to_object(context_scope).unwrap());
+                let scope = &mut v8::EscapableHandleScope::new(context_scope);
+                let v8_funcs = serde_pristine::to_v8(scope, funcs).unwrap();
+                let v8_funcs = serde_pristine::resolve_ref(scope, v8_funcs);
+                let v8_funcs = v8_funcs.to_object(scope).unwrap();
+                // println!("v8_funcs = {:#?}", v8_type(v8_funcs));
+                engine_instance.funcs = Some(scope.escape(v8_funcs));
             } else {
                 println!("no v8 funcs!!!");
             }
 
             if let Some(frames) = frames {
-                let v8_frames = serde_pristine::to_v8(context_scope, frames).unwrap();
-                let v8_frames = serde_pristine::resolve_ref(context_scope, v8_frames);
-                engine_instance.frames = Some(v8_frames);
+                let scope = &mut v8::EscapableHandleScope::new(context_scope);
+                let v8_frames = serde_pristine::to_v8(scope, frames).unwrap();
+                let v8_frames = serde_pristine::resolve_ref(scope, v8_frames);
+                engine_instance.frames = Some(scope.escape(v8_frames));
                 println!("\n\n\n##resolve_ref fully done");
-
                 // crate::v8_helpers::v8_println(context_scope, v8_frames);
             }
 
@@ -201,18 +204,50 @@ impl Engine {
                     .ok_or(anyhow!("no result from $step"))?;
 
                 let js_stmt_result_obj = js_stmt_result.to_object(context_scope).unwrap();
-                let fns_key = v8::String::new(context_scope, "funcs").unwrap();
-                let new_fns = js_stmt_result_obj
-                    .get(context_scope, fns_key.into())
-                    .unwrap();
-
                 let val_key = v8::String::new(context_scope, "val").unwrap();
                 let new_val = js_stmt_result_obj
                     .get(context_scope, val_key.into())
                     .unwrap();
 
+                engine_instance.frames = None;
+                engine_instance.funcs = None;
+
+                let obj_cache_key = v8::String::new(context_scope, "__obj_cache").unwrap();
+                assert!(context
+                    .global(context_scope)
+                    .delete(context_scope, obj_cache_key.into(),)
+                    .unwrap());
+
+                // force GC
+                context_scope.low_memory_notification();
+                context_scope.perform_microtask_checkpoint();
+                context_scope
+                    .request_garbage_collection_for_testing(v8::GarbageCollectionType::Full);
+
+                // fetch engine_status
+                let get_engine_status = get_module_fn(
+                    context_scope,
+                    engine_instance.enginecode.unwrap(),
+                    "$get_engine_status",
+                )?;
+                let v8_engine_status = get_engine_status
+                    .call(context_scope, undefined, &[])
+                    .ok_or(anyhow!("no result from $get_engine_status"))?;
+
+                let v8_engine_status_obj = v8_engine_status.to_object(context_scope).unwrap();
+
+                let fns_key = v8::String::new(context_scope, "funcs").unwrap();
+                let new_fns = v8_engine_status_obj
+                    .get(context_scope, fns_key.into())
+                    .unwrap();
+
+                let frames_key = v8::String::new(context_scope, "frames").unwrap();
+                let new_frames = v8_engine_status_obj
+                    .get(context_scope, frames_key.into())
+                    .unwrap();
+
                 let counter = RefCell::new(0);
-                let res_json = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
+                let (res_json, engine_status) = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
                     let new_fns: serde_json::Value =
                         serde_pristine::from_v8(context_scope, new_fns).unwrap();
 
@@ -221,9 +256,11 @@ impl Engine {
                         serde_json::to_string_pretty(&new_fns).unwrap()
                     );
 
+                    let new_frames: serde_json::Value =
+                        serde_pristine::from_v8(context_scope, new_frames).unwrap();
+
                     let mut res_json: StepResult =
                         serde_pristine::from_v8(context_scope, js_stmt_result).unwrap();
-                    res_json.funcs = Some(new_fns);
 
                     if res_json.val.is_some() {
                         println!("$$$$$$ postprocessing res_json.val");
@@ -253,10 +290,17 @@ impl Engine {
 
                     // event!(Level::INFO, "res_json: {:?}", res_json);
 
-                    res_json
+                    let engine_status = EngineStatus {
+                        funcs: Some(new_fns),
+                        frames: Some(new_frames),
+                    };
+
+                    println!("engine_status: {:?}", engine_status);
+
+                    (res_json, engine_status)
                 });
 
-                Ok(res_json)
+                Ok((res_json, engine_status))
             })();
 
             match (context_scope.exception(), context_scope.message()) {
@@ -269,17 +313,14 @@ impl Engine {
                     Err(anyhow!("Exception: {} {}", exception_str, stack_trace_str))
                 }
                 _ => match new_state {
-                    Result::Ok(new_state) => Ok(new_state),
+                    Result::Ok((res_json, engine_status)) => Ok((res_json, engine_status)),
                     Err(e) => Err(e),
                 },
             }
         };
 
         match new_state {
-            Result::Ok(new_state) => {
-                isolate.perform_microtask_checkpoint();
-                Ok(new_state)
-            }
+            Result::Ok((res_json, engine_status)) => Ok((res_json, engine_status)),
             Err(e) => {
                 event!(Level::INFO, "error: {:?}", e);
                 Err(e)

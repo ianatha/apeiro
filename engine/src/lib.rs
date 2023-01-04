@@ -25,6 +25,7 @@ pub(crate) fn v8_init() {
             " --harmony-import-assertions",
             " --no-validate-asm",
             " --turbo_fast_api_calls",
+            " --expose-gc",
         );
 
         v8::V8::set_flags_from_string(&format!("{}{}", flags, " --predictable --random-seed=42"));

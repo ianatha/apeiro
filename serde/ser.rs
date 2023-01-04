@@ -715,10 +715,14 @@ pub fn resolve_fn<'s>(
     let script_output = script.run(scope).unwrap();
     let function: v8::Local<v8::Function> = unsafe { v8::Local::cast(script_output) };
     let undefined = v8::undefined(scope);
-    let function_res = function.call(scope, undefined.into(), &[obj.into()]).unwrap();
+    let function_res = function
+        .call(scope, undefined.into(), &[obj.into()])
+        .unwrap();
     let function_res: v8::Local<v8::Function> = unsafe { v8::Local::cast(function_res) };
     let scope_key = v8_struct_key(scope, "$$scope");
-    assert!(function_res.set(scope, scope_key.into(), obj.into()).unwrap());
+    assert!(function_res
+        .set(scope, scope_key.into(), obj.into())
+        .unwrap());
 
     return function_res;
 }

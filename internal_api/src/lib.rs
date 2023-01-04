@@ -61,6 +61,10 @@ pub struct StepResult {
     pub status: StepResultStatus,
     pub val: Option<Value>,
     pub suspension: Option<Value>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct EngineStatus {
     pub frames: Option<Value>,
     pub funcs: Option<Value>,
 }
@@ -87,23 +91,8 @@ impl std::fmt::Debug for StepResult {
             .field("status", &self.status)
             .field("val", &self.val)
             .field("suspension", &self.suspension)
-            .field("frames", &self.frames)
             .finish()
     }
-
-    // fn debug_display(v: StepResult) -> Option<()> {
-    //     let frames = v.frames?;
-    //     let frames = frames.as_array()?;
-    //     println!("======");
-    //     println!("# frames: {}", frames.len());
-    //     for frame in frames {
-    //         let fnhash = frame.get("fnhash")?.as_str()?;
-    //         let pc = frame.get("$pc")?.as_u64()?;
-    //         println!("* fnhash: {}, pc: {}", fnhash, pc);
-    //     }
-    //     println!("");
-    //     Some(())
-    // }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]

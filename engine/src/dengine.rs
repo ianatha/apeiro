@@ -171,9 +171,9 @@ impl DEngine {
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src);
 
-        let res = engine.step_process(compiled_src, None, None).await.unwrap();
+        let (res, engine_status) = engine.step_process(compiled_src, None, None).await.unwrap();
 
-        db::proc_update(&conn, &proc_id, &res, &vec![]).unwrap();
+        db::proc_update(&conn, &proc_id, &res, &engine_status).unwrap();
 
         Ok(ProcNewOutput {
             id: proc_id,
@@ -382,11 +382,15 @@ impl DEngine {
 
             engine.mbox.push(body.msg.clone());
 
-            let res = engine
-                .step_process(proc.compiled_src, proc.state.funcs, proc.state.frames)
+            let (res, engine_status) = engine
+                .step_process(
+                    proc.compiled_src,
+                    proc.engine_status.funcs,
+                    proc.engine_status.frames,
+                )
                 .await?;
 
-            db::proc_update(&conn, &proc_id, &res, &vec![])?;
+            db::proc_update(&conn, &proc_id, &res, &engine_status)?;
 
             Ok(res)
         };

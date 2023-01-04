@@ -50,12 +50,39 @@ export function $scope(parent = undefined, frame?: Frame) {
 		frame.scope = newScope;
 	}
 
-	$fns["scope_" + newScopeId] = newScope;
+	$fns["scope_" + newScopeId] = new WeakRef(newScope);
 	// $scopes.set(newScopeId, new WeakRef(newScope));
 
 	return newScope;
 }
 
+function $alive_funcs() {
+	let result = {};
+	let keys = Object.keys($fns);
+	for (const key of keys) {
+		let value = $fns[key];
+		if (value.deref) {
+			value = value.deref();
+		};
+		if (value !== undefined) {
+			result[key] = value;
+		}
+	}
+	return result;
+}
+
+function $reanimate_funcs(inp) {
+	let keys = Object.keys(inp);
+	for (const key of keys) {
+		let value = inp[key];
+		if (value !== undefined && typeof value == "object") {
+			log("creating weakref");
+			log(JSON.stringify(value));
+			inp[key] = new WeakRef(value);
+		}
+	}
+	return inp;
+}
 // ## Frames
 
 type FnDeclId = string;
@@ -148,9 +175,6 @@ interface SuspendStepResult {
 	status: "SUSPEND";
 	val?: any;
 	suspension: Record<string, any>;
-	current_frame: number;
-	frames: any;
-	funcs: any;
 }
 
 interface ErrorStepResult {
@@ -178,16 +202,23 @@ function garbage_collect() {
 	// }
 }
 
+export function $get_engine_status(): {
+	current_frame: number;
+	frames: any;
+	funcs: any;
+} {
+	return {
+		current_frame: current_frame,
+		frames: $frames,
+		funcs: $alive_funcs(),
+	};
+}
+
 export default function $step(): StepResult {
-	log("hello from $step3");
-	log("hello from $step3, 2nd");
-	log("hello from $step3, 3rd");
 	let fn = $usercode().default;
 	current_frame = 0;
 	$frames = $get_frames();
-	$fns = $get_funcs();
-	log("$fns length");
-	log(JSON.stringify(Object.keys($fns).length, null, 2));
+	$fns = $reanimate_funcs($get_funcs());
 	let val = undefined;
 	try {
 		if (isGenerator(fn)) {
@@ -195,14 +226,10 @@ export default function $step(): StepResult {
 			let attempts = 0;
 			val = generator_instance.next().value;
 			generator_instance.next().value; // this call should throw suspension
-
 			return {
 				status: "SUSPEND",
 				suspension: {$generator: true},
 				val: val,
-				current_frame: current_frame,
-				frames: $frames,
-				funcs: $fns,
 			};
 		} else {
 			const val = fn();
@@ -214,14 +241,10 @@ export default function $step(): StepResult {
 	} catch (e) {
 		if ($isSuspendSignal(e)) {
 			log("hello from $step3, before return");
-
 			return {
 				status: "SUSPEND",
 				val,
 				suspension: e.until,
-				current_frame: current_frame,
-				frames: $frames,
-				funcs: $fns,
 			};
 		} else {
 			throw e;
