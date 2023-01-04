@@ -289,8 +289,6 @@ impl<'a, 'b, 'c> ser::SerializeStruct for StructSerializers<'a, 'b, 'c> {
 pub enum MapSerializerMode {
     #[default]
     None,
-    Function,
-    ObjLookup(Option<i32>),
     ObjWithId(Option<i32>),
 }
 
@@ -321,15 +319,9 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
 
     fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<()> {
         let key = key.serialize(Serializer::new(self.scope))?;
-        // if key.to_rust_string_lossy(&mut self.scope.borrow_mut()) == "$$type" {
-        //     self.mode = MapSerializerMode::Function;
-        // }
         if key.to_rust_string_lossy(&mut self.scope.borrow_mut()) == "$$obj_id" {
             self.mode = MapSerializerMode::ObjWithId(None);
         }
-        // if key.to_rust_string_lossy(&mut self.scope.borrow_mut()) == "$$__$$obj_id_ref" {
-        //     self.mode = MapSerializerMode::ObjLookup(None);
-        // }
         self.keys.push(
             key.try_into()
                 .map_err(|_| Error::Message("Serialized Maps expect String keys".into()))?,
@@ -348,15 +340,6 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
                 self.keys.pop();
                 Ok(())
             }
-            MapSerializerMode::ObjLookup(None) => {
-                let v8_obj_id_ref = value.serialize(Serializer::new(self.scope))?;
-                let obj_id_ref = v8_obj_id_ref
-                    .int32_value(&mut self.scope.borrow_mut())
-                    .unwrap();
-                self.mode = MapSerializerMode::ObjLookup(Some(obj_id_ref));
-                self.keys.pop();
-                Ok(())
-            }
             _ => {
                 let v8_value = value.serialize(Serializer::new(self.scope))?;
                 self.values.push(v8_value);
@@ -369,35 +352,6 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
         debug_assert!(self.keys.len() == self.values.len());
         let scope = &mut *self.scope.borrow_mut();
         let null = v8::null(scope).into();
-        match self.mode {
-            MapSerializerMode::ObjLookup(Some(obj_id_ref)) => {
-                return Ok(get_from_scope_cache(scope, obj_id_ref)
-                    .expect(format!("couldnt lookup object: {}", obj_id_ref).as_str())
-                    .into());
-            }
-            MapSerializerMode::Function => {
-                let src = self.values[1]
-                    .to_string(scope)
-                    .unwrap()
-                    .to_rust_string_lossy(scope);
-                let scope_id_ref = self.values[1].int32_value(scope).unwrap();
-                let src = format!(
-                    r#"(function (){{
-    // scope_id_ref: {}
-    let $sc1 = undefined;
-    return {};
-}})()"#,
-                    scope_id_ref, src
-                );
-                println!("\n\n\nsrc: {}\n\n", src);
-                let v8_src = v8::String::new(scope, &src).unwrap();
-                let script = v8::Script::compile(scope, v8_src, None).unwrap();
-                let script_output = script.run(scope).unwrap();
-                return Ok(script_output.into());
-            }
-            _ => {}
-        }
-
         let obj = v8::Object::with_prototype_and_properties(
             scope,
             null,
@@ -677,7 +631,7 @@ fn set_in_scope_cache<'s>(
     obj: v8::Local<'s, v8::Object>,
 ) {
     println!("set_in_scope_cache: {}\n\n\n\n", obj_id);
-    let v8_obj_cache_key = v8::String::new(scope, "__obj_cache").unwrap();
+    let v8_obj_cache_key = v8_struct_key(scope, "__obj_cache");
     let global = scope.get_current_context().global(scope);
     let v8_obj_cache = global.get(scope, v8_obj_cache_key.into()).unwrap();
     let v8_obj_cache = if v8_obj_cache.is_undefined() {
@@ -701,7 +655,7 @@ fn get_from_scope_cache<'s>(
 ) -> Option<v8::Local<'s, v8::Object>> {
     println!("\n\n### get_from_scope_cache {}", obj_id);
     let global = scope.get_current_context().global(scope);
-    let v8_obj_cache_key = v8::String::new(scope, "__obj_cache").unwrap();
+    let v8_obj_cache_key = v8_struct_key(scope, "__obj_cache");
     let v8_obj_cache = global.get(scope, v8_obj_cache_key.into()).unwrap();
     let v8_obj_cache = if v8_obj_cache.is_undefined() {
         return None;
@@ -716,6 +670,81 @@ fn get_from_scope_cache<'s>(
         println!("get_from_scope_cache: {}", obj_id);
         Some(v8_lookup_res.to_object(scope).unwrap())
     }
+}
+
+pub fn resolve_fn<'s>(
+    scope: &mut v8::HandleScope<'s>,
+    obj: v8::Local<'s, v8::Object>,
+) -> v8::Local<'s, v8::Function> {
+    let src_key = v8_struct_key(scope, "src");
+    let scope_key = v8_struct_key(scope, "$$scope");
+    let src = obj
+        .get(scope, src_key.into())
+        .unwrap()
+        .to_string(scope)
+        .unwrap()
+        .to_rust_string_lossy(scope);
+
+    let scope_obj = obj
+        .get(scope, scope_key.into())
+        .unwrap()
+        .to_object(scope)
+        .unwrap();
+
+    let obj_id_ref = v8_struct_key(scope, "$$__$$obj_id_ref");
+    let obj_ref = scope_obj
+        .get(scope, obj_id_ref.into())
+        .unwrap()
+        .int32_value(scope)
+        .unwrap();
+
+    let obj = get_from_scope_cache(scope, obj_ref).unwrap();
+    v8_println(scope, obj.into());
+
+    let src = format!(
+        r#"(function($sc1) {{
+    return {};
+}})"#,
+        src
+    );
+
+    println!("{}", src);
+
+    let v8_src = v8::String::new(scope, &src).unwrap();
+    let script = v8::Script::compile(scope, v8_src, None).unwrap();
+    let script_output = script.run(scope).unwrap();
+    let function: v8::Local<v8::Function> = unsafe { v8::Local::cast(script_output) };
+    let undefined = v8::undefined(scope);
+    let function_res = function.call(scope, undefined.into(), &[obj.into()]).unwrap();
+    let function_res: v8::Local<v8::Function> = unsafe { v8::Local::cast(function_res) };
+    let scope_key = v8_struct_key(scope, "$$scope");
+    assert!(function_res.set(scope, scope_key.into(), obj.into()).unwrap());
+
+    return function_res;
+}
+
+pub fn is_object_ref<'s>(
+    scope: &mut v8::HandleScope<'s>,
+    obj: &v8::Local<'s, v8::Object>,
+) -> Option<i32> {
+    let v8_obj_id_key = v8_struct_key(scope, "$$__$$obj_id_ref");
+    let v8_obj_id = obj.get(scope, v8_obj_id_key.into())?;
+    if !v8_obj_id.is_null_or_undefined() {
+        return Some(v8_obj_id.to_integer(scope)?.value() as i32);
+    }
+    None
+}
+
+pub fn is_function_ref<'s>(
+    scope: &mut v8::HandleScope<'s>,
+    obj: &v8::Local<'s, v8::Object>,
+) -> Option<bool> {
+    let v8_obj_id_key = v8_struct_key(scope, "$$type");
+    let v8_obj_id = obj.get(scope, v8_obj_id_key.into())?;
+    if !v8_obj_id.is_null_or_undefined() {
+        return Some(true);
+    }
+    None
 }
 
 pub fn resolve_ref<'s>(
@@ -736,22 +765,20 @@ pub fn resolve_ref<'s>(
         }
         return arr.into();
     } else if obj.is_object() {
-        println!("\n\n### obj resolve_ref");
         let obj = obj.to_object(scope).unwrap();
-        // if contains key $$__$$obj_id_ref, then get_from_scope_cache
-        let v8_obj_id_key = v8::String::new(scope, "$$__$$obj_id_ref").unwrap();
-        let v8_obj_id = obj.get(scope, v8_obj_id_key.into()).unwrap();
-        if !v8_obj_id.is_null_or_undefined() {
-            println!("#### yes, ref");
-            let v8_obj_id = v8_obj_id.to_integer(scope).unwrap().value() as i32;
+
+        println!("\n\n### obj resolve_ref");
+        if let Some(v8_obj_id) = is_object_ref(scope, &obj) {
             let v8_obj_cache = get_from_scope_cache(scope, v8_obj_id);
             return v8_obj_cache.expect("obj_id_ref not found in cache").into();
-        } else {
-            println!("#### not a ref, {}", v8_obj_id.to_rust_string_lossy(scope));
-            v8_println(scope, obj.into());
+        }
+        if let Some(true) = is_function_ref(scope, &obj) {
+            return resolve_fn(scope, obj).into();
         }
 
         let indices = obj
+            .to_object(scope)
+            .unwrap()
             .get_own_property_names(
                 scope,
                 v8::GetPropertyNamesArgs {
