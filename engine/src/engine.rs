@@ -11,6 +11,8 @@ use v8::ScriptOrigin;
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::v8_helpers::stack_trace_to_string;
+use crate::v8_helpers::v8_println_array;
+use crate::v8_helpers::v8_struct_key;
 use crate::v8_helpers::v8_type;
 use crate::v8_init;
 use crate::v8_str;
@@ -204,9 +206,14 @@ impl Engine {
                     .ok_or(anyhow!("no result from $step"))?;
 
                 let js_stmt_result_obj = js_stmt_result.to_object(context_scope).unwrap();
-                let val_key = v8::String::new(context_scope, "val").unwrap();
+                let val_key = v8_struct_key(context_scope, "val");
                 let new_val = js_stmt_result_obj
                     .get(context_scope, val_key.into())
+                    .unwrap();
+
+                let suspension_key = v8_struct_key(context_scope, "suspension");
+                let new_suspension = js_stmt_result_obj
+                    .get(context_scope, suspension_key.into())
                     .unwrap();
 
                 engine_instance.frames = None;
@@ -281,6 +288,29 @@ impl Engine {
                         let json_val: serde_json::Value =
                             serde_pristine::from_v8(context_scope, new_val).unwrap();
                         res_json.val = Some(json_val);
+                    }
+
+                    if res_json.suspension.is_some() {
+                        println!("$$$$$$ postprocessing res_json.suspension");
+
+                        let new_suspension =
+                            serde_pristine::resolve_ref(context_scope, new_suspension);
+                        crate::v8_helpers::v8_println(context_scope, new_suspension);
+                        let global = context_scope.get_current_context().global(context_scope);
+                        let disable_references_key =
+                            v8::String::new(context_scope, "$$disable_references").unwrap();
+                        let true_val = v8::Boolean::new(context_scope, true);
+                        assert!(global
+                            .set(
+                                context_scope,
+                                disable_references_key.into(),
+                                true_val.into()
+                            )
+                            .unwrap());
+
+                        let json_val: serde_json::Value =
+                            serde_pristine::from_v8(context_scope, new_suspension).unwrap();
+                        res_json.suspension = Some(json_val);
                     }
 
                     println!(

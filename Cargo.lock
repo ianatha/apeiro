@@ -2196,6 +2196,7 @@ dependencies = [
  "serde_json",
  "serde_json_matcher",
  "serde_pristine",
+ "serde_v8",
  "tokio",
  "tokio-test",
  "tracing",

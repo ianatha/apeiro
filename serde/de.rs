@@ -421,6 +421,8 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de> for &'x mut Deserializer<'a, 'b,
                             obj_id_ref: priv_val.int32_value(self.scope).unwrap(),
                         })
                     } else {
+                        let public_key = v8::String::new(self.scope, "$$obj_id").unwrap();
+                        assert!(obj.delete(self.scope, public_key.into(),).unwrap());
                         None
                     }
                 }

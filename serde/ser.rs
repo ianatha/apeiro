@@ -734,7 +734,9 @@ pub fn is_object_ref<'s>(
     let v8_obj_id_key = v8_struct_key(scope, "$$__$$obj_id_ref");
     let v8_obj_id = obj.get(scope, v8_obj_id_key.into())?;
     if !v8_obj_id.is_null_or_undefined() {
-        return Some(v8_obj_id.to_integer(scope)?.value() as i32);
+        let obj_ref_id = v8_obj_id.to_integer(scope)?.value() as i32;
+        println!("ref id found: {}", obj_ref_id);
+        return Some(obj_ref_id);
     }
     None
 }

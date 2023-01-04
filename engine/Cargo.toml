@@ -19,6 +19,7 @@ r2d2_sqlite = "0.21.0"
 futures-core = "0.3.25"
 serde_json_matcher = "0.1.4"
 tracing = { version = "0.1", features = ["log-always"] }
+serde_v8 = "0.75.0"
 
 [dev-dependencies]
 tokio-test = "0.4.2"

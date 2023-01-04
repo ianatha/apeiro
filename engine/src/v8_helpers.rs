@@ -70,11 +70,11 @@ pub fn v8_type(val: Local<Value>) -> String {
     .into()
 }
 
-// pub fn v8_println<'s>(context_scope: &mut HandleScope<'s, Context>, v8_value: Local<'s, Value>) {
-//     let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
-//     let json = serde_json::to_string_pretty(&value).unwrap();
-//     println!("{}", json);
-// }
+pub fn v8_println<'s>(context_scope: &mut HandleScope<'s, Context>, v8_value: Local<'s, Value>) {
+    let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
+    let json = serde_json::to_string_pretty(&value).unwrap();
+    println!("{}", json);
+}
 
 pub fn v8_println_array(context_scope: &mut HandleScope<Context>, props: Local<Array>) {
     if props.length() == 0 {
@@ -112,4 +112,14 @@ macro_rules! struct_method_to_v8 {
             $struct_type::$method(struct_instance, scope, args, retval);
         }
     };
+}
+
+pub fn v8_struct_key<'s>(
+    scope: &mut v8::HandleScope<'s>,
+    field: &'static str,
+) -> v8::Local<'s, v8::String> {
+    // Internalized v8 strings are significantly faster than "normal" v8 strings
+    // since v8 deduplicates re-used strings minimizing new allocations
+    // see: https://github.com/v8/v8/blob/14ac92e02cc3db38131a57e75e2392529f405f2f/include/v8.h#L3165-L3171
+    v8::String::new_from_utf8(scope, field.as_ref(), v8::NewStringType::Internalized).unwrap()
 }
