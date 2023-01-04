@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 use tracing::trace;
 
 use crate::db;
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::string::String;
 use std::sync::Arc;
@@ -41,6 +42,7 @@ pub(crate) enum DEngineCmd {
     Broadcast(String, String, ProcEvent),
     Send(DEngineCmdSend),
     Log((String, String, serde_json::Value)),
+    Tick,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +61,7 @@ struct SharedDEngine {
     tx: mpsc::Sender<DEngineCmd>,
     watchers: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<ProcEvent>>>>,
     watchers_exec: Arc<RwLock<HashMap<(String, String), tokio::sync::watch::Sender<ProcEvent>>>>,
+    proc_subscriptions: Arc<RwLock<HashMap<String, Vec<serde_json::Value>>>>
 }
 
 pub struct EventLoop {
@@ -76,6 +79,11 @@ impl EventLoop {
         while let Some(message) = self.rx.recv().await {
             event!(Level::INFO, message = ?message);
             match message {
+                DEngineCmd::Tick => {
+                    let dengine = self.dengine.clone();
+                    let s = dengine.get_all_subscriptions().await;
+                    println!("subscriptions: {:?}", s);
+                }
                 DEngineCmd::Broadcast(proc_id, exec_id, msg) => {
                     let dengine = self.dengine.clone();
                     dengine.send_to_watchers(&proc_id, &msg).await.unwrap();
@@ -157,6 +165,13 @@ impl DEngine {
         Ok(proc_lock)
     }
 
+    pub async fn process_post_step_suspension(&self, proc_id: &String, suspension: &serde_json::Value) {
+        if let Some(subscription) = suspension.get("$subscribe") {
+            println!("subscription detected");
+            self.subscribe_proc_to_events(proc_id.clone(), subscription.clone()).await;
+        }
+    }
+
     #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let conn = self.0.db.get().map_err(|_e| anyhow!("no conn"))?;
@@ -174,6 +189,10 @@ impl DEngine {
         let (res, engine_status) = engine.step_process(compiled_src, None, None).await.unwrap();
 
         db::proc_update(&conn, &proc_id, &res, &engine_status).unwrap();
+
+        if let Some(suspension) = &res.suspension {
+            self.process_post_step_suspension(&proc_id, suspension).await;
+        };
 
         Ok(ProcNewOutput {
             id: proc_id,
@@ -300,6 +319,23 @@ impl DEngine {
         self.0.tx.send(cmd).await.map_err(anyhow::Error::msg)
     }
 
+    pub async fn load_proc_subscriptions(&self) -> Result<(), anyhow::Error> {
+        let conn = self.0.db.get()?;
+
+        let procs = db::proc_list(&conn)?;
+        for proc in procs {
+            if let Some(suspension) = proc.suspension {
+                self.process_post_step_suspension(&proc.id, &suspension).await;
+            }
+        };
+
+        Ok(())
+    }
+
+    pub async fn tick(&self) -> Result<(), anyhow::Error> {
+        self.0.tx.send(DEngineCmd::Tick).await.map_err(anyhow::Error::msg)
+    }
+
     #[instrument(skip(self))]
     pub async fn proc_send(
         &self,
@@ -395,6 +431,7 @@ impl DEngine {
             if let Some(suspension) = &res.suspension {
                 if let Some(generator_tag) = suspension.get("$generator") {
                     if generator_tag.as_bool().unwrap_or(false) {
+                        println!("advacing {} because of $generator: {:?}", proc_id, res.suspension);
                         self.send(DEngineCmd::Send(DEngineCmdSend {
                             proc_id: proc_id.clone(),
                             step_id: "generator_step".to_string(),
@@ -406,6 +443,9 @@ impl DEngine {
                         }))
                         .await?;
                     }
+                } else if let Some(subscription) = suspension.get("$subscribe") {
+                    println!("subscription detected");
+                    self.subscribe_proc_to_events(proc_id.clone(), subscription.clone()).await;
                 }
             };
 
@@ -415,6 +455,27 @@ impl DEngine {
         event!(Level::INFO, "result: {:?}", res);
 
         res
+    }
+
+    pub async fn get_all_subscriptions(&self) -> Vec<serde_json::Value> {
+        let mut result = vec![];
+        let proc_subscriptions_locked = self.0.proc_subscriptions.read().await;
+        for (_, proc_subscriptions) in proc_subscriptions_locked.iter() {
+            for subscription in proc_subscriptions {
+                result.push(subscription.clone());
+            }
+        }
+        result
+    }
+
+    #[instrument(skip(self))]
+    pub async fn subscribe_proc_to_events(&self, proc_id: String, subscription: serde_json::Value) {
+        let mut proc_subscriptions_locked = self.0.proc_subscriptions.write().await;
+        if let Some(subscriptions) = proc_subscriptions_locked.get_mut(&proc_id) {
+            subscriptions.push(subscription);
+        } else {
+            proc_subscriptions_locked.insert(proc_id, vec![subscription]);
+        }
     }
 
     #[instrument(skip(self))]
@@ -499,6 +560,7 @@ impl SharedDEngine {
             tx: tx.clone(),
             watchers: Arc::new(RwLock::new(HashMap::new())),
             watchers_exec: Arc::new(RwLock::new(HashMap::new())),
+            proc_subscriptions: Arc::new(RwLock::new(HashMap::new())),
         };
 
         instance.init_db()?;

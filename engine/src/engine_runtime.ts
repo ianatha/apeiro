@@ -239,7 +239,6 @@ export default function $step(): StepResult {
 		}
 	} catch (e) {
 		if ($isSuspendSignal(e)) {
-			log("hello from $step3, before return");
 			return {
 				status: "SUSPEND",
 				val,

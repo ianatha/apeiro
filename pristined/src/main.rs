@@ -60,6 +60,16 @@ async fn main() -> anyhow::Result<()> {
         event_loop.run().await;
     });
 
+    dengine.load_proc_subscriptions().await?;
+
+    let dengine2 = dengine.clone();
+    tokio::task::spawn(async move {
+        loop {
+            dengine2.tick().await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    });
+
     println!("Starting HTTP daemon on port {}", port);
     HttpServer::new(move || {
         App::new()
