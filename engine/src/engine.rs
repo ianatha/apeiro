@@ -10,9 +10,11 @@ use v8::ScriptOrigin;
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::v8_helpers::stack_trace_to_string;
+use crate::v8_helpers::v8_type;
 use crate::v8_init;
 use crate::v8_str;
 use crate::DEngine;
+use std::cell::RefCell;
 use std::string::String;
 
 use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
@@ -36,6 +38,7 @@ pub struct EngineInstance<'a> {
     pub enginecode: Option<v8::Local<'a, v8::Module>>,
     pub usercode: Option<v8::Local<'a, v8::Module>>,
     pub frames: Option<v8::Local<'a, v8::Value>>,
+    pub funcs: Option<v8::Local<'a, v8::Object>>,
 }
 
 impl Engine {
@@ -58,7 +61,12 @@ impl Engine {
         isolate
     }
 
-    pub async fn step_process(&mut self, src: String, frames: Option<Value>) -> Result<StepResult> {
+    pub async fn step_process(
+        &mut self,
+        src: String,
+        funcs: Option<Value>,
+        frames: Option<Value>,
+    ) -> Result<StepResult> {
         let mut engine_instance = EngineInstance::default();
         let align = std::mem::align_of::<usize>();
         let layout = std::alloc::Layout::from_size_align(
@@ -99,6 +107,10 @@ impl Engine {
                 .data(engine_instance_ref.into())
                 .build(handle_scope);
 
+            let get_funcs_fn_builder = v8::FunctionTemplate::builder(funcs_callback)
+                .data(engine_instance_ref.into())
+                .build(handle_scope);
+
             let global = v8::ObjectTemplate::new(handle_scope);
             global.set(
                 v8::String::new(handle_scope, "log").unwrap().into(),
@@ -120,16 +132,30 @@ impl Engine {
                 v8::String::new(handle_scope, "$get_frames").unwrap().into(),
                 get_frames_fn_builder.into(),
             );
+            global.set(
+                v8::String::new(handle_scope, "$get_funcs").unwrap().into(),
+                get_funcs_fn_builder.into(),
+            );
 
             let context = v8::Context::new_from_template(handle_scope, global);
             let context_scope = &mut ContextScope::new(handle_scope, context);
 
-            match frames {
-                Some(frames) => {
-                    engine_instance.frames =
-                        Some(serde_pristine::to_v8(context_scope, frames).unwrap());
-                }
-                None => {}
+            if let Some(funcs) = funcs {
+                let v8_funcs = serde_pristine::to_v8(context_scope, funcs).unwrap();
+                let v8_funcs = serde_pristine::resolve_ref(context_scope, v8_funcs);
+                println!("v8_funcs = {:#?}", v8_type(v8_funcs));
+                engine_instance.funcs = Some(v8_funcs.to_object(context_scope).unwrap());
+            } else {
+                println!("no v8 funcs!!!");
+            }
+
+            if let Some(frames) = frames {
+                let v8_frames = serde_pristine::to_v8(context_scope, frames).unwrap();
+                let v8_frames = serde_pristine::resolve_ref(context_scope, v8_frames);
+                engine_instance.frames = Some(v8_frames);
+                println!("\n\n\n##resolve_ref fully done");
+
+                // crate::v8_helpers::v8_println(context_scope, v8_frames);
             }
 
             let context_scope = &mut v8::TryCatch::new(context_scope);
@@ -138,6 +164,18 @@ impl Engine {
                     let engine_runtime = engine_runtime_fn();
                     let enginecode_module =
                         instantiate_module(context_scope, "engine".into(), engine_runtime).unwrap();
+
+                    if let Some(v8_funcs) = engine_instance.funcs {
+                        let enginecode_obj = enginecode_module
+                            .get_module_namespace()
+                            .to_object(context_scope)
+                            .unwrap();
+                        let fns_key = v8::String::new(context_scope, "$fns").unwrap();
+                        assert!(enginecode_obj
+                            .set(context_scope, fns_key.into(), v8_funcs.into())
+                            .unwrap());
+                    }
+
                     engine_instance.enginecode = Some(enginecode_module);
 
                     let global = context.global(context_scope);
@@ -162,11 +200,33 @@ impl Engine {
                     .call(context_scope, undefined, &[])
                     .ok_or(anyhow!("no result from $step"))?;
 
-                let res_json: StepResult =
-                    serde_pristine::from_v8(context_scope, js_stmt_result)
-                        .map_err(|e| anyhow!("couldnt convert to json: {}", e))?;
+                let new_fns = js_stmt_result.to_object(context_scope).unwrap();
+                let fns_key = v8::String::new(context_scope, "funcs").unwrap();
+                let new_fns = new_fns.get(context_scope, fns_key.into()).unwrap();
 
-                event!(Level::INFO, "res_json: {:?}", res_json);
+                let counter = RefCell::new(0);
+                let res_json = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
+                    let new_fns: serde_json::Value =
+                        serde_pristine::from_v8(context_scope, new_fns).unwrap();
+
+                    println!(
+                        "\n\n\n\nnew_fns: {}",
+                        serde_json::to_string_pretty(&new_fns).unwrap()
+                    );
+
+                    let mut res_json: StepResult =
+                        serde_pristine::from_v8(context_scope, js_stmt_result).unwrap();
+                    res_json.funcs = Some(new_fns);
+
+                    println!(
+                        "\n\n\n\nres_json: {}\n\n\n\n\n\n",
+                        serde_json::to_string_pretty(&res_json).unwrap()
+                    );
+
+                    // event!(Level::INFO, "res_json: {:?}", res_json);
+
+                    res_json
+                });
 
                 Ok(res_json)
             })();
@@ -215,7 +275,9 @@ impl Engine {
 
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
-            let msg = serde_pristine::from_v8(scope, msg).unwrap();
+            let counter = RefCell::new(-1);
+            let msg = serde_pristine::OBJ_COUNT_DE
+                .set(&counter, || serde_pristine::from_v8(scope, msg).unwrap());
 
             let proc_id = self.proc_id.clone();
             tokio::task::spawn(async move {
@@ -238,7 +300,10 @@ impl Engine {
     ) {
         let _context = v8::Context::new(scope);
 
-        let filter = serde_pristine::from_v8(scope, args.get(0)).unwrap();
+        let counter = RefCell::new(-1);
+        let filter = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
+            serde_pristine::from_v8(scope, args.get(0)).unwrap()
+        });
         let filter = serde_json_matcher::from_json(filter).unwrap();
         for (index, msg) in self.mbox.iter().enumerate() {
             if filter.matches(msg) {
@@ -289,7 +354,9 @@ impl Engine {
             let proc_id: String = proc_id.to_rust_string_lossy(scope);
 
             let msg = args.get(1);
-            let msg = serde_pristine::from_v8(scope, msg).unwrap();
+            let counter = RefCell::new(-1);
+            let msg = serde_pristine::OBJ_COUNT_DE
+                .set(&counter, || serde_pristine::from_v8(scope, msg).unwrap());
 
             tokio::task::spawn(async move {
                 event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
@@ -330,6 +397,25 @@ fn frames_callback(
         .frames
         .unwrap_or(v8::Array::new(scope, 0).into());
     retval.set(val);
+}
+
+fn funcs_callback(
+    scope: &mut v8::HandleScope,
+    args: v8::FunctionCallbackArguments,
+    mut retval: v8::ReturnValue,
+) {
+    let external = v8::Local::<v8::External>::try_from(args.data()).unwrap();
+    let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
+    let val = struct_instance
+        .funcs
+        .unwrap_or({
+            let obj = v8::Object::new(scope);
+            let scope_last_id_key = v8_str!(scope, "$scopeLastId");
+            let scope_last_id_val = v8::Integer::new(scope, 0);
+            obj.set(scope, scope_last_id_key, scope_last_id_val.into());
+            obj
+        });
+    retval.set(val.into());
 }
 
 fn usercode_callback(

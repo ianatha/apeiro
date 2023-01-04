@@ -1,9 +1,9 @@
 // ## Global Datastoers
 
-// const $scopes: Map<number, Scope> = new Map();
+const $scopes: Map<number, Scope> = new Map();
 let $frames: Frame[] = [];
 type FunctionRef = any;
-const $fns: Map<string, FunctionRef> = new Map();
+let $fns: Record<string, FunctionRef> = {};
 
 // ## Scopes
 
@@ -13,9 +13,10 @@ interface Scope extends Record<string, any> {
 
 const SYMBOL_SCOPE_ID = Symbol("pristine:scope:id");
 
+$fns.$scopeLastId = 0;
+
 const scopeIdGenerator = function() {
-	let i = 0;
-	return () => { return i++; };
+	return () => { return $fns.$scopeLastId++; };
 }();
 
 export function $scope(parent = undefined, frame?: Frame) {
@@ -28,7 +29,7 @@ export function $scope(parent = undefined, frame?: Frame) {
 
 	const newScopeId = scopeIdGenerator();
 	const newScope: Scope = {
-		$$scope_id: newScopeId,
+		// $$scope_id: newScopeId,
 	 };
 
 	Object.defineProperty(newScope, SYMBOL_SCOPE_ID, {
@@ -49,6 +50,7 @@ export function $scope(parent = undefined, frame?: Frame) {
 		frame.scope = newScope;
 	}
 
+	$fns["scope_" + newScopeId] = newScope;
 	// $scopes.set(newScopeId, new WeakRef(newScope));
 
 	return newScope;
@@ -104,13 +106,17 @@ export function $new_frame(fnhash, last_fn_hash) {
 
 
 export function $fn(fn, hash, in_scope) {
-	$fns.set(hash, {
-		id: hash,
-		in_scope: in_scope,
-		src: fn.toString(),
-		ref: new WeakRef(fn)
-	});
-	fn.id = hash;
+	// $fns.set(hash, {
+	// 	id: hash,
+	// 	src: fn.toString(),
+	// 	ref: new WeakRef(fn)
+	// });
+	fn.hash = hash;
+	if (in_scope) {
+		fn.$$scope = in_scope;
+	} else {
+		fn.$$scope = "undefined";
+	}
 	return fn;
 }
 
@@ -178,13 +184,10 @@ export default function $step(): StepResult {
 	log("hello from $step3, 3rd");
 	let fn = $usercode().default;
 	current_frame = 0;
-	if (!$frames || $frames.length == 0) {
-		$frames = $get_frames();
-	}
-	if ($frames === null || $frames === undefined) {
-		log("no frames");
-		$frames = [];
-	}
+	$frames = $get_frames();
+	$fns = $get_funcs();
+	log("$fns length");
+	log(JSON.stringify(Object.keys($fns).length, null, 2));
 	let val = undefined;
 	try {
 		if (isGenerator(fn)) {

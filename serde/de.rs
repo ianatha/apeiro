@@ -1,6 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate serde;
 
+use std::cell::{Ref, RefCell};
 use std::convert::TryFrom;
 
 use self::serde::de::IntoDeserializer;
@@ -33,6 +34,10 @@ impl<'a, 'b, 's> Deserializer<'a, 'b, 's> {
         }
     }
 }
+
+better_scoped_tls::scoped_tls!(
+  pub static OBJ_COUNT_DE: RefCell<i32>
+);
 
 // from_v8 deserializes a v8::Value into a Deserializable / rust struct
 pub fn from_v8<'de, 'a, 'b, 's, T>(
@@ -112,8 +117,6 @@ impl<'de, 'a, 'b, 's> Deserializer<'a, 'b, 's> {
     where
         V: Visitor<'de>,
     {
-        let fn_name = self.input.to_string(self.scope).unwrap();
-        let fn_name = fn_name.to_rust_string_lossy(self.scope);
         let function = unsafe { v8::Local::cast(self.input) };
         visitor.visit_map(MapFunctionAccess::new(function, self.scope))
     }
@@ -166,7 +169,7 @@ impl<'de> de::MapAccess<'de> for MapFunctionAccess<'_, '_> {
             }
             4 => {
                 self.pos = 5;
-                let deserializer = IntoDeserializer::into_deserializer("todo");
+                let deserializer = IntoDeserializer::into_deserializer("$$scope");
                 return seed.deserialize(deserializer).map(Some);
             }
             _ => Ok(None),
@@ -189,8 +192,10 @@ impl<'de> de::MapAccess<'de> for MapFunctionAccess<'_, '_> {
             }
             5 => {
                 self.pos = 5;
-                let deserializer = IntoDeserializer::into_deserializer("todo!()");
-                seed.deserialize(deserializer)
+                let scope_id_key = v8::String::new(self.scope, "$$scope").unwrap();
+                let scope_id = self.obj.get(self.scope, scope_id_key.into()).unwrap();
+                let mut deserializer = Deserializer::new(self.scope, scope_id, None);
+                seed.deserialize(&mut deserializer)
             }
             _ => Result::Err(crate::Error::Message(
                 "Call next_key_seed before next_value_seed".to_string(),
@@ -387,6 +392,36 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de> for &'x mut Deserializer<'a, 'b,
         // Assume object, then get_own_property_names
         let obj =
             v8::Local::<v8::Object>::try_from(self.input).map_err(|_| Error::ExpectedObject)?;
+
+        let maybe_terminate = OBJ_COUNT_DE.with(|count: &RefCell<i32>| {
+            let mut count = count.borrow_mut();
+            if *count != -1 {
+                let priv_key_str = v8::String::new(self.scope, "private_key").unwrap();
+                let priv_key = v8::Private::for_api(self.scope, priv_key_str.into());
+
+                let priv_val = obj.get_private(self.scope, priv_key).unwrap();
+                if priv_val.is_undefined() {
+                    *count += 1;
+                    let val = v8::Integer::new(self.scope, *count);
+                    assert!(obj.set_private(self.scope, priv_key, val.into()).unwrap());
+                    let public_key = v8::String::new(self.scope, "$$obj_id").unwrap();
+                    assert!(obj.set(self.scope, public_key.into(), val.into()).unwrap());
+                    None
+                } else {
+                    Some(ObjectReference {
+                        pos: 0,
+                        obj_id_ref: priv_val.int32_value(self.scope).unwrap(),
+                    })
+                }
+            } else {
+                None
+            }
+        });
+
+        match maybe_terminate {
+            Some(terminate) => return visitor.visit_map(terminate),
+            None => {}
+        }
 
         if v8::Local::<v8::Map>::try_from(self.input).is_ok() {
             let pairs_array = v8::Local::<v8::Map>::try_from(self.input)
@@ -828,5 +863,39 @@ fn to_utf8_slow(s: v8::Local<v8::String>, scope: &mut v8::HandleScope) -> String
     unsafe {
         buf.set_len(bytes_len);
         String::from_utf8_unchecked(buf)
+    }
+}
+
+struct ObjectReference {
+    pos: i32,
+    obj_id_ref: i32,
+}
+
+impl<'de> de::MapAccess<'de> for ObjectReference {
+    type Error = Error;
+
+    fn next_key_seed<K: de::DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>> {
+        if self.pos != 0 {
+            return Ok(None);
+        }
+
+        self.pos = 1;
+        let deserializer = IntoDeserializer::into_deserializer("$$__$$obj_id_ref");
+        return seed.deserialize(deserializer).map(Some);
+    }
+
+    fn next_value_seed<V: de::DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value> {
+        if self.pos != 1 {
+            return Result::Err(crate::Error::Message(
+                "Call next_key_seed before next_value_seed".to_string(),
+            ));
+        }
+
+        let deserializer = IntoDeserializer::into_deserializer(self.obj_id_ref);
+        seed.deserialize(deserializer)
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        None
     }
 }

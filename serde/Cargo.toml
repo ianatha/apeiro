@@ -10,6 +10,7 @@ description = "Rust to V8 serialization and deserialization"
 path = "lib.rs"
 
 [dependencies]
+better_scoped_tls = "0.1.0"
 bytes = "=1.2.1"
 derive_more = "0.99.17"
 serde = { version = "^1.0.100", features = ["derive"] }

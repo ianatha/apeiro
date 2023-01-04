@@ -70,6 +70,12 @@ pub fn v8_type(val: Local<Value>) -> String {
     .into()
 }
 
+// pub fn v8_println<'s>(context_scope: &mut HandleScope<'s, Context>, v8_value: Local<'s, Value>) {
+//     let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
+//     let json = serde_json::to_string_pretty(&value).unwrap();
+//     println!("{}", json);
+// }
+
 pub fn v8_println_array(context_scope: &mut HandleScope<Context>, props: Local<Array>) {
     if props.length() == 0 {
         println!("empty array");

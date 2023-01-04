@@ -82,7 +82,7 @@ pub fn proc_get_details(conn: &Conn, id: &String) -> Result<ProcDetails, anyhow:
 
 pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
     let mut stmt =
-        conn.prepare("SELECT status, val, suspension, frames FROM procs WHERE id = ?")?;
+        conn.prepare("SELECT status, val, suspension, frames, funcs FROM procs WHERE id = ?")?;
 
     let result = stmt.query_row(&[id], |row| {
         let status: String = row.get(0)?;
@@ -105,13 +105,19 @@ pub fn proc_get(conn: &Conn, id: &String) -> Result<StepResult, anyhow::Error> {
         } else {
             None
         };
+        let funcs: Result<String, _> = row.get(4);
+        let funcs = if let Ok(funcs) = funcs {
+            serde_json::from_str(&funcs).unwrap_or(None)
+        } else {
+            None
+        };
 
         Ok(StepResult {
             status,
             val,
             suspension,
             frames,
-            ..Default::default()
+            funcs,
         })
     })?;
 

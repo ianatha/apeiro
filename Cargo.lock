@@ -2709,6 +2709,7 @@ name = "serde_pristine"
 version = "0.75.0"
 dependencies = [
  "bencher",
+ "better_scoped_tls",
  "bytes",
  "derive_more",
  "serde",

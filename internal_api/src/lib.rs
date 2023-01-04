@@ -61,7 +61,6 @@ pub struct StepResult {
     pub status: StepResultStatus,
     pub val: Option<Value>,
     pub suspension: Option<Value>,
-    pub current_frame: Option<u64>,
     pub frames: Option<Value>,
     pub funcs: Option<Value>,
 }
@@ -88,7 +87,6 @@ impl std::fmt::Debug for StepResult {
             .field("status", &self.status)
             .field("val", &self.val)
             .field("suspension", &self.suspension)
-            .field("current_frame", &self.current_frame)
             .field("frames", &self.frames)
             .finish()
     }
