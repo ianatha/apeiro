@@ -140,7 +140,7 @@ fn test_fn_wrap_two_receives() {
 //     compiler_test(
 //         "function *one() { yield 1; yield 2; return 4;}",
 //         |_| generator::generator(Mark::fresh(Mark::root())),
-//         r#"import _ts_generator from "@pristine/helpers/src/_ts_generator.mjs";
+//         r#"import _ts_generator from "@apeiro/helpers/src/_ts_generator.mjs";
 // function one() {
 //     return _ts_generator(this, function(_state) {
 //         switch(_state.label){

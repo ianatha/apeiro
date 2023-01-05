@@ -144,7 +144,7 @@ macro_rules! add_import_to {
                 ),
             });
 
-            let src: Str = concat!("@pristine/helpers/src/_", stringify!($name), ".mjs").into();
+            let src: Str = concat!("@apeiro/helpers/src/_", stringify!($name), ".mjs").into();
 
             $buf.push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                 span: DUMMY_SP,

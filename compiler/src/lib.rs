@@ -14,8 +14,8 @@ mod generator;
 mod stmt_exploder;
 mod utils;
 
-pub use bundle_phase::pristine_bundle_and_compile;
-pub use compile_phase::custom_pristine_compile;
+pub use bundle_phase::apeiro_bundle_and_compile;
+pub use compile_phase::custom_apeiro_compile;
 
 use swc_common::chain;
 use swc_ecma_ast::EsVersion;
@@ -24,11 +24,11 @@ use anyhow::Result;
 use swc_ecma_transforms::pass::noop;
 
 pub fn engine_runtime_compile(input: String) -> Result<String> {
-    custom_pristine_compile(input, |_| noop(), false, false, false)
+    custom_apeiro_compile(input, |_| noop(), false, false, false)
 }
 
-pub fn pristine_compile(input: String) -> Result<String> {
-    custom_pristine_compile(
+pub fn apeiro_compile(input: String) -> Result<String> {
+    custom_apeiro_compile(
         input,
         |_| {
             chain!(

@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Ok, Result};
-use pristine_internal_api::EngineStatus;
-use pristine_internal_api::ProcSendRequest;
-use pristine_internal_api::StepResult;
+use apeiro_internal_api::EngineStatus;
+use apeiro_internal_api::ProcSendRequest;
+use apeiro_internal_api::StepResult;
 use serde_json::Value;
 use tracing::{event, instrument, Level};
 use v8::CreateParams;
@@ -157,8 +157,8 @@ impl Engine {
 
             if let Some(funcs) = funcs {
                 let scope = &mut v8::EscapableHandleScope::new(context_scope);
-                let v8_funcs = serde_pristine::to_v8(scope, funcs).unwrap();
-                let v8_funcs = serde_pristine::resolve_ref(scope, v8_funcs);
+                let v8_funcs = apeiro_serde::to_v8(scope, funcs).unwrap();
+                let v8_funcs = apeiro_serde::resolve_ref(scope, v8_funcs);
                 let v8_funcs = v8_funcs.to_object(scope).unwrap();
                 // println!("v8_funcs = {:#?}", v8_type(v8_funcs));
                 engine_instance.funcs = Some(scope.escape(v8_funcs));
@@ -166,8 +166,8 @@ impl Engine {
 
             if let Some(frames) = frames {
                 let scope = &mut v8::EscapableHandleScope::new(context_scope);
-                let v8_frames = serde_pristine::to_v8(scope, frames).unwrap();
-                let v8_frames = serde_pristine::resolve_ref(scope, v8_frames);
+                let v8_frames = apeiro_serde::to_v8(scope, frames).unwrap();
+                let v8_frames = apeiro_serde::resolve_ref(scope, v8_frames);
                 engine_instance.frames = Some(scope.escape(v8_frames));
             }
 
@@ -268,9 +268,9 @@ impl Engine {
                     .unwrap();
 
                 let counter = RefCell::new(0);
-                let (res_json, engine_status) = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
+                let (res_json, engine_status) = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
                     let new_fns: serde_json::Value =
-                        serde_pristine::from_v8(context_scope, new_fns).unwrap();
+                        apeiro_serde::from_v8(context_scope, new_fns).unwrap();
 
                     println!(
                         "\n\n\n\nnew_fns: {}",
@@ -278,14 +278,14 @@ impl Engine {
                     );
 
                     let new_frames: serde_json::Value =
-                        serde_pristine::from_v8(context_scope, new_frames).unwrap();
+                        apeiro_serde::from_v8(context_scope, new_frames).unwrap();
 
                     let mut res_json: StepResult =
-                        serde_pristine::from_v8(context_scope, js_stmt_result).unwrap();
+                        apeiro_serde::from_v8(context_scope, js_stmt_result).unwrap();
 
                     if res_json.val.is_some() {
                         println!("$$$$$$ postprocessing res_json.val");
-                        let new_val = serde_pristine::resolve_ref(context_scope, new_val);
+                        let new_val = apeiro_serde::resolve_ref(context_scope, new_val);
 
                         let global = context_scope.get_current_context().global(context_scope);
                         let disable_references_key =
@@ -300,7 +300,7 @@ impl Engine {
                             .unwrap());
 
                         let json_val: serde_json::Value =
-                            serde_pristine::from_v8(context_scope, new_val).unwrap();
+                            apeiro_serde::from_v8(context_scope, new_val).unwrap();
                         res_json.val = Some(json_val);
                     }
 
@@ -308,7 +308,7 @@ impl Engine {
                         println!("$$$$$$ postprocessing res_json.suspension");
 
                         let new_suspension =
-                            serde_pristine::resolve_ref(context_scope, new_suspension);
+                            apeiro_serde::resolve_ref(context_scope, new_suspension);
                         crate::v8_helpers::v8_println(context_scope, new_suspension);
                         let global = context_scope.get_current_context().global(context_scope);
                         let disable_references_key =
@@ -323,7 +323,7 @@ impl Engine {
                             .unwrap());
 
                         let json_val: serde_json::Value =
-                            serde_pristine::from_v8(context_scope, new_suspension).unwrap();
+                            apeiro_serde::from_v8(context_scope, new_suspension).unwrap();
                         res_json.suspension = Some(json_val);
                     }
 
@@ -389,8 +389,8 @@ impl Engine {
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
             let counter = RefCell::new(-1);
-            let msg = serde_pristine::OBJ_COUNT_DE
-                .set(&counter, || serde_pristine::from_v8(scope, msg).unwrap());
+            let msg = apeiro_serde::OBJ_COUNT_DE
+                .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
 
             let proc_id = self.proc_id.clone();
             tokio::task::spawn(async move {
@@ -414,8 +414,8 @@ impl Engine {
         let _context = v8::Context::new(scope);
 
         let counter = RefCell::new(-1);
-        let filter = serde_pristine::OBJ_COUNT_DE.set(&counter, || {
-            serde_pristine::from_v8(scope, args.get(0)).unwrap()
+        let filter = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
+            apeiro_serde::from_v8(scope, args.get(0)).unwrap()
         });
         let filter = serde_json_matcher::from_json(filter).unwrap();
         for (index, msg) in self.mbox.iter().enumerate() {
@@ -428,7 +428,7 @@ impl Engine {
                     index,
                     msg
                 );
-                let msg = serde_pristine::to_v8(scope, msg).unwrap();
+                let msg = apeiro_serde::to_v8(scope, msg).unwrap();
                 retval.set(msg);
                 return;
             }
@@ -437,7 +437,7 @@ impl Engine {
         event!(Level::INFO, "no recv match found");
         // no matching value found
         let exception_obj = v8::Object::new(scope);
-        let key_str = v8_str!(scope / "pristine_suspend");
+        let key_str = v8_str!(scope / "apeiro_suspend");
         let r#true = v8::Boolean::new(scope, true);
         exception_obj.set(scope, key_str.into(), r#true.into());
         let key_str = v8_str!(scope / "until");
@@ -466,8 +466,8 @@ impl Engine {
 
             let msg = args.get(1);
             let counter = RefCell::new(-1);
-            let msg = serde_pristine::OBJ_COUNT_DE
-                .set(&counter, || serde_pristine::from_v8(scope, msg).unwrap());
+            let msg = apeiro_serde::OBJ_COUNT_DE
+                .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
 
             tokio::task::spawn(async move {
                 event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
@@ -508,7 +508,7 @@ impl Engine {
             let _guard = handle.enter();
             let res = futures::executor::block_on(dengine.proc_get(proc_id)).unwrap();
             let res = serde_json::to_value(res.val.unwrap_or("false".into())).unwrap();
-            let res = serde_pristine::to_v8(scope, res).unwrap();
+            let res = apeiro_serde::to_v8(scope, res).unwrap();
             retval.set(res.into());
         }
     }

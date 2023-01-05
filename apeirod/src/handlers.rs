@@ -1,17 +1,17 @@
 use actix_web::error::{self, ErrorBadRequest};
 use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse, Responder};
-use pristine_engine::DEngine;
-use pristine_internal_api::*;
+use apeiro_engine::DEngine;
+use apeiro_internal_api::*;
 use tracing::{event, Level};
 
-fn pristine_err(e: anyhow::Error) -> PristineError {
-    PristineError(e)
+fn apeiro_err(e: anyhow::Error) -> ApeiroError {
+    ApeiroError(e)
 }
 
-struct PristineError(anyhow::Error);
+struct ApeiroError(anyhow::Error);
 
-impl From<PristineError> for actix_web::Error {
-    fn from(e: PristineError) -> Self {
+impl From<ApeiroError> for actix_web::Error {
+    fn from(e: ApeiroError) -> Self {
         error::ErrorBadRequest(serde_json::json! {{
             "Err": {
                 "error": e.0.to_string()
@@ -29,14 +29,14 @@ async fn proc_new(
     let res = dengine
         .proc_new(body.into_inner())
         .await
-        .map_err(pristine_err)?;
+        .map_err(apeiro_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
 #[get("/proc/")]
 async fn proc_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
-    let res = dengine.proc_list().await.map_err(pristine_err)?;
+    let res = dengine.proc_list().await.map_err(apeiro_err)?;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
@@ -48,7 +48,7 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    let res = dengine.proc_get(proc_id).await.map_err(pristine_err)?;
+    let res = dengine.proc_get(proc_id).await.map_err(apeiro_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
@@ -61,7 +61,7 @@ async fn proc_delete(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Resp
         .ok_or(ErrorBadRequest("no mount name"))?
         .parse()?;
 
-    dengine.proc_delete(proc_id).await.map_err(pristine_err)?;
+    dengine.proc_delete(proc_id).await.map_err(apeiro_err)?;
 
     Ok::<_, actix_web::Error>("")
 }
@@ -77,7 +77,7 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
     let res = dengine
         .proc_get_debug(proc_id)
         .await
-        .map_err(pristine_err)?;
+        .map_err(apeiro_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
@@ -97,7 +97,7 @@ async fn proc_send(
     let res = dengine
         .proc_send_and_watch_step_result(proc_id, body.into_inner())
         .await
-        .map_err(pristine_err)?;
+        .map_err(apeiro_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }

@@ -3,7 +3,7 @@ mod handlers;
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use clap::{command, Parser};
-use pristine_engine::{get_engine_runtime, DEngine};
+use apeiro_engine::{get_engine_runtime, DEngine};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tracing::Level;
@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
                 | tracing_subscriber::fmt::format::FmtSpan::CLOSE,
         )
         .with_max_level(Level::TRACE)
-        .with_env_filter("pristine_engine=trace,pristined=trace")
+        .with_env_filter("apeiro_engine=trace,apeirod=trace")
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (dengine, mut event_loop) = DEngine::new(
         Some(get_engine_runtime),
-        Box::new(pristine_engine::Db {
+        Box::new(apeiro_engine::Db {
             pool: establish_db_connection(store)?,
         }),
     )?;

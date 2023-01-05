@@ -11,7 +11,7 @@ interface Scope extends Record<string, any> {
 	// [SCOPE_ID]: number;
 }
 
-const SYMBOL_SCOPE_ID = Symbol("pristine:scope:id");
+const SYMBOL_SCOPE_ID = Symbol("apeiro:scope:id");
 
 $fns.$scopeLastId = 0;
 
@@ -45,7 +45,7 @@ export function $scope(parent = undefined, frame?: Frame) {
 
 	if (frame) {
 		if (frame.scope) {
-			throw new PristineEngineError("frame already has a scope");
+			throw new ApeiroEngineError("frame already has a scope");
 		}
 		frame.scope = newScope;
 	}
@@ -93,7 +93,7 @@ interface Frame {
 	fnhash: FnDeclId;
 }
 
-class PristineEngineError extends Error {
+class ApeiroEngineError extends Error {
 
 }
 
@@ -107,7 +107,7 @@ function debugDisplayFrame(frame: Frame) {
 export function $frame_end(dead_child: Frame) {
 	if ($frames[$frames.length - 1] !== dead_child) {
 		log("invalid frame");
-		throw new PristineEngineError("invalid frame being dropped");
+		throw new ApeiroEngineError("invalid frame being dropped");
 	}
 	dead_child.scope = undefined;
 	$frames.pop();
@@ -118,7 +118,7 @@ var current_frame = 0;
 export function $new_frame(fnhash, last_fn_hash) {
 	if ($frames[current_frame]) {
 		if ($frames[current_frame].fnhash !== fnhash) {
-			throw new PristineEngineError("illegal frame restoration, targetting wrong fn, given " + fnhash + " but it should have been " + $frames[current_frame].fnhash);
+			throw new ApeiroEngineError("illegal frame restoration, targetting wrong fn, given " + fnhash + " but it should have been " + $frames[current_frame].fnhash);
 		}
 		current_frame++;
 		return $frames[current_frame - 1];
@@ -149,24 +149,24 @@ export function $fn(fn, hash, in_scope) {
 
 // ## Suspend
 
-const SYMBOL_SUSPEND = "pristine:suspend";
+const SYMBOL_SUSPEND = "apeiro:suspend";
 
 interface SuspendSignal {
 	[SYMBOL_SUSPEND]: true;
 	until: Record<string, any>;
 }
 
-class PristineSignal {
+class ApeiroSignal {
 	constructor(public readonly until: Record<string, any>) {
 	}
 }
 
-export function $isSuspendSignal(e: any): e is PristineSignal {
-	return e instanceof PristineSignal || e.pristine_suspend === true;
+export function $isSuspendSignal(e: any): e is ApeiroSignal {
+	return e instanceof ApeiroSignal || e.apeiro_suspend === true;
 }
 
 function $suspend(until: Record<string, any>) {
-	throw new PristineSignal(until);
+	throw new ApeiroSignal(until);
 }
 
 // ## Engine Entrypoint

@@ -1,13 +1,13 @@
 use anyhow::{anyhow, Ok, Result};
-use pristine_compiler::pristine_bundle_and_compile;
-use pristine_internal_api::ProcListOutput;
-use pristine_internal_api::ProcNewOutput;
-use pristine_internal_api::ProcNewRequest;
-use pristine_internal_api::ProcSendRequest;
-use pristine_internal_api::ProcStatus;
-use pristine_internal_api::ProcStatusDebug;
-use pristine_internal_api::StepResult;
-use pristine_internal_api::StepResultStatus;
+use apeiro_compiler::apeiro_bundle_and_compile;
+use apeiro_internal_api::ProcListOutput;
+use apeiro_internal_api::ProcNewOutput;
+use apeiro_internal_api::ProcNewRequest;
+use apeiro_internal_api::ProcSendRequest;
+use apeiro_internal_api::ProcStatus;
+use apeiro_internal_api::ProcStatusDebug;
+use apeiro_internal_api::StepResult;
+use apeiro_internal_api::StepResultStatus;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
@@ -52,7 +52,7 @@ pub enum ProcEvent {
 #[derive(Debug)]
 struct SharedDEngine {
     runtime_js_src: Option<fn() -> String>,
-    db: Box<dyn PristineEnginePersistence>,
+    db: Box<dyn ApeiroEnginePersistence>,
     locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
     tx: mpsc::Sender<DEngineCmd>,
     watchers: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<ProcEvent>>>>,
@@ -68,7 +68,7 @@ pub struct EventLoop {
 
 use tracing::{event, instrument, Level};
 
-use crate::db::PristineEnginePersistence;
+use crate::db::ApeiroEnginePersistence;
 
 impl EventLoop {
     #[instrument(name = "eventloop", skip(self))]
@@ -135,7 +135,7 @@ impl EventLoop {
 impl DEngine {
     pub fn new(
         runtime_js_src: Option<fn() -> String>,
-        db: Box<dyn PristineEnginePersistence>,
+        db: Box<dyn ApeiroEnginePersistence>,
     ) -> Result<(DEngine, EventLoop)> {
         let (shared_dengine, rx, tx) = SharedDEngine::new_inner(runtime_js_src, db)?;
         let instance = Arc::new(shared_dengine);
@@ -179,7 +179,7 @@ impl DEngine {
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let src = req.src.clone();
         let compiled_src =
-            tokio::task::spawn_blocking(move || pristine_bundle_and_compile(src).unwrap())
+            tokio::task::spawn_blocking(move || apeiro_bundle_and_compile(src).unwrap())
                 .await
                 .unwrap();
 
@@ -555,7 +555,7 @@ impl DEngine {
 impl SharedDEngine {
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
-        db: Box<dyn PristineEnginePersistence>,
+        db: Box<dyn ApeiroEnginePersistence>,
     ) -> Result<(
         SharedDEngine,
         mpsc::Receiver<DEngineCmd>,

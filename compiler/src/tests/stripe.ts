@@ -1,7 +1,7 @@
 // input an email, and an amount in USD. create an invoice on stripe using the email and the amount. the item description should be "consulting charges". Either wait for the payment or for 4 hours to pass. If the payment is received, send a thank you email. If the payment isn't received in 4 hours, send an email reminder.
-import { sendEmail } from "pristine://$/emailbox";
-import { wait, waitUntil } from "pristine://$/time";
-import { createStripeInvoice, recvStripeEvent } from "pristine://$/stripe";
+import { sendEmail } from "apeiro://$/emailbox";
+import { wait, waitUntil } from "apeiro://$/time";
+import { createStripeInvoice, recvStripeEvent } from "apeiro://$/stripe";
 
 export default function main() {
 	const email = io.input({

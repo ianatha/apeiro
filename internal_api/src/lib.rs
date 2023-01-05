@@ -2,17 +2,17 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub type PristineId = String;
+pub type ApeiroId = String;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewOutput {
-    pub id: PristineId,
+    pub id: ApeiroId,
     pub state: StepResult,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcSummary {
-    pub id: PristineId,
+    pub id: ApeiroId,
     pub name: Option<String>,
     pub status: StepResultStatus,
     pub suspension: Option<Value>,
@@ -128,6 +128,6 @@ impl ProcStatus {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PristineError {
+pub struct ApeiroError {
     error: String,
 }

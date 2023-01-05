@@ -9,7 +9,7 @@
 // }
 
 // fn multiple_steps(input: &str, steps: Vec<StepAssertion>) {
-//     let src_user_out = pristine_compiler::pristine_compile(input.to_string()).unwrap();
+//     let src_user_out = apeiro_compiler::apeiro_compile(input.to_string()).unwrap();
 //     let mut engine = crate::Engine::new(Some(crate::get_engine_runtime));
 
 //     let mut funcs = None;

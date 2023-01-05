@@ -1,7 +1,7 @@
 use criterion::async_executor::FuturesExecutor;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use pristine_engine::{Engine, StepResult};
-use pristine_internal_api::EngineStatus;
+use apeiro_engine::{Engine, StepResult};
+use apeiro_internal_api::EngineStatus;
 
 const CODE: &str = r#"
 function makestr(length) {

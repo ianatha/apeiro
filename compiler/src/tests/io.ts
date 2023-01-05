@@ -1,4 +1,4 @@
-import { io } from "pristine://$";
+import { io } from "apeiro://$";
 
 function input() {
 	"use strict";

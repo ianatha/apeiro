@@ -2,8 +2,8 @@ use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
 use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
-use pristine_internal_api::{
-    PristineError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
+use apeiro_internal_api::{
+    ApeiroError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
     ProcStatusDebug, StepResult, StepResultStatus
 };
 use reqwest::Response;
@@ -62,14 +62,14 @@ enum Commands {
     },
 }
 
-async fn result_or_error<T>(r: Response) -> Result<T, PristineError>
+async fn result_or_error<T>(r: Response) -> Result<T, ApeiroError>
 where
     T: serde::de::DeserializeOwned,
 {
     if r.status().is_success() {
-        Result::<T, PristineError>::Ok(r.json::<T>().await.unwrap())
+        Result::<T, ApeiroError>::Ok(r.json::<T>().await.unwrap())
     } else {
-        r.json::<Result<T, PristineError>>().await.unwrap()
+        r.json::<Result<T, ApeiroError>>().await.unwrap()
     }
 }
 

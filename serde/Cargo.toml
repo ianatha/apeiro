@@ -1,7 +1,7 @@
 # Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 [package]
-name = "serde_pristine"
+name = "apeiro_serde"
 version = "0.75.0"
 readme = "README.md"
 description = "Rust to V8 serialization and deserialization"

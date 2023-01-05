@@ -258,6 +258,131 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
 
 [[package]]
+name = "apeiro_cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "apeiro_engine",
+ "apeiro_internal_api",
+ "clap 4.0.27",
+ "cli-table",
+ "futures",
+ "reqwest",
+ "reqwest-eventsource",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "apeiro_compiler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_scoped_tls",
+ "futures",
+ "is-macro",
+ "once_cell",
+ "reqwest",
+ "rustc-hash",
+ "swc",
+ "swc_atoms",
+ "swc_bundler",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_codegen",
+ "swc_ecma_loader",
+ "swc_ecma_minifier",
+ "swc_ecma_parser",
+ "swc_ecma_transforms",
+ "swc_ecma_transforms_base",
+ "swc_ecma_utils",
+ "swc_ecma_visit",
+ "swc_ecmascript",
+ "swc_node_base",
+ "tokio",
+ "tracing",
+ "url",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "apeiro_engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "apeiro_compiler",
+ "apeiro_internal_api",
+ "apeiro_serde",
+ "brotli",
+ "futures",
+ "futures-core",
+ "nanoid",
+ "r2d2",
+ "r2d2_sqlite",
+ "serde",
+ "serde_json",
+ "serde_json_matcher",
+ "serde_v8",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "v8",
+]
+
+[[package]]
+name = "apeiro_internal_api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "colored",
+ "rand",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "apeiro_serde"
+version = "0.75.0"
+dependencies = [
+ "bencher",
+ "better_scoped_tls",
+ "bytes",
+ "derive_more",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "serde_v8",
+ "smallvec",
+ "v8",
+]
+
+[[package]]
+name = "apeirod"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "apeiro_engine",
+ "apeiro_internal_api",
+ "async-stream",
+ "clap 4.0.27",
+ "criterion",
+ "env_logger",
+ "futures",
+ "futures-core",
+ "nanoid",
+ "r2d2",
+ "r2d2_sqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2132,115 +2257,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pristine_cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 4.0.27",
- "cli-table",
- "futures",
- "pristine_engine",
- "pristine_internal_api",
- "reqwest",
- "reqwest-eventsource",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pristine_compiler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "better_scoped_tls",
- "futures",
- "is-macro",
- "once_cell",
- "reqwest",
- "rustc-hash",
- "swc",
- "swc_atoms",
- "swc_bundler",
- "swc_common",
- "swc_ecma_ast",
- "swc_ecma_codegen",
- "swc_ecma_loader",
- "swc_ecma_minifier",
- "swc_ecma_parser",
- "swc_ecma_transforms",
- "swc_ecma_transforms_base",
- "swc_ecma_utils",
- "swc_ecma_visit",
- "swc_ecmascript",
- "swc_node_base",
- "tokio",
- "tracing",
- "url",
- "xxhash-rust",
-]
-
-[[package]]
-name = "pristine_engine"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "brotli",
- "futures",
- "futures-core",
- "nanoid",
- "pristine_compiler",
- "pristine_internal_api",
- "r2d2",
- "r2d2_sqlite",
- "serde",
- "serde_json",
- "serde_json_matcher",
- "serde_pristine",
- "serde_v8",
- "tokio",
- "tokio-test",
- "tracing",
- "v8",
-]
-
-[[package]]
-name = "pristine_internal_api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "colored",
- "rand",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "pristined"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "anyhow",
- "async-stream",
- "clap 4.0.27",
- "criterion",
- "env_logger",
- "futures",
- "futures-core",
- "nanoid",
- "pristine_engine",
- "pristine_internal_api",
- "r2d2",
- "r2d2_sqlite",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2704,22 +2720,6 @@ checksum = "9454918f95b57569234fa9ff548115b8536fecdc6277d4d31e45419ab78ba1d6"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "serde_pristine"
-version = "0.75.0"
-dependencies = [
- "bencher",
- "better_scoped_tls",
- "bytes",
- "derive_more",
- "serde",
- "serde_bytes",
- "serde_json",
- "serde_v8",
- "smallvec",
- "v8",
 ]
 
 [[package]]

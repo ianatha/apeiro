@@ -504,7 +504,7 @@ impl VisitMut for WrapFunctions {
                     .as_ref()
                     .unwrap()
                     .to_string()
-                    .starts_with("\"pristine://")
+                    .starts_with("\"apeiro://")
                 {
                     let mut assign_obj = vec![];
                     for import_spec in import.specifiers.iter() {
@@ -552,7 +552,7 @@ impl VisitMut for WrapFunctions {
                 } else {
                     event!(
                         Level::INFO,
-                        "import doesn't begin with pristine {:?}",
+                        "import doesn't begin with apeiro {:?}",
                         import.src.raw.as_ref().unwrap().to_string()
                     )
                 }

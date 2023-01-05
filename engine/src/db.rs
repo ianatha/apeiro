@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::StepResultStatus;
 use anyhow::anyhow;
 use nanoid::nanoid;
-use pristine_internal_api::{EngineStatus, ProcStatusDebug, ProcSummary, StepResult};
+use apeiro_internal_api::{EngineStatus, ProcStatusDebug, ProcSummary, StepResult};
 use r2d2::Pool;
 use r2d2_sqlite::rusqlite::params;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -19,7 +19,7 @@ pub struct ProcDetails {
     pub state: StepResult,
 }
 
-pub trait PristineEnginePersistence: Sync + Send + Debug + 'static {
+pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn init(&self) -> Result<(), anyhow::Error>;
 
     fn proc_new(
@@ -53,7 +53,7 @@ impl Debug for Db {
     }
 }
 
-impl PristineEnginePersistence for Db {
+impl ApeiroEnginePersistence for Db {
     fn init(&self) -> Result<(), anyhow::Error> {
         let conn = self.pool.get()?;
 

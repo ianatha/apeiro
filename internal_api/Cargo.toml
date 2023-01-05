@@ -1,5 +1,5 @@
 [package]
-name = "pristine_internal_api"
+name = "apeiro_internal_api"
 version = "0.1.0"
 edition = "2021"
 

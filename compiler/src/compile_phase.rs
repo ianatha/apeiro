@@ -21,18 +21,18 @@ use crate::{
     BASELINE_ES_VERSION,
 };
 
-pub struct PristineCompiler {
+pub struct ApeiroCompiler {
     pub cm: Lrc<SourceMap>,
     compiler: Compiler,
 }
 
-impl std::fmt::Debug for PristineCompiler {
+impl std::fmt::Debug for ApeiroCompiler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PristineCompiler").finish()
+        f.debug_struct("ApeiroCompiler").finish()
     }
 }
 
-pub fn custom_pristine_compile<P>(
+pub fn custom_apeiro_compile<P>(
     input: String,
     folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
     source_map: bool,
@@ -42,9 +42,9 @@ pub fn custom_pristine_compile<P>(
 where
     P: swc_ecmascript::visit::Fold,
 {
-    let compiler = PristineCompiler::new();
+    let compiler = ApeiroCompiler::new();
     GLOBALS.set(&Globals::new(), || {
-        compiler.custom_pristine_compile_string(
+        compiler.custom_apeiro_compile_string(
             input,
             folder_chain,
             source_map,
@@ -54,11 +54,11 @@ where
     })
 }
 
-impl PristineCompiler {
-    pub fn new() -> PristineCompiler {
+impl ApeiroCompiler {
+    pub fn new() -> ApeiroCompiler {
         let cm = Lrc::new(SourceMap::default());
 
-        PristineCompiler {
+        ApeiroCompiler {
             cm: cm.clone(),
             compiler: Compiler::new(cm.clone()),
         }
@@ -102,7 +102,7 @@ impl PristineCompiler {
 
         let compiled_str = if should_compile {
             event!(Level::INFO, "compiling");
-            self.custom_pristine_compile_string(
+            self.custom_apeiro_compile_string(
                 contents,
                 |_| {
                     chain!(
@@ -117,7 +117,7 @@ impl PristineCompiler {
                 false,
             )?
         } else {
-            self.custom_pristine_compile_string(contents, |_| noop(), true, false, false)?
+            self.custom_apeiro_compile_string(contents, |_| noop(), true, false, false)?
         };
 
         let (file, program) = GLOBALS.set(&Globals::new(), || self.parse(compiled_str));
@@ -129,7 +129,7 @@ impl PristineCompiler {
         }
     }
 
-    pub fn custom_pristine_compile<P>(
+    pub fn custom_apeiro_compile<P>(
         &self,
         file: Lrc<SourceFile>,
         program: Program,
@@ -215,7 +215,7 @@ impl PristineCompiler {
         (file, program)
     }
 
-    pub fn custom_pristine_compile_string<P>(
+    pub fn custom_apeiro_compile_string<P>(
         &self,
         input: String,
         folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
@@ -228,7 +228,7 @@ impl PristineCompiler {
     {
         let (file, program) = self.parse(input);
 
-        self.custom_pristine_compile(
+        self.custom_apeiro_compile(
             file,
             program,
             folder_chain,

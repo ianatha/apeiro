@@ -22,7 +22,7 @@ use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith;
 use tracing::{event, Level};
 
-use crate::compile_phase::PristineCompiler;
+use crate::compile_phase::ApeiroCompiler;
 
 fn get_bundle(cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: bool) -> String {
     if modules.len() != 1 {
@@ -60,9 +60,9 @@ fn get_bundle(cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: bool) -> String 
     code
 }
 
-struct PristineResolver {}
+struct ApeiroResolver {}
 
-impl swc_bundler::Resolve for PristineResolver {
+impl swc_bundler::Resolve for ApeiroResolver {
     fn resolve(&self, base: &FileName, module_specifier: &str) -> Result<FileName, Error> {
         match base {
             FileName::Anon => {
@@ -88,7 +88,7 @@ impl swc_bundler::Resolve for PristineResolver {
 }
 
 fn do_test(
-    compiler: Lrc<PristineCompiler>,
+    compiler: Lrc<ApeiroCompiler>,
     cm: Lrc<SourceMap>,
     entries: HashMap<String, FileName>,
     inline: bool,
@@ -96,7 +96,7 @@ fn do_test(
     special_main: Option<String>,
 ) -> Result<String, Error> {
     let globals = Box::leak(Box::new(Globals::default()));
-    let resolver = PristineResolver {};
+    let resolver = ApeiroResolver {};
     let mut bundler = Bundler::new(
         globals,
         cm.clone(),
@@ -167,13 +167,13 @@ fn do_test(
     Ok(get_bundle(cm, modules, minify))
 }
 
-pub fn pristine_bundle_and_compile(src: String) -> Result<String, Error> {
+pub fn apeiro_bundle_and_compile(src: String) -> Result<String, Error> {
     let minify = false;
     let mut entries = HashMap::default();
 
     entries.insert("main".to_string(), FileName::Anon);
 
-    let compiler = Lrc::new(crate::compile_phase::PristineCompiler::new());
+    let compiler = Lrc::new(crate::compile_phase::ApeiroCompiler::new());
 
     let cm = compiler.cm.clone();
     do_test(compiler.clone(), cm, entries, false, minify, Some(src))
@@ -218,7 +218,7 @@ impl swc_bundler::Hook for Hook {
 }
 
 pub struct Loader {
-    pub compiler: Lrc<PristineCompiler>,
+    pub compiler: Lrc<ApeiroCompiler>,
     pub special_main: Option<String>,
     // pub cm: Lrc<SourceMap>,
 }

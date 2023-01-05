@@ -11,10 +11,10 @@ use std::sync::Once;
 pub use db::Db;
 pub use dengine::DEngine;
 pub use engine::Engine;
-pub use pristine_compiler::pristine_bundle_and_compile;
-pub use pristine_compiler::pristine_compile;
-pub use pristine_internal_api::StepResult;
-pub use pristine_internal_api::StepResultStatus;
+pub use apeiro_compiler::apeiro_bundle_and_compile;
+pub use apeiro_compiler::apeiro_compile;
+pub use apeiro_internal_api::StepResult;
+pub use apeiro_internal_api::StepResultStatus;
 
 static INIT: Once = Once::new();
 
@@ -41,5 +41,5 @@ pub fn get_engine_runtime() -> String {
     let code = include_str!("engine_runtime.ts");
     // let code =
     // std::fs::read_to_string(std::path::Path::new("engine/src/engine_runtime.ts")).unwrap();
-    pristine_compiler::engine_runtime_compile(code.into()).unwrap()
+    apeiro_compiler::engine_runtime_compile(code.into()).unwrap()
 }
