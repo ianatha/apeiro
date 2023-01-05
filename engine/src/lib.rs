@@ -8,6 +8,7 @@ mod v8_helpers;
 
 use std::sync::Once;
 
+pub use db::Db;
 pub use dengine::DEngine;
 pub use engine::Engine;
 pub use pristine_compiler::pristine_bundle_and_compile;

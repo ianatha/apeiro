@@ -53,8 +53,12 @@ async fn main() -> anyhow::Result<()> {
     let port = cli.port.unwrap_or(5151);
     let store = cli.store.unwrap_or("world.db".into());
 
-    let conn_pool = establish_db_connection(store)?;
-    let (dengine, mut event_loop) = DEngine::new(Some(get_engine_runtime), conn_pool)?;
+    let (dengine, mut event_loop) = DEngine::new(
+        Some(get_engine_runtime),
+        Box::new(pristine_engine::Db {
+            pool: establish_db_connection(store)?,
+        }),
+    )?;
 
     tokio::task::spawn(async move {
         event_loop.run().await;

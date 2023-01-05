@@ -8,14 +8,11 @@ use pristine_internal_api::ProcStatus;
 use pristine_internal_api::ProcStatusDebug;
 use pristine_internal_api::StepResult;
 use pristine_internal_api::StepResultStatus;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tracing::trace;
 
-use crate::db;
 use std::collections::HashMap;
 use std::string::String;
 use std::sync::Arc;
@@ -55,7 +52,7 @@ pub enum ProcEvent {
 #[derive(Debug)]
 struct SharedDEngine {
     runtime_js_src: Option<fn() -> String>,
-    db: Pool<SqliteConnectionManager>,
+    db: Box<dyn PristineEnginePersistence>,
     locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
     tx: mpsc::Sender<DEngineCmd>,
     watchers: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<ProcEvent>>>>,
@@ -70,6 +67,8 @@ pub struct EventLoop {
 }
 
 use tracing::{event, instrument, Level};
+
+use crate::db::PristineEnginePersistence;
 
 impl EventLoop {
     #[instrument(name = "eventloop", skip(self))]
@@ -136,7 +135,7 @@ impl EventLoop {
 impl DEngine {
     pub fn new(
         runtime_js_src: Option<fn() -> String>,
-        db: Pool<SqliteConnectionManager>,
+        db: Box<dyn PristineEnginePersistence>,
     ) -> Result<(DEngine, EventLoop)> {
         let (shared_dengine, rx, tx) = SharedDEngine::new_inner(runtime_js_src, db)?;
         let instance = Arc::new(shared_dengine);
@@ -178,21 +177,22 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
-        let conn = self.0.db.get().map_err(|_e| anyhow!("no conn"))?;
-
         let src = req.src.clone();
         let compiled_src =
             tokio::task::spawn_blocking(move || pristine_bundle_and_compile(src).unwrap())
                 .await
                 .unwrap();
 
-        let proc_id = db::proc_new(&conn, &req.src, &req.name, &compiled_src)?;
+        let proc_id = self.0.db.proc_new(&req.src, &req.name, &compiled_src)?;
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src);
 
         let (res, engine_status) = engine.step_process(compiled_src, None, None).await.unwrap();
 
-        db::proc_update(&conn, &proc_id, &res, &engine_status).unwrap();
+        self.0
+            .db
+            .proc_update(&proc_id, &res, &engine_status)
+            .unwrap();
 
         if let Some(suspension) = &res.suspension {
             self.process_post_step_suspension(&proc_id, suspension)
@@ -207,8 +207,7 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
-        let conn = self.0.db.get()?;
-        let procs = db::proc_list(&conn)?;
+        let procs = self.0.db.proc_list()?;
 
         Ok(ProcListOutput { procs })
     }
@@ -233,8 +232,11 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
-        let conn = self.0.db.get().expect("");
-        let res = db::proc_get(&conn, &proc_id).map_err(|_e| anyhow!("db problem"))?;
+        let res = self
+            .0
+            .db
+            .proc_get(&proc_id)
+            .map_err(|_e| anyhow!("db problem"))?;
 
         let executing = self.proc_is_executing(&proc_id).await?;
 
@@ -243,16 +245,14 @@ impl DEngine {
 
     #[instrument]
     pub async fn proc_delete(&self, proc_id: String) -> Result<(), anyhow::Error> {
-        let conn = self.0.db.get().expect("");
-        db::proc_delete(&conn, &proc_id)?;
+        self.0.db.proc_delete(&proc_id)?;
 
         Ok(())
     }
 
     #[instrument(skip(self))]
     pub async fn proc_get_debug(&self, proc_id: String) -> Result<ProcStatusDebug, anyhow::Error> {
-        let conn = self.0.db.get().expect("");
-        let proc_status_debug = db::proc_inspect(&conn, &proc_id)?;
+        let proc_status_debug = self.0.db.proc_inspect(&proc_id)?;
 
         Ok(proc_status_debug)
     }
@@ -325,9 +325,7 @@ impl DEngine {
     }
 
     pub async fn load_proc_subscriptions(&self) -> Result<(), anyhow::Error> {
-        let conn = self.0.db.get()?;
-
-        let procs = db::proc_list(&conn)?;
+        let procs = self.0.db.proc_list()?;
         for proc in procs {
             if let Some(suspension) = proc.suspension {
                 self.process_post_step_suspension(&proc.id, &suspension)
@@ -409,9 +407,7 @@ impl DEngine {
         proc_id: &String,
         body: &ProcSendRequest,
     ) -> Result<StepResult, anyhow::Error> {
-        let conn = self.0.db.get()?;
-
-        let proc = db::proc_get_details(&conn, &proc_id)?;
+        let proc = self.0.db.proc_get_details(&proc_id)?;
 
         let res = if proc.state.status != StepResultStatus::SUSPEND {
             Err(anyhow!("can only send to suspended procs"))
@@ -436,7 +432,7 @@ impl DEngine {
                 )
                 .await?;
 
-            db::proc_update(&conn, &proc_id, &res, &engine_status)?;
+            self.0.db.proc_update(&proc_id, &res, &engine_status)?;
 
             if let Some(suspension) = &res.suspension {
                 if let Some(generator_tag) = suspension.get("$generator") {
@@ -559,7 +555,7 @@ impl DEngine {
 impl SharedDEngine {
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
-        db: Pool<SqliteConnectionManager>,
+        db: Box<dyn PristineEnginePersistence>,
     ) -> Result<(
         SharedDEngine,
         mpsc::Receiver<DEngineCmd>,
@@ -584,34 +580,6 @@ impl SharedDEngine {
 
     #[instrument(skip(self))]
     fn init_db(&self) -> Result<(), anyhow::Error> {
-        let conn = self.db.get()?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS procs (
-            id TEXT PRIMARY KEY,
-            name TEXT UNIQUE,
-            src TEXT,
-            compiled_src TEXT,
-            status TEXT,
-            val TEXT,
-            suspension TEXT,
-            snapshot BLOB,
-            frames TEXT,
-            funcs TEXT
-        );",
-            (),
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS mbox (
-            id TEXT PRIMARY KEY,
-            proc_id TEXT,
-            msg TEXT,
-            read BOOL
-        );",
-            (),
-        )?;
-
-        Ok(())
+        self.db.init()
     }
 }
