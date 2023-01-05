@@ -2,6 +2,7 @@ use swc_common::{sync::Lrc, SourceMap};
 use swc_ecma_ast::{Expr, ExprStmt, Lit, Stmt};
 use swc_ecma_codegen::{text_writer::WriteJs, Emitter};
 
+#[allow(dead_code)]
 pub fn ast_to_str<T: swc_ecma_codegen::Node>(node: &T) -> Vec<u8> {
     let cm: Lrc<SourceMap> = Default::default();
     let mut buf = vec![];

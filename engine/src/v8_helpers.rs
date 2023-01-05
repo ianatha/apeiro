@@ -1,4 +1,4 @@
-use v8::{Array, Context, HandleScope, Local, StackTrace, Value};
+use v8::{Context, HandleScope, Local, StackTrace, Value};
 
 pub fn stack_trace_to_string<'s>(
     scope: &mut HandleScope<'s>,
@@ -25,6 +25,7 @@ pub fn stack_trace_to_string<'s>(
     stack_trace_str
 }
 
+#[allow(dead_code)]
 pub fn v8_type(val: Local<Value>) -> String {
     (if val.is_undefined() {
         "undefined"
@@ -74,19 +75,6 @@ pub fn v8_println<'s>(context_scope: &mut HandleScope<'s, Context>, v8_value: Lo
     let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
     let json = serde_json::to_string_pretty(&value).unwrap();
     println!("{}", json);
-}
-
-pub fn v8_println_array(context_scope: &mut HandleScope<Context>, props: Local<Array>) {
-    if props.length() == 0 {
-        println!("empty array");
-        return;
-    }
-    for i in 0..props.length() - 1 {
-        let prop = props.get_index(context_scope, i).unwrap();
-        let prop_str = prop.to_rust_string_lossy(context_scope);
-        println!("{} (type: {})", prop_str, v8_type(prop));
-    }
-    println!("----");
 }
 
 #[macro_export]

@@ -5,24 +5,18 @@ use pristine_internal_api::StepResult;
 use serde_json::Value;
 use tracing::{event, instrument, Level};
 use v8::CreateParams;
-use v8::Local;
-use v8::MapFnTo;
-use v8::ObjectTemplate;
-use v8::ScriptOrigin;
 
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::v8_helpers::stack_trace_to_string;
-use crate::v8_helpers::v8_println_array;
 use crate::v8_helpers::v8_struct_key;
-use crate::v8_helpers::v8_type;
 use crate::v8_init;
 use crate::v8_str;
 use crate::DEngine;
 use std::cell::RefCell;
 use std::string::String;
 
-use v8::{ContextScope, FunctionCodeHandling, HandleScope, Isolate, Script};
+use v8::{ContextScope, HandleScope, Isolate};
 
 #[derive(Debug)]
 pub struct Engine {
@@ -64,14 +58,6 @@ impl Engine {
     fn setup_isolate(&self, mut isolate: v8::OwnedIsolate) -> v8::OwnedIsolate {
         isolate.set_capture_stack_trace_for_uncaught_exceptions(true, 100);
         isolate
-    }
-
-    fn create_global_object_template<'a>(
-        &self,
-        scope: &mut HandleScope<'a, ()>,
-        engine_instance: &mut EngineInstance,
-    ) -> Local<'a, ObjectTemplate> {
-        todo!();
     }
 
     pub async fn step_process(

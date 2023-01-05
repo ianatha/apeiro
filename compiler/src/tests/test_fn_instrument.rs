@@ -273,14 +273,9 @@ fn test_fn_while() {
                 let $sc2 = $scope($sc1, $f2);
                 switch($f2.$pc){
                     case 0:
-                        $sc2._temp$1 = {
-                            value: step($sc1.state.value)
-                        };
+                        $sc2.state.value = step($sc2.state.value);
                         $f2.$pc = 1;
                     case 1:
-                        $sc2.state.value = $sc2._temp$1.value;
-                        $f2.$pc = 2;
-                    case 2:
                         if ($sc2.state.value.done) {
                             let $f3 = $new_frame("1", null);
                             let $sc3 = $scope($sc2, $f3);
@@ -294,9 +289,6 @@ fn test_fn_while() {
                         $frame_end($f2);
                 }
             }
-            $f1.$pc = 3;
-        case 3:
-            delete $sc1._temp$1.value;
             $frame_end($f1);
     }
 }, "1", null);
@@ -322,6 +314,24 @@ fn test_rewrite_vars() {
     }
 }",
         folder_chain!(),
-        r#""#,
+        r#"let a = $fn(function a() {
+    let $f1 = $new_frame("1", null);
+    let $sc1 = $scope(undefined, $f1);
+    switch($f1.$pc){
+        case 0:
+            $sc1.msg = {
+                value: 90
+            };
+            $f1.$pc = 1;
+        case 1:
+            function test(msg, msg2) {
+                let $f2 = $new_frame("1", null);
+                let $sc2 = $scope($sc1, $f2);
+                switch($f2.$pc){
+                }
+            }
+            $frame_end($f1);
+    }
+}, "1", null);"#,
     );
 }

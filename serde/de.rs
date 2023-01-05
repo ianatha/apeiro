@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate serde;
 
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::convert::TryFrom;
 
 use self::serde::de::IntoDeserializer;
@@ -126,29 +126,11 @@ struct MapFunctionAccess<'a, 's> {
     obj: v8::Local<'a, v8::Function>,
     scope: &'a mut v8::HandleScope<'s>,
     pos: u32,
-    // keys: SeqAccess<'a, 's>,
-    next_value: Option<v8::Local<'s, v8::Value>>,
 }
 
 impl<'a, 's> MapFunctionAccess<'a, 's> {
     pub fn new(obj: v8::Local<'a, v8::Function>, scope: &'a mut v8::HandleScope<'s>) -> Self {
-        // let keys = match obj.get_own_property_names(
-        //   scope,
-        //   v8::GetPropertyNamesArgsBuilder::new()
-        //     .key_conversion(v8::KeyConversionMode::ConvertToString)
-        //     .build(),
-        // ) {
-        //   Some(keys) => SeqAccess::new(keys.into(), scope, 0..keys.length()),
-        //   None => SeqAccess::new(obj, scope, 0..0),
-        // };
-
-        Self {
-            obj,
-            scope,
-            pos: 0,
-            // keys,
-            next_value: None,
-        }
+        Self { obj, scope, pos: 0 }
     }
 }
 

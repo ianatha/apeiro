@@ -23,14 +23,3 @@ v8 = { version = "0.60.0", default-features = false }
 [dev-dependencies]
 bencher = "0.1"
 serde_json = "=1.0.91"
-
-[[example]]
-name = "basic"
-
-[[bench]]
-name = "de"
-harness = false
-
-[[bench]]
-name = "ser"
-harness = false
