@@ -71,16 +71,15 @@ use tracing::{event, instrument, Level};
 use crate::db::ApeiroEnginePersistence;
 
 impl EventLoop {
-    #[instrument(name = "eventloop", skip(self))]
+    #[instrument(name = "event_loop", skip(self))]
     pub async fn run(&mut self) {
-        event!(Level::INFO, "Event loop started");
         while let Some(message) = self.rx.recv().await {
-            event!(Level::INFO, message = ?message);
+            event!(Level::TRACE, msg = ?message);
             match message {
                 DEngineCmd::Tick => {
                     let dengine = self.dengine.clone();
-                    let s = dengine.get_all_subscriptions().await;
-                    println!("subscriptions: {:?}", s);
+                    let _s = dengine.get_all_subscriptions().await;
+                    // TODO
                 }
                 DEngineCmd::Broadcast(proc_id, exec_id, msg) => {
                     let dengine = self.dengine.clone();

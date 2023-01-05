@@ -1,11 +1,11 @@
 use anyhow::{Ok, Result};
+use apeiro_internal_api::{
+    ApeiroError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
+    ProcStatusDebug, StepResult, StepResultStatus,
+};
 use clap::{command, Parser, Subcommand};
 use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
-use apeiro_internal_api::{
-    ApeiroError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
-    ProcStatusDebug, StepResult, StepResultStatus
-};
 use reqwest::Response;
 use reqwest_eventsource::{Event, EventSource};
 

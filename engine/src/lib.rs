@@ -8,13 +8,13 @@ mod v8_helpers;
 
 use std::sync::Once;
 
-pub use db::Db;
-pub use dengine::DEngine;
-pub use engine::Engine;
 pub use apeiro_compiler::apeiro_bundle_and_compile;
 pub use apeiro_compiler::apeiro_compile;
 pub use apeiro_internal_api::StepResult;
 pub use apeiro_internal_api::StepResultStatus;
+pub use db::Db;
+pub use dengine::DEngine;
+pub use engine::Engine;
 
 static INIT: Once = Once::new();
 

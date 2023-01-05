@@ -16,3 +16,7 @@ serde_json = "1.0.89"
 cli-table = "0.4.7"
 reqwest-eventsource = "0.4.0"
 futures = "0.3.25"
+
+[[bin]]
+name = "ap"
+path = "src/main.rs"

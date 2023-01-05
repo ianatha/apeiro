@@ -13,9 +13,8 @@ pub fn compiler_test<P>(
 ) where
     P: swc_ecmascript::visit::Fold,
 {
-    let out =
-        compiler::custom_apeiro_compile(input.to_string(), folder_chain, false, true, false)
-            .unwrap();
+    let out = compiler::custom_apeiro_compile(input.to_string(), folder_chain, false, true, false)
+        .unwrap();
     if out != expected.to_string() {
         println!("\n# Output was:\n<<<<\n{}\n>>>>>\n", out);
         assert_eq!(out.trim(), expected.to_string().trim());

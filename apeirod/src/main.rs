@@ -2,8 +2,8 @@ mod handlers;
 
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
-use clap::{command, Parser};
 use apeiro_engine::{get_engine_runtime, DEngine};
+use clap::{command, Parser};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tracing::Level;
@@ -39,6 +39,8 @@ pub fn establish_db_connection(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    println!("Starting Apeiro Daemon");
+
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_span_events(
             tracing_subscriber::fmt::format::FmtSpan::NEW
