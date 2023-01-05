@@ -150,8 +150,6 @@ impl Engine {
                 let v8_funcs = v8_funcs.to_object(scope).unwrap();
                 // println!("v8_funcs = {:#?}", v8_type(v8_funcs));
                 engine_instance.funcs = Some(scope.escape(v8_funcs));
-            } else {
-                println!("no v8 funcs!!!");
             }
 
             if let Some(frames) = frames {
@@ -159,8 +157,6 @@ impl Engine {
                 let v8_frames = serde_pristine::to_v8(scope, frames).unwrap();
                 let v8_frames = serde_pristine::resolve_ref(scope, v8_frames);
                 engine_instance.frames = Some(scope.escape(v8_frames));
-                println!("\n\n\n##resolve_ref fully done");
-                // crate::v8_helpers::v8_println(context_scope, v8_frames);
             }
 
             let context_scope = &mut v8::TryCatch::new(context_scope);

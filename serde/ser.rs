@@ -692,14 +692,19 @@ pub fn resolve_fn<'s>(
         .unwrap();
 
     let obj_id_ref = v8_struct_key(scope, "$$__$$obj_id_ref");
-    let obj_ref = scope_obj
-        .get(scope, obj_id_ref.into())
-        .unwrap()
-        .int32_value(scope)
-        .unwrap();
 
-    let obj = get_from_scope_cache(scope, obj_ref).unwrap();
-    v8_println(scope, obj.into());
+    let obj_ref = scope_obj.get(scope, obj_id_ref.into()).unwrap();
+
+    let obj = if obj_ref.is_number() {
+        let obj_ref = obj_ref.int32_value(scope).unwrap();
+
+        let obj = get_from_scope_cache(scope, obj_ref)
+            .expect(format!("obj {} not found in cache", obj_ref).as_str());
+        v8_println(scope, obj.into());
+        obj
+    } else {
+        v8::Object::new(scope)
+    };
 
     let src = format!(
         r#"(function($sc1) {{
@@ -758,7 +763,6 @@ pub fn resolve_ref<'s>(
     obj: v8::Local<'s, v8::Value>,
 ) -> v8::Local<'s, v8::Value> {
     if obj.is_array() {
-        println!("\n\n### array resolve_ref");
         let arr: v8::Local<'s, v8::Array> = unsafe { v8::Local::cast(obj) };
         let len = arr.length();
         if len == 0 {
@@ -772,8 +776,6 @@ pub fn resolve_ref<'s>(
         return arr.into();
     } else if obj.is_object() {
         let obj = obj.to_object(scope).unwrap();
-
-        println!("\n\n### obj resolve_ref");
         if let Some(v8_obj_id) = is_object_ref(scope, &obj) {
             let v8_obj_cache = get_from_scope_cache(scope, v8_obj_id);
             return v8_obj_cache.expect("obj_id_ref not found in cache").into();
