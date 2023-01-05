@@ -1,11 +1,14 @@
 mod handlers;
+mod plugins;
 
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use apeiro_engine::{get_engine_runtime, DEngine};
 use clap::{command, Parser};
+use plugins::ApeiroPlugin;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use serde::{Deserialize, Serialize};
 use tracing::Level;
 
 #[derive(Parser)]
@@ -35,6 +38,11 @@ pub fn establish_db_connection(
     let manager = SqliteConnectionManager::memory();
     let pool = Pool::builder().build(manager)?;
     Ok(pool)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PluginConfiguration {
+    plugins: Vec<Box<dyn ApeiroPlugin>>,
 }
 
 #[tokio::main]
@@ -68,13 +76,23 @@ async fn main() -> anyhow::Result<()> {
 
     dengine.load_proc_subscriptions().await?;
 
-    let dengine2 = dengine.clone();
-    tokio::task::spawn(async move {
-        loop {
-            dengine2.tick().await.unwrap();
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    if let Ok(plugins_json_contents) = std::fs::read_to_string("./plugins.json") {
+        let plugin_conf: PluginConfiguration =
+            serde_json::from_str(plugins_json_contents.as_str())?;
+        for plugin in plugin_conf.plugins {
+            plugin.init(dengine.clone()).await?;
         }
-    });
+    }
+
+    {
+        let dengine = dengine.clone();
+        tokio::task::spawn(async move {
+            loop {
+                dengine.clone().tick().await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+        });
+    }
 
     println!("Starting HTTP daemon on port {}", port);
     HttpServer::new(move || {
