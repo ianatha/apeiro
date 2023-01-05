@@ -39,7 +39,7 @@ enum Commands {
     },
     Cleanup {},
     Rm {
-        proc_id: String,
+        proc_ids: Vec<String>,
     },
     /// Get compiled source code of a process
     Inspect {
@@ -262,7 +262,12 @@ async fn main() -> Result<()> {
 
     match &cli.command {
         Commands::Cleanup {} => cleanup(remote).await,
-        Commands::Rm { proc_id } => rm(remote, proc_id).await,
+        Commands::Rm { proc_ids } => {
+            for proc_id in proc_ids {
+                rm(remote.clone(), proc_id).await?
+            }
+            Ok(())
+        }
         Commands::Watch { proc_id } => watch(&remote, proc_id).await,
         Commands::Get { proc_id, value } => get(&remote, proc_id, value, cli.output_json).await,
         Commands::Inspect { proc_id } => inspect(remote, proc_id).await,
