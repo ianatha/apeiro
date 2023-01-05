@@ -1,6 +1,0 @@
-{
-  "imports": {
-    "pristine": "../ecmatime/index.ts",
-    "pristine/": "../ecmatime/"
-  }
-}
