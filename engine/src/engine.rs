@@ -5,7 +5,9 @@ use pristine_internal_api::StepResult;
 use serde_json::Value;
 use tracing::{event, instrument, Level};
 use v8::CreateParams;
+use v8::Local;
 use v8::MapFnTo;
+use v8::ObjectTemplate;
 use v8::ScriptOrigin;
 
 use crate::dengine::DEngineCmd;
@@ -64,6 +66,14 @@ impl Engine {
         isolate
     }
 
+    fn create_global_object_template<'a>(
+        &self,
+        scope: &mut HandleScope<'a, ()>,
+        engine_instance: &mut EngineInstance,
+    ) -> Local<'a, ObjectTemplate> {
+        todo!();
+    }
+
     pub async fn step_process(
         &mut self,
         src: String,
@@ -79,13 +89,13 @@ impl Engine {
         .unwrap();
         assert!(layout.size() > 0);
 
-        let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
-        let engine_instance_external_ref = (&engine_instance as *const _) as *mut std::ffi::c_void;
-
         let mut isolate = self.setup_isolate(Isolate::new(CreateParams::default()));
 
         let new_state: Result<(StepResult, EngineStatus)> = {
             let handle_scope = &mut HandleScope::new(&mut isolate);
+            let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
+            let engine_instance_external_ref =
+                (&engine_instance as *const _) as *mut std::ffi::c_void;
 
             let engine_ref = v8::External::new(handle_scope, engine_external_ref);
             let engine_instance_ref = v8::External::new(handle_scope, engine_instance_external_ref);
@@ -114,6 +124,14 @@ impl Engine {
                 .data(engine_instance_ref.into())
                 .build(handle_scope);
 
+            let get_fn_builder = v8::FunctionTemplate::builder(get_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
+
+            let pid_fn_builder = v8::FunctionTemplate::builder(pid_callback)
+                .data(engine_instance_ref.into())
+                .build(handle_scope);
+
             let global = v8::ObjectTemplate::new(handle_scope);
             global.set(
                 v8::String::new(handle_scope, "log").unwrap().into(),
@@ -138,6 +156,14 @@ impl Engine {
             global.set(
                 v8::String::new(handle_scope, "$get_funcs").unwrap().into(),
                 get_funcs_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$get").unwrap().into(),
+                get_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$pid").unwrap().into(),
+                pid_fn_builder.into(),
             );
 
             let context = v8::Context::new_from_template(handle_scope, global);
@@ -448,9 +474,7 @@ impl Engine {
     ) {
         let _context = v8::Context::new(scope);
 
-        event!(Level::INFO, "maybe sending to dengine");
         if let Some(dengine) = self.dengine.clone() {
-            event!(Level::INFO, "sending to dengine");
             let proc_id = args.get(0);
             let proc_id: String = proc_id.to_rust_string_lossy(scope);
 
@@ -466,6 +490,40 @@ impl Engine {
                     .await;
                 event!(Level::INFO, "sent!!");
             });
+        }
+    }
+
+    #[inline]
+    fn pid_callback(
+        &mut self,
+        scope: &mut v8::HandleScope,
+        _args: v8::FunctionCallbackArguments,
+        mut retval: v8::ReturnValue,
+    ) {
+        let _context = v8::Context::new(scope);
+        let res = v8::String::new(scope, self.proc_id.as_str()).unwrap();
+        retval.set(res.into())
+    }
+
+    #[inline]
+    fn get_callback(
+        &mut self,
+        scope: &mut v8::HandleScope,
+        args: v8::FunctionCallbackArguments,
+        mut retval: v8::ReturnValue,
+    ) {
+        let _context = v8::Context::new(scope);
+
+        if let Some(dengine) = self.dengine.clone() {
+            let proc_id = args.get(0);
+            let proc_id: String = proc_id.to_rust_string_lossy(scope);
+
+            let handle = tokio::runtime::Handle::current();
+            let _guard = handle.enter();
+            let res = futures::executor::block_on(dengine.proc_get(proc_id)).unwrap();
+            let res = serde_json::to_value(res.val.unwrap_or("false".into())).unwrap();
+            let res = serde_pristine::to_v8(scope, res).unwrap();
+            retval.set(res.into());
         }
     }
 }
@@ -486,6 +544,8 @@ fn export_symbols_to_global<'a>(
 struct_method_to_v8!(log_callback -> Engine::log_callback);
 struct_method_to_v8!(mbox_callback -> Engine::mbox_callback);
 struct_method_to_v8!(send_callback -> Engine::send_callback);
+struct_method_to_v8!(get_callback -> Engine::get_callback);
+struct_method_to_v8!(pid_callback -> Engine::pid_callback);
 
 fn frames_callback(
     scope: &mut v8::HandleScope,
@@ -526,6 +586,7 @@ fn usercode_callback(
     let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
     let val = struct_instance.usercode.unwrap();
     let namespace = val.get_module_namespace();
+    println!("before retval");
     retval.set(namespace);
 }
 

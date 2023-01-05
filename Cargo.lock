@@ -2186,6 +2186,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "brotli",
+ "futures",
  "futures-core",
  "nanoid",
  "pristine_compiler",
