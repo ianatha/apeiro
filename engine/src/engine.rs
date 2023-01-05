@@ -272,11 +272,6 @@ impl Engine {
                     let new_fns: serde_json::Value =
                         apeiro_serde::from_v8(context_scope, new_fns).unwrap();
 
-                    println!(
-                        "\n\n\n\nnew_fns: {}",
-                        serde_json::to_string_pretty(&new_fns).unwrap()
-                    );
-
                     let new_frames: serde_json::Value =
                         apeiro_serde::from_v8(context_scope, new_frames).unwrap();
 
@@ -284,7 +279,6 @@ impl Engine {
                         apeiro_serde::from_v8(context_scope, js_stmt_result).unwrap();
 
                     if res_json.val.is_some() {
-                        println!("$$$$$$ postprocessing res_json.val");
                         let new_val = apeiro_serde::resolve_ref(context_scope, new_val);
 
                         let global = context_scope.get_current_context().global(context_scope);
@@ -305,8 +299,6 @@ impl Engine {
                     }
 
                     if res_json.suspension.is_some() {
-                        println!("$$$$$$ postprocessing res_json.suspension");
-
                         let new_suspension =
                             apeiro_serde::resolve_ref(context_scope, new_suspension);
                         crate::v8_helpers::v8_println(context_scope, new_suspension);
@@ -327,19 +319,12 @@ impl Engine {
                         res_json.suspension = Some(json_val);
                     }
 
-                    println!(
-                        "\n\n\n\nres_json: {}\n\n\n\n\n\n",
-                        serde_json::to_string_pretty(&res_json).unwrap()
-                    );
-
                     // event!(Level::INFO, "res_json: {:?}", res_json);
 
                     let engine_status = EngineStatus {
                         funcs: Some(new_fns),
                         frames: Some(new_frames),
                     };
-
-                    println!("engine_status: {:?}", engine_status);
 
                     (res_json, engine_status)
                 });
@@ -572,7 +557,6 @@ fn usercode_callback(
     let struct_instance = unsafe { &mut *(external.value() as *mut EngineInstance) };
     let val = struct_instance.usercode.unwrap();
     let namespace = val.get_module_namespace();
-    println!("before retval");
     retval.set(namespace);
 }
 
