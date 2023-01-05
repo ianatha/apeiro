@@ -2,10 +2,9 @@ use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
 use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
-use pristine_engine::{pristine_compile, StepResult, StepResultStatus};
 use pristine_internal_api::{
     PristineError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
-    ProcStatusDebug,
+    ProcStatusDebug, StepResult, StepResultStatus
 };
 use reqwest::Response;
 use reqwest_eventsource::{Event, EventSource};
@@ -60,12 +59,6 @@ enum Commands {
     /// Stream process events and logs
     Watch {
         proc_id: String,
-    },
-    /// Compile a source file into Pristine VM
-    Compile {
-        input: PathBuf,
-        #[clap(short, long)]
-        output: Option<PathBuf>,
     },
 }
 
@@ -262,18 +255,6 @@ async fn ps(remote: String, _output_json: bool) -> Result<()> {
     Ok(())
 }
 
-async fn compile(input: &PathBuf, output: &Option<PathBuf>) -> Result<()> {
-    let input_content = std::fs::read_to_string(input)?;
-    let output_content = pristine_compile(input_content)?;
-    match output {
-        Some(output) => {
-            std::fs::write(output, output_content)?;
-        }
-        None => println!("{}", output_content),
-    }
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -288,7 +269,6 @@ async fn main() -> Result<()> {
         Commands::Send { proc_id, message } => send(remote, proc_id, message).await,
         Commands::New { srcfile, name } => new(remote, srcfile, name).await,
         Commands::Ps {} => ps(remote, cli.output_json).await,
-        Commands::Compile { input, output } => compile(input, output).await,
     }
 }
 
