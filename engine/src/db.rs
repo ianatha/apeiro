@@ -14,6 +14,8 @@ pub struct Db {
 }
 
 pub struct ProcDetails {
+    pub pid: String,
+    pub name: Option<String>,
     pub compiled_src: String,
     pub engine_status: EngineStatus,
     pub state: StepResult,
@@ -38,7 +40,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
 
     fn proc_get_details(&self, id: &String) -> Result<ProcDetails, anyhow::Error>;
 
-    fn proc_get(&self, id: &String) -> Result<StepResult, anyhow::Error>;
+    fn proc_get(&self, id: &String) -> Result<(String, Option<String>, StepResult), anyhow::Error>;
 
     fn proc_list(&self) -> Result<Vec<ProcSummary>, anyhow::Error>;
 
@@ -135,15 +137,15 @@ impl ApeiroEnginePersistence for Db {
         Ok(())
     }
 
-    fn proc_get_details(&self, id: &String) -> Result<ProcDetails, anyhow::Error> {
+    fn proc_get_details(&self, proc_id_or_name: &String) -> Result<ProcDetails, anyhow::Error> {
         let conn = self.pool.get()?;
+
+        let (proc_id, name, state) = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
             conn.prepare("SELECT compiled_src, frames, funcs FROM procs WHERE id = ?")?;
 
-        let state = self.proc_get(id)?;
-
-        let result = stmt.query_row(&[id], |row| {
+        let result = stmt.query_row(&[&proc_id.clone()], |row| {
             let compiled_src: String = row.get(0)?;
             let frames: String = row.get(1)?;
             let frames: Option<serde_json::Value> = serde_json::from_str(&frames).unwrap();
@@ -151,6 +153,8 @@ impl ApeiroEnginePersistence for Db {
             let funcs: Option<serde_json::Value> = serde_json::from_str(&funcs).unwrap();
             let engine_status = EngineStatus { frames, funcs };
             Ok(ProcDetails {
+                pid: proc_id,
+                name,
                 compiled_src,
                 engine_status,
                 state,
@@ -160,12 +164,19 @@ impl ApeiroEnginePersistence for Db {
         Ok(result)
     }
 
-    fn proc_get(&self, id: &String) -> Result<StepResult, anyhow::Error> {
+    fn proc_get(
+        &self,
+        proc_id_or_name: &String,
+    ) -> Result<(String, Option<String>, StepResult), anyhow::Error> {
         let conn = self.pool.get()?;
 
-        let mut stmt = conn.prepare("SELECT status, val, suspension FROM procs WHERE id = ?")?;
+        let mut stmt = if is_proc_id(proc_id_or_name) {
+            conn.prepare("SELECT status, val, suspension, id, name FROM procs WHERE id = ?")?
+        } else {
+            conn.prepare("SELECT status, val, suspension, id, name FROM procs WHERE name = ?")?
+        };
 
-        let result = stmt.query_row(&[id], |row| {
+        let result = stmt.query_row(&[proc_id_or_name], |row| {
             let status: String = row.get(0)?;
             let status: StepResultStatus = serde_json::from_str(&status).unwrap();
             let val: Result<String, _> = row.get(1);
@@ -180,12 +191,18 @@ impl ApeiroEnginePersistence for Db {
             } else {
                 None
             };
+            let proc_id: String = row.get(3).unwrap();
+            let name: Option<String> = row.get(4).unwrap();
 
-            Ok(StepResult {
-                status,
-                val,
-                suspension,
-            })
+            Ok((
+                proc_id,
+                name,
+                StepResult {
+                    status,
+                    val,
+                    suspension,
+                },
+            ))
         })?;
 
         Ok(result)
@@ -262,4 +279,8 @@ impl ApeiroEnginePersistence for Db {
 
         Ok(result)
     }
+}
+
+fn is_proc_id(s: &String) -> bool {
+    s.len() == 21
 }

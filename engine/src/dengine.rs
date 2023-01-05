@@ -231,7 +231,7 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
-        let res = self
+        let (res_proc_id, name, res) = self
             .0
             .db
             .proc_get(&proc_id)
@@ -239,7 +239,7 @@ impl DEngine {
 
         let executing = self.proc_is_executing(&proc_id).await?;
 
-        Ok(ProcStatus::new(res, executing))
+        Ok(ProcStatus::new(res_proc_id, name, res, executing))
     }
 
     #[instrument]
@@ -403,21 +403,21 @@ impl DEngine {
     #[instrument(skip(self))]
     async fn inner_proc_send(
         &self,
-        proc_id: &String,
+        proc_id_or_name: &String,
         body: &ProcSendRequest,
     ) -> Result<StepResult, anyhow::Error> {
-        let proc = self.0.db.proc_get_details(&proc_id)?;
+        let proc = self.0.db.proc_get_details(&proc_id_or_name)?;
 
         let res = if proc.state.status != StepResultStatus::SUSPEND {
             Err(anyhow!("can only send to suspended procs"))
         } else {
-            let proc_lock = self.get_proc_lock(proc_id).await.expect("cant lock");
+            let proc_lock = self.get_proc_lock(&proc.pid).await.expect("cant lock");
             let _proc_lock_guard = proc_lock.write().await;
 
             event!(Level::INFO, "after proc lock guard");
 
             let mut engine =
-                crate::Engine::new_with_name(Some(crate::get_engine_runtime), proc_id.clone());
+                crate::Engine::new_with_name(Some(crate::get_engine_runtime), proc.pid.clone());
 
             engine.dengine = Some(self.clone());
 
@@ -431,17 +431,17 @@ impl DEngine {
                 )
                 .await?;
 
-            self.0.db.proc_update(&proc_id, &res, &engine_status)?;
+            self.0.db.proc_update(&proc.pid, &res, &engine_status)?;
 
             if let Some(suspension) = &res.suspension {
                 if let Some(generator_tag) = suspension.get("$generator") {
                     if generator_tag.as_bool().unwrap_or(false) {
                         println!(
                             "advacing {} because of $generator: {:?}",
-                            proc_id, res.suspension
+                            proc.pid, res.suspension
                         );
                         self.send(DEngineCmd::Send(DEngineCmdSend {
-                            proc_id: proc_id.clone(),
+                            proc_id: proc.pid.clone(),
                             step_id: "generator_step".to_string(),
                             req: ProcSendRequest {
                                 msg: serde_json::json!({
@@ -453,7 +453,7 @@ impl DEngine {
                     }
                 } else if let Some(subscription) = suspension.get("$subscribe") {
                     println!("subscription detected");
-                    self.subscribe_proc_to_events(proc_id.clone(), subscription.clone())
+                    self.subscribe_proc_to_events(proc.pid.clone(), subscription.clone())
                         .await;
                 }
             };

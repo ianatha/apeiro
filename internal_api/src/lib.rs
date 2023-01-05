@@ -97,6 +97,8 @@ impl std::fmt::Debug for StepResult {
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ProcStatus {
+    pub proc_id: String,
+    pub name: Option<String>,
     pub status: StepResultStatus,
     pub val: Option<String>,
     pub suspension: Option<String>,
@@ -111,8 +113,15 @@ pub struct ProcStatusDebug {
 }
 
 impl ProcStatus {
-    pub fn new(step_result: StepResult, executing: bool) -> Self {
+    pub fn new(
+        proc_id: String,
+        name: Option<String>,
+        step_result: StepResult,
+        executing: bool,
+    ) -> Self {
         ProcStatus {
+            proc_id,
+            name,
             status: step_result.status,
             val: step_result
                 .val
