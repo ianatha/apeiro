@@ -294,9 +294,34 @@ impl WrapFunctions {
                         // return stmt.take();
                     }
                 } else {
+                    if let Some(assignee_name) = decl.name.as_ident() {
+                        new_stmts.push(
+                            ExprStmt {
+                                span: DUMMY_SP,
+                                expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
+                                    span: DUMMY_SP,
+                                    left: MemberExpr {
+                                        span: DUMMY_SP,
+                                        obj: self.current_scope_identifier().unwrap().into(),
+                                        prop: assignee_name.id.clone().into(),
+                                    }
+                                    .into(),
+                                    op: swc_ecma_ast::AssignOp::Assign,
+                                    right: ObjectLit {
+                                        span: DUMMY_SP,
+                                        props: vec![],
+                                    }
+                                    .into(),
+                                })),
+                            }
+                            .into(),
+                        );
+                    }
+                    // no init;
                     // TODO
-                    event!(Level::INFO, "{:?}", decl);
-                    todo!();
+                    // println!("ERROR: can't compile: {:?}", decl);
+                    // event!(Level::ERROR, "{:?}", decl);
+                    // todo!();
                     // println!("todo009");
                     // return stmt.take();
                 }
