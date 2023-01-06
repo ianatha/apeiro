@@ -88,6 +88,15 @@ macro_rules! v8_str {
 }
 
 #[macro_export]
+macro_rules! throw_exception {
+    ($scope:ident, $msg:expr) => {
+        let message = v8::String::new($scope, $msg).unwrap();
+        let exception = v8::Exception::error($scope, message);
+        $scope.throw_exception(exception);
+    };
+}
+
+#[macro_export]
 macro_rules! struct_method_to_v8 {
     ($struct_less_name:ident -> $struct_type:ident :: $method:ident) => {
         fn $struct_less_name(

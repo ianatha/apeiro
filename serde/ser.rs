@@ -630,7 +630,6 @@ fn set_in_scope_cache<'s>(
     obj_id: i32,
     obj: v8::Local<'s, v8::Object>,
 ) {
-    println!("set_in_scope_cache: {}\n\n\n\n", obj_id);
     let v8_obj_cache_key = v8_struct_key(scope, "__obj_cache");
     let global = scope.get_current_context().global(scope);
     let v8_obj_cache = global.get(scope, v8_obj_cache_key.into()).unwrap();
@@ -653,7 +652,6 @@ fn get_from_scope_cache<'s>(
     scope: &mut v8::HandleScope<'s>,
     obj_id: i32,
 ) -> Option<v8::Local<'s, v8::Object>> {
-    println!("\n\n### get_from_scope_cache {}", obj_id);
     let global = scope.get_current_context().global(scope);
     let v8_obj_cache_key = v8_struct_key(scope, "__obj_cache");
     let v8_obj_cache = global.get(scope, v8_obj_cache_key.into()).unwrap();
@@ -667,7 +665,6 @@ fn get_from_scope_cache<'s>(
     if v8_lookup_res.is_null_or_undefined() {
         return None;
     } else {
-        println!("get_from_scope_cache: {}", obj_id);
         Some(v8_lookup_res.to_object(scope).unwrap())
     }
 }

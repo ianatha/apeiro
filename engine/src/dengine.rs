@@ -175,16 +175,15 @@ impl DEngine {
     }
 
     #[instrument(skip(self))]
-    pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
-        let src = req.src.clone();
-        let compiled_src =
-            tokio::task::spawn_blocking(move || apeiro_bundle_and_compile(src).unwrap())
-                .await
-                .unwrap();
+    pub async fn proc_new_compiled(
+        &self,
+        src: String,
+        compiled_src: String,
+        name: Option<String>,
+    ) -> Result<ProcNewOutput, anyhow::Error> {
+        let proc_id = self.0.db.proc_new(&src, &name, &compiled_src)?;
 
-        let proc_id = self.0.db.proc_new(&req.src, &req.name, &compiled_src)?;
-
-        let mut engine = crate::Engine::new(self.0.runtime_js_src);
+        let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone());
 
         let (res, engine_status) = engine.step_process(compiled_src, None, None).await.unwrap();
 
@@ -202,6 +201,18 @@ impl DEngine {
             id: proc_id,
             state: res,
         })
+    }
+
+    #[instrument(skip(self))]
+    pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
+        let src = req.src.clone();
+        let compiled_src =
+            tokio::task::spawn_blocking(move || apeiro_bundle_and_compile(src).unwrap())
+                .await
+                .unwrap();
+
+        self.proc_new_compiled(req.src, compiled_src, req.name)
+            .await
     }
 
     #[instrument(skip(self))]
@@ -417,7 +428,7 @@ impl DEngine {
             event!(Level::INFO, "after proc lock guard");
 
             let mut engine =
-                crate::Engine::new_with_name(Some(crate::get_engine_runtime), proc.pid.clone());
+                crate::Engine::new(Some(crate::get_engine_runtime), proc.pid.clone());
 
             engine.dengine = Some(self.clone());
 

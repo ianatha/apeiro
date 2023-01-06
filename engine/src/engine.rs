@@ -8,6 +8,7 @@ use v8::CreateParams;
 
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
+use crate::throw_exception;
 use crate::v8_helpers::stack_trace_to_string;
 use crate::v8_helpers::v8_struct_key;
 use crate::v8_init;
@@ -42,11 +43,7 @@ pub struct EngineInstance<'a> {
 }
 
 impl Engine {
-    pub fn new(engine_runtime: Option<fn() -> String>) -> Engine {
-        Engine::new_with_name(engine_runtime, "anon".into())
-    }
-
-    pub fn new_with_name(engine_runtime: Option<fn() -> String>, name: String) -> Engine {
+    pub fn new(engine_runtime: Option<fn() -> String>, name: String) -> Engine {
         v8_init();
         Engine {
             runtime_js_src: engine_runtime,
@@ -116,7 +113,12 @@ impl Engine {
                 .build(handle_scope);
 
             let pid_fn_builder = v8::FunctionTemplate::builder(pid_callback)
-                .data(engine_instance_ref.into())
+                .data(engine_ref.into())
+                .build(handle_scope);
+
+            let spawn_fn_builder = v8::FunctionTemplate::builder(spawn_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
                 .build(handle_scope);
 
             let global = v8::ObjectTemplate::new(handle_scope);
@@ -152,6 +154,10 @@ impl Engine {
             global.set(
                 v8::String::new(handle_scope, "$pid").unwrap().into(),
                 pid_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "$spawn").unwrap().into(),
+                spawn_fn_builder.into(),
             );
 
             let context = v8::Context::new_from_template(handle_scope, global);
@@ -482,6 +488,110 @@ impl Engine {
     }
 
     #[inline]
+    fn spawn_callback(
+        &mut self,
+        scope: &mut v8::HandleScope,
+        args: v8::FunctionCallbackArguments,
+        mut retval: v8::ReturnValue,
+    ) {
+        let new_function = args.get(0);
+        if let Result::Ok(new_function) = v8::Local::<v8::Function>::try_from(new_function) {
+            let function_serialized: serde_json::Value =
+                apeiro_serde::from_v8(scope, new_function.into()).unwrap();
+            println!("\n\n\n\n\n\nspawning: {:?}", function_serialized);
+            let fn_src = function_serialized.get("src").unwrap().as_str().unwrap();
+            let synthetic_src = format!("let main = {}; export default main;", fn_src);
+
+            println!("\n\n\n\n\n\nspawning: {}", synthetic_src);
+
+            let dengine = self.dengine.clone().unwrap();
+
+            println!("before spawening 0");
+            let handle = tokio::runtime::Handle::current();
+            println!("before spawening 1");
+            let _guard = handle.enter();
+            println!("before spawening 2");
+            let res = futures::executor::block_on(dengine.proc_new_compiled(
+                synthetic_src.clone().into(),
+                synthetic_src.into(),
+                None,
+            )).unwrap();
+
+            println!("before spawening");
+
+            let new_function_pid = v8::String::new(scope, res.id.as_str()).unwrap();
+            retval.set(new_function_pid.into());
+        } else {
+            throw_exception!(scope, "invalid function");
+        }
+    }
+
+
+    #[inline]
+    fn http_post_callback(
+        &mut self,
+        scope: &mut v8::HandleScope,
+        args: v8::FunctionCallbackArguments,
+        mut retval: v8::ReturnValue,
+    ) {
+        println!("http_post_callback");
+        let url = args.get(0);
+        let msg = args.get(1);
+        let headers = args.get(2);
+        if let Result::Ok(url) = v8::Local::<v8::String>::try_from(url) {
+            println!("http_post_callback 0");
+            scope.set_data(1, usize::MAX as *mut c_void);
+            let msg: serde_json::Value = apeiro_serde::from_v8(scope, msg).unwrap();
+            let headers: Option<serde_json::Value> = apeiro_serde::from_v8(scope, headers).unwrap();
+            
+            let mut headers = if let Some(headers) = headers {
+                let headers = headers.as_object().unwrap().clone();
+                let mut result = reqwest::header::HeaderMap::new();
+                for (k, v) in headers {
+                    let k = string_to_static_str(k);
+                    let v = v.as_str().unwrap();
+                    let v = reqwest::header::HeaderValue::from_str(v).unwrap();
+                    result.insert(k, v);
+                }
+                result
+            } else {
+                reqwest::header::HeaderMap::new()
+            };
+            headers.insert(reqwest::header::CONTENT_TYPE, "application/json".parse().unwrap());
+
+            println!("http_post_callback 1 {:?}", headers);
+            
+            println!("http_post_callback 2");
+
+            println!("POST {}\n{:?}", url.to_rust_string_lossy(scope), msg);
+
+            let url = url.to_rust_string_lossy(scope);
+            scope.set_data(1, 0 as *mut c_void);
+
+            tokio::task::spawn(async move {
+                let res = reqwest::Client::new()
+                .post(url)
+                .headers(headers)
+                .json(&msg)
+                .send()
+                .await;
+            
+                println!("\n\n\nafter POST");
+
+                println!("res: {:?}", res);
+
+                let resp: serde_json::Value = res.unwrap().json().await.unwrap();
+                println!("resp: {:?}", resp);
+             });
+
+            let v8_true = v8::Boolean::new(scope, true);
+            retval.set(v8_true.into());
+        } else {
+            throw_exception!(scope, "invalid invocation");
+        }
+    }
+
+    #[inline]
     fn get_callback(
         &mut self,
         scope: &mut v8::HandleScope,
@@ -522,6 +632,7 @@ struct_method_to_v8!(mbox_callback -> Engine::mbox_callback);
 struct_method_to_v8!(send_callback -> Engine::send_callback);
 struct_method_to_v8!(get_callback -> Engine::get_callback);
 struct_method_to_v8!(pid_callback -> Engine::pid_callback);
+struct_method_to_v8!(spawn_callback -> Engine::spawn_callback);
 
 fn frames_callback(
     scope: &mut v8::HandleScope,
