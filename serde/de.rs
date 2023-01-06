@@ -3,6 +3,7 @@ extern crate serde;
 
 use std::cell::RefCell;
 use std::convert::TryFrom;
+use std::ffi::c_void;
 
 use self::serde::de::IntoDeserializer;
 use self::serde::de::{self, SeqAccess as _, Visitor};
@@ -382,16 +383,21 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de> for &'x mut Deserializer<'a, 'b,
             .map(|x| x.boolean_value(self.scope))
             .unwrap_or(false);
 
-        let maybe_terminate = OBJ_COUNT_DE.with(|count: &RefCell<i32>| {
-            let mut count = count.borrow_mut();
-            if *count != -1 {
+        let maybe_terminate = {
+            //
+            // } OBJ_COUNT_DE.with(|count: &RefCell<i32>| {
+            // let mut count = count.borrow_mut();
+            let count = self.scope.get_data(1) as usize;
+            if count != usize::MAX {
+                let mut count = count as i32;
                 let priv_key_str = v8::String::new(self.scope, "private_key").unwrap();
                 let priv_key = v8::Private::for_api(self.scope, priv_key_str.into());
 
                 let priv_val = obj.get_private(self.scope, priv_key).unwrap();
                 if priv_val.is_undefined() {
-                    *count += 1;
-                    let val = v8::Integer::new(self.scope, *count);
+                    count += 1;
+                    self.scope.set_data(1, count as *mut c_void);
+                    let val = v8::Integer::new(self.scope, count);
                     assert!(obj.set_private(self.scope, priv_key, val.into()).unwrap());
                     let public_key = v8::String::new(self.scope, "$$obj_id").unwrap();
                     assert!(obj.set(self.scope, public_key.into(), val.into()).unwrap());
@@ -411,7 +417,8 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de> for &'x mut Deserializer<'a, 'b,
             } else {
                 None
             }
-        });
+        };
+        // });
 
         match maybe_terminate {
             Some(terminate) => return visitor.visit_map(terminate),

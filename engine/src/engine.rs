@@ -14,6 +14,7 @@ use crate::v8_init;
 use crate::v8_str;
 use crate::DEngine;
 use std::cell::RefCell;
+use std::ffi::c_void;
 use std::string::String;
 
 use v8::{ContextScope, HandleScope, Isolate};
@@ -119,6 +120,7 @@ impl Engine {
                 .build(handle_scope);
 
             let global = v8::ObjectTemplate::new(handle_scope);
+            global.set_internal_field_count(1);
             global.set(
                 v8::String::new(handle_scope, "log").unwrap().into(),
                 log_callback_fn_builder.into(),
@@ -267,6 +269,7 @@ impl Engine {
                     .get(context_scope, frames_key.into())
                     .unwrap();
 
+                context_scope.set_data(1, 100 as *mut c_void);
                 let counter = RefCell::new(0);
                 let (res_json, engine_status) = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
                     let new_fns: serde_json::Value =
@@ -374,9 +377,9 @@ impl Engine {
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
             let counter = RefCell::new(-1);
+            scope.set_data(1, usize::MAX as *mut c_void);
             let msg = apeiro_serde::OBJ_COUNT_DE
                 .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
-
             let proc_id = self.proc_id.clone();
             tokio::task::spawn(async move {
                 // TODO: 2nd proc_id should be exec
@@ -399,6 +402,7 @@ impl Engine {
         let _context = v8::Context::new(scope);
 
         let counter = RefCell::new(-1);
+        scope.set_data(1, usize::MAX as *mut c_void);
         let filter = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
             apeiro_serde::from_v8(scope, args.get(0)).unwrap()
         });
@@ -451,6 +455,7 @@ impl Engine {
 
             let msg = args.get(1);
             let counter = RefCell::new(-1);
+            scope.set_data(1, usize::MAX as *mut c_void);
             let msg = apeiro_serde::OBJ_COUNT_DE
                 .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
 
