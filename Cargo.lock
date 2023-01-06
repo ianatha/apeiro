@@ -320,6 +320,7 @@ dependencies = [
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_json_matcher",

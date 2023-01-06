@@ -105,6 +105,7 @@ async fn main() -> anyhow::Result<()> {
             .service(handlers::proc_get)
             .service(handlers::proc_get_debug)
             .service(handlers::proc_send)
+            .service(handlers::proc_post_send)
             .service(handlers::proc_watch)
             .service(handlers::proc_delete)
     })

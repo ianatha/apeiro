@@ -119,6 +119,9 @@ impl Engine {
             let spawn_fn_builder = v8::FunctionTemplate::builder(spawn_callback)
                 .data(engine_ref.into())
                 .build(handle_scope);
+
+            let http_post_fn_builder = v8::FunctionTemplate::builder(http_post_callback)
+                .data(engine_ref.into())
                 .build(handle_scope);
 
             let global = v8::ObjectTemplate::new(handle_scope);
@@ -158,6 +161,11 @@ impl Engine {
             global.set(
                 v8::String::new(handle_scope, "$spawn").unwrap().into(),
                 spawn_fn_builder.into(),
+            );
+
+            global.set(
+                v8::String::new(handle_scope, "$http_post").unwrap().into(),
+                http_post_fn_builder.into(),
             );
 
             let context = v8::Context::new_from_template(handle_scope, global);
@@ -633,6 +641,7 @@ struct_method_to_v8!(send_callback -> Engine::send_callback);
 struct_method_to_v8!(get_callback -> Engine::get_callback);
 struct_method_to_v8!(pid_callback -> Engine::pid_callback);
 struct_method_to_v8!(spawn_callback -> Engine::spawn_callback);
+struct_method_to_v8!(http_post_callback -> Engine::http_post_callback);
 
 fn frames_callback(
     scope: &mut v8::HandleScope,
@@ -735,4 +744,8 @@ pub fn instantiate_module<'a>(
     } else {
         Err(anyhow!("module instantiation failed"))
     }
+}
+
+fn string_to_static_str(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
 }
