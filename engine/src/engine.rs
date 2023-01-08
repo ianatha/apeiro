@@ -222,8 +222,7 @@ impl Engine {
                     );
                 }
 
-                let usercode_module =
-                    instantiate_module(context_scope, "usercode".into(), src).unwrap();
+                let usercode_module = instantiate_module(context_scope, "usercode".into(), src)?;
                 engine_instance.usercode = Some(usercode_module);
 
                 event!(Level::INFO, "before kickoff");
@@ -375,6 +374,7 @@ impl Engine {
     }
 
     #[inline]
+    #[instrument(skip(self))]
     fn log_callback(
         &self,
         scope: &mut v8::HandleScope,
@@ -406,7 +406,7 @@ impl Engine {
     }
 
     #[inline]
-    #[instrument]
+    #[instrument(skip(self))]
     fn mbox_callback(
         &mut self,
         scope: &mut v8::HandleScope,
@@ -455,6 +455,7 @@ impl Engine {
     }
 
     #[inline]
+    #[instrument(skip(self))]
     fn send_callback(
         &mut self,
         scope: &mut v8::HandleScope,
@@ -484,6 +485,7 @@ impl Engine {
     }
 
     #[inline]
+    #[instrument(skip(self))]
     fn pid_callback(
         &mut self,
         scope: &mut v8::HandleScope,
@@ -496,6 +498,7 @@ impl Engine {
     }
 
     #[inline]
+    #[instrument(skip(self))]
     fn spawn_callback(
         &mut self,
         scope: &mut v8::HandleScope,

@@ -185,12 +185,11 @@ impl DEngine {
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone());
 
-        let (res, engine_status) = engine.step_process(compiled_src, None, None).await.unwrap();
+        let (res, engine_status) = engine.step_process(compiled_src, None, None).await?;
 
         self.0
             .db
-            .proc_update(&proc_id, &res, &engine_status)
-            .unwrap();
+            .proc_update(&proc_id, &res, &engine_status)?;
 
         if let Some(suspension) = &res.suspension {
             self.process_post_step_suspension(&proc_id, suspension)
@@ -206,13 +205,9 @@ impl DEngine {
     #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let src = req.src.clone();
-        let compiled_src =
-            tokio::task::spawn_blocking(move || apeiro_bundle_and_compile(src).unwrap())
-                .await
-                .unwrap();
+        let compiled_src = apeiro_bundle_and_compile(src)?;
 
-        self.proc_new_compiled(req.src, compiled_src, req.name)
-            .await
+        self.proc_new_compiled(req.src, compiled_src, req.name).await
     }
 
     #[instrument(skip(self))]
