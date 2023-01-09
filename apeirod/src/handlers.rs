@@ -163,3 +163,34 @@ async fn proc_watch(
         .streaming(stream)
     // Ok::<_, actix_web::Error>(web::Json(res))
 }
+
+#[get("/mount/")]
+async fn mount_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
+    let res = dengine.mount_list().await.map_err(apeiro_err)?;
+    Ok::<_, actix_web::Error>(web::Json(res))
+}
+
+#[get("/mount/{mount_id}")]
+async fn mount_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
+    let mount_id: String = req
+        .match_info()
+        .get("mount_id")
+        .ok_or(ErrorBadRequest("no mount_id"))?
+        .parse()?;
+
+    let res = dengine.mount_get(mount_id).await.map_err(apeiro_err)?;
+    Ok::<_, actix_web::Error>(web::Json(res))
+}
+
+#[post("/mount/")]
+async fn mount_new(
+    _req: HttpRequest,
+    body: web::Json<MountNewRequest>,
+    dengine: web::Data<DEngine>,
+) -> impl Responder {
+    let res = dengine
+        .mount_new(body.into_inner())
+        .await
+        .map_err(apeiro_err)?;
+    Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": res })))
+}

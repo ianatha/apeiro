@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Ok, Result};
 use apeiro_compiler::apeiro_bundle_and_compile;
+use apeiro_internal_api::MountNewRequest;
+use apeiro_internal_api::MountSummary;
 use apeiro_internal_api::ProcListOutput;
 use apeiro_internal_api::ProcNewOutput;
 use apeiro_internal_api::ProcNewRequest;
@@ -177,19 +179,18 @@ impl DEngine {
     #[instrument(skip(self))]
     pub async fn proc_new_compiled(
         &self,
+        mount_id: String,
         src: String,
         compiled_src: String,
         name: Option<String>,
     ) -> Result<ProcNewOutput, anyhow::Error> {
-        let proc_id = self.0.db.proc_new(&src, &name, &compiled_src)?;
+        let proc_id = self.0.db.proc_new(&mount_id, &src, &name, &compiled_src)?;
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone());
 
         let (res, engine_status) = engine.step_process(compiled_src, None, None).await?;
 
-        self.0
-            .db
-            .proc_update(&proc_id, &res, &engine_status)?;
+        self.0.db.proc_update(&proc_id, &res, &engine_status)?;
 
         if let Some(suspension) = &res.suspension {
             self.process_post_step_suspension(&proc_id, suspension)
@@ -204,10 +205,9 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
-        let src = req.src.clone();
-        let compiled_src = apeiro_bundle_and_compile(src)?;
-
-        self.proc_new_compiled(req.src, compiled_src, req.name).await
+        let mount = self.mount_get(req.mount_id.clone()).await?;
+        self.proc_new_compiled(mount.id, mount.src, mount.compiled_src, req.name)
+            .await
     }
 
     #[instrument(skip(self))]
@@ -215,6 +215,30 @@ impl DEngine {
         let procs = self.0.db.proc_list()?;
 
         Ok(ProcListOutput { procs })
+    }
+
+    #[instrument(skip(self))]
+    pub async fn mount_get(&self, mount_id: String) -> Result<MountSummary, anyhow::Error> {
+        let mount = self.0.db.mount_get(&mount_id)?;
+
+        Ok(mount)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
+        let procs = self.0.db.mount_list()?;
+
+        Ok(procs)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn mount_new(&self, req: MountNewRequest) -> Result<String, anyhow::Error> {
+        let src = req.src.clone();
+        let compiled_src = apeiro_bundle_and_compile(src)?;
+
+        let mount = self.0.db.mount_new(&req.src, &compiled_src)?;
+
+        Ok(mount)
     }
 
     #[instrument(skip(self))]
@@ -237,7 +261,7 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
-        let (res_proc_id, name, res) = self
+        let (res_proc_id, mount_id, name, res) = self
             .0
             .db
             .proc_get(&proc_id)
@@ -245,7 +269,7 @@ impl DEngine {
 
         let executing = self.proc_is_executing(&proc_id).await?;
 
-        Ok(ProcStatus::new(res_proc_id, name, res, executing))
+        Ok(ProcStatus::new(res_proc_id, mount_id, name, res, executing))
     }
 
     #[instrument]

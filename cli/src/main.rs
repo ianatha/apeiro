@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use apeiro_internal_api::{
     ApeiroError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
-    ProcStatusDebug, StepResult, StepResultStatus,
+    ProcStatusDebug, StepResult, StepResultStatus, MountSummary, MountNewRequest,
 };
 use clap::{command, Parser, Subcommand};
 use cli_table::format::VerticalLine;
@@ -50,9 +50,18 @@ enum Commands {
         proc_id: String,
         message: String,
     },
+    /// New mount
+    Mount {
+        srcfile: PathBuf,
+    },
+    /// List mounts
+    Mounts { },
     /// Start a new process
     New {
-        srcfile: PathBuf,
+        #[clap(short, long)]
+        mount: Option<String>,
+        #[clap(short, long)]
+        src: Option<PathBuf>,
         #[clap(short, long)]
         name: Option<String>,
     },
@@ -186,13 +195,12 @@ async fn send(remote: String, proc_id: &String, message: &String) -> Result<()> 
     Ok(())
 }
 
-async fn new(remote: String, srcfile: &PathBuf, name: &Option<String>) -> Result<()> {
-    let src = std::fs::read_to_string(srcfile)?;
+async fn new(remote: String, mount_id: &String, name: &Option<String>) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .post(remote + "/proc/")
         .json(&ProcNewRequest {
-            src,
+            mount_id: mount_id.clone(),
             name: name.clone(),
         })
         .send()
@@ -255,6 +263,49 @@ async fn ps(remote: String, _output_json: bool) -> Result<()> {
     Ok(())
 }
 
+async fn mounts_list(remote: String) -> Result<()> {
+    let resp = reqwest::get(remote + "/mount/")
+        .await?
+        .json::<Vec<MountSummary>>()
+        .await?;
+
+    println!("{:?}", resp);
+
+    Ok(())
+}
+
+async fn mount_new_inner(remote: String, srcfile: &PathBuf) -> Result<String> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(remote + "/mount/")
+        .json(&MountNewRequest {
+            src: std::fs::read_to_string(srcfile)?,
+        })
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    let res = resp
+        .as_object()
+        .unwrap()
+        .get("mid")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    Ok(res)
+}
+
+async fn mount_new(remote: String, srcfile: &PathBuf) -> Result<()> {
+    let resp = mount_new_inner(remote, srcfile).await?;
+
+    println!("{:?}", resp);
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -272,8 +323,19 @@ async fn main() -> Result<()> {
         Commands::Get { proc_id, value } => get(&remote, proc_id, value, cli.output_json).await,
         Commands::Inspect { proc_id } => inspect(remote, proc_id).await,
         Commands::Send { proc_id, message } => send(remote, proc_id, message).await,
-        Commands::New { srcfile, name } => new(remote, srcfile, name).await,
+        Commands::New { src, mount, name } => {
+            if let Some(src) = src {
+                let mount_id = mount_new_inner(remote.clone(), src).await?;
+                new(remote, &mount_id, name).await
+            } else if let Some(mount_id) = mount {
+                new(remote, mount_id, name).await
+            } else {
+                Err(anyhow::anyhow!("either --src or --mount must be specified"))
+            }
+        },
         Commands::Ps {} => ps(remote, cli.output_json).await,
+        Commands::Mounts {} => mounts_list(remote).await,
+        Commands::Mount { srcfile } => mount_new(remote, srcfile).await,
     }
 }
 

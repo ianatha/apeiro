@@ -27,8 +27,13 @@ pub struct ProcListOutput {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewRequest {
-    pub src: String,
+    pub mount_id: String,
     pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MountNewRequest {
+    pub src: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -98,6 +103,7 @@ impl std::fmt::Debug for StepResult {
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ProcStatus {
     pub proc_id: String,
+    pub mount_id: String,
     pub name: Option<String>,
     pub status: StepResultStatus,
     pub val: Option<String>,
@@ -115,12 +121,14 @@ pub struct ProcStatusDebug {
 impl ProcStatus {
     pub fn new(
         proc_id: String,
+        mount_id: String,
         name: Option<String>,
         step_result: StepResult,
         executing: bool,
     ) -> Self {
         ProcStatus {
             proc_id,
+            mount_id,
             name,
             status: step_result.status,
             val: step_result
@@ -139,4 +147,11 @@ impl ProcStatus {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ApeiroError {
     error: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MountSummary {
+    pub id: String,
+    pub src: String,
+    pub compiled_src: String,
 }

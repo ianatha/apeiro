@@ -108,6 +108,9 @@ async fn main() -> anyhow::Result<()> {
             .service(handlers::proc_post_send)
             .service(handlers::proc_watch)
             .service(handlers::proc_delete)
+            .service(handlers::mount_new)
+            .service(handlers::mount_list)
+            .service(handlers::mount_get)
     })
     .bind(("127.0.0.1", port))?
     .run()

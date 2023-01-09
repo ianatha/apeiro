@@ -218,6 +218,7 @@ impl Engine {
                             "$scope",
                             "$frame_end",
                             "$isSuspendSignal",
+                            "$delay",
                         ],
                     );
                 }
@@ -523,10 +524,12 @@ impl Engine {
             let _guard = handle.enter();
             println!("before spawening 2");
             let res = futures::executor::block_on(dengine.proc_new_compiled(
+                "synthetic_id".into(),
                 synthetic_src.clone().into(),
                 synthetic_src.into(),
                 None,
-            )).unwrap();
+            ))
+            .unwrap();
 
             println!("before spawening");
 

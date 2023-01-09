@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::StepResultStatus;
 use anyhow::anyhow;
-use apeiro_internal_api::{EngineStatus, ProcStatusDebug, ProcSummary, StepResult};
+use apeiro_internal_api::{EngineStatus, ProcStatusDebug, ProcSummary, StepResult, MountSummary};
 use nanoid::nanoid;
 use r2d2::Pool;
 use r2d2_sqlite::rusqlite::params;
@@ -15,6 +15,7 @@ pub struct Db {
 
 pub struct ProcDetails {
     pub pid: String,
+    pub mount_id: String,
     pub name: Option<String>,
     pub compiled_src: String,
     pub engine_status: EngineStatus,
@@ -26,6 +27,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
 
     fn proc_new(
         &self,
+        mount_id: &String,
         src: &String,
         name: &Option<String>,
         compiled_src: &String,
@@ -40,13 +42,22 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
 
     fn proc_get_details(&self, id: &String) -> Result<ProcDetails, anyhow::Error>;
 
-    fn proc_get(&self, id: &String) -> Result<(String, Option<String>, StepResult), anyhow::Error>;
+    fn proc_get(
+        &self,
+        id: &String,
+    ) -> Result<(String, String, Option<String>, StepResult), anyhow::Error>;
 
     fn proc_list(&self) -> Result<Vec<ProcSummary>, anyhow::Error>;
 
     fn proc_inspect(&self, id: &String) -> Result<ProcStatusDebug, anyhow::Error>;
 
     fn proc_delete(&self, id: &String) -> Result<(), anyhow::Error>;
+
+    fn mount_new(&self, src: &String, compiled_src: &String) -> Result<String, anyhow::Error>;
+
+    fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error>;
+
+    fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error>;
 }
 
 impl Debug for Db {
@@ -60,9 +71,19 @@ impl ApeiroEnginePersistence for Db {
         let conn = self.pool.get()?;
 
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS mounts (
+                id TEXT PRIMARY KEY,
+                src TEXT,
+                compiled_src TEXT
+            );",
+            (),
+        )?;
+
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS procs (
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
+                mount_id TEXT,
                 src TEXT,
                 compiled_src TEXT,
                 status TEXT,
@@ -89,6 +110,7 @@ impl ApeiroEnginePersistence for Db {
     }
     fn proc_new(
         &self,
+        mount_id: &String,
         src: &String,
         name: &Option<String>,
         compiled_src: &String,
@@ -98,8 +120,8 @@ impl ApeiroEnginePersistence for Db {
         let conn = self.pool.get()?;
 
         conn.execute(
-            "INSERT INTO procs (id, name, src, compiled_src) VALUES (?, ?, ?, ?)",
-            params![&id, name, src, compiled_src],
+            "INSERT INTO procs (id, name, mount_id, src, compiled_src) VALUES (?, ?, ?, ?, ?)",
+            params![&id, name, mount_id, src, compiled_src],
         )?;
 
         Ok(id)
@@ -140,7 +162,7 @@ impl ApeiroEnginePersistence for Db {
     fn proc_get_details(&self, proc_id_or_name: &String) -> Result<ProcDetails, anyhow::Error> {
         let conn = self.pool.get()?;
 
-        let (proc_id, name, state) = self.proc_get(proc_id_or_name)?;
+        let (proc_id, mount_id, name, state) = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
             conn.prepare("SELECT compiled_src, frames, funcs FROM procs WHERE id = ?")?;
@@ -154,6 +176,7 @@ impl ApeiroEnginePersistence for Db {
             let engine_status = EngineStatus { frames, funcs };
             Ok(ProcDetails {
                 pid: proc_id,
+                mount_id,
                 name,
                 compiled_src,
                 engine_status,
@@ -167,13 +190,17 @@ impl ApeiroEnginePersistence for Db {
     fn proc_get(
         &self,
         proc_id_or_name: &String,
-    ) -> Result<(String, Option<String>, StepResult), anyhow::Error> {
+    ) -> Result<(String, String, Option<String>, StepResult), anyhow::Error> {
         let conn = self.pool.get()?;
 
         let mut stmt = if is_proc_id(proc_id_or_name) {
-            conn.prepare("SELECT status, val, suspension, id, name FROM procs WHERE id = ?")?
+            conn.prepare(
+                "SELECT status, val, suspension, id, name, mount_id FROM procs WHERE id = ?",
+            )?
         } else {
-            conn.prepare("SELECT status, val, suspension, id, name FROM procs WHERE name = ?")?
+            conn.prepare(
+                "SELECT status, val, suspension, id, name, mount_id FROM procs WHERE name = ?",
+            )?
         };
 
         let result = stmt.query_row(&[proc_id_or_name], |row| {
@@ -191,11 +218,13 @@ impl ApeiroEnginePersistence for Db {
             } else {
                 None
             };
-            let proc_id: String = row.get(3).unwrap();
-            let name: Option<String> = row.get(4).unwrap();
+            let proc_id: String = row.get(3)?;
+            let name: Option<String> = row.get(4)?;
+            let mount_id: String = row.get(5)?;
 
             Ok((
                 proc_id,
+                mount_id,
                 name,
                 StepResult {
                     status,
@@ -276,6 +305,64 @@ impl ApeiroEnginePersistence for Db {
             })?
             .map(Result::unwrap)
             .collect();
+
+        Ok(result)
+    }
+
+    fn mount_new(&self, src: &String, compiled_src: &String) -> Result<String, anyhow::Error> {
+        let id = nanoid!();
+
+        let conn = self.pool.get()?;
+
+        conn.execute(
+            "INSERT INTO mounts (id, src, compiled_src) VALUES (?, ?, ?)",
+            params![&id, src, compiled_src],
+        )?;
+
+        Ok(id)
+    }
+
+    fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, src, compiled_src FROM mounts",
+        )?;
+
+        let result = stmt
+            .query_map((), |row| {
+                let id: String = row.get(0)?;
+                let src: String = row.get(1)?;
+                let compiled_src: String = row.get(2)?;
+
+                Ok(MountSummary {
+                    id,
+                    src,
+                    compiled_src,
+                })
+            })?
+            .map(Result::unwrap)
+            .collect();
+
+        Ok(result)
+    }
+
+    fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, src, compiled_src FROM mounts WHERE id = ?",
+        )?;
+
+        let result: MountSummary = stmt.query_row(&[mount_id], |row| {
+                let id: String = row.get(0)?;
+                let src: String = row.get(1)?;
+                let compiled_src: String = row.get(2)?;
+
+                Ok(MountSummary {
+                    id,
+                    src,
+                    compiled_src,
+                })
+            })?;
 
         Ok(result)
     }
