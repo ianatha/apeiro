@@ -96,9 +96,27 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Starting HTTP daemon on port {}", port);
     HttpServer::new(move || {
+        use actix_cors::Cors;
+        use actix_web::http;
+
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:3000")
+            // .allowed_origin_fn(|origin, _req_head| {
+            //     origin.as_bytes().ends_with(b".rust-lang.org")
+            // })
+            .allowed_methods(vec!["GET", "POST"])
+            .allowed_headers(vec![
+                "apeiro-wait",
+                http::header::AUTHORIZATION.as_str(),
+                http::header::ACCEPT.as_str(),
+            ])
+            .allowed_header(http::header::CONTENT_TYPE)
+            .max_age(3600);
+
         App::new()
             .wrap(Logger::default())
             .wrap(Logger::new("%a %{User-Agent}i"))
+            .wrap(cors)
             .app_data(actix_web::web::Data::new(dengine.clone()))
             .service(handlers::proc_new)
             .service(handlers::proc_list)
