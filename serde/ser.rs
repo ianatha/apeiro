@@ -682,23 +682,29 @@ pub fn resolve_fn<'s>(
         .unwrap()
         .to_rust_string_lossy(scope);
 
-    let scope_obj = obj
-        .get(scope, scope_key.into())
-        .unwrap()
-        .to_object(scope)
-        .unwrap();
+    let obj = if let Some(scope_obj) = obj.get(scope, scope_key.into()) {
+        if scope_obj.is_object() {
+            let scope_obj = scope_obj.to_object(scope).unwrap();
 
-    let obj_id_ref = v8_struct_key(scope, "$$__$$obj_id_ref");
+            let obj_id_ref = v8_struct_key(scope, "$$__$$obj_id_ref");
 
-    let obj_ref = scope_obj.get(scope, obj_id_ref.into()).unwrap();
+            let obj_ref = scope_obj.get(scope, obj_id_ref.into()).unwrap();
 
-    let obj = if obj_ref.is_number() {
-        let obj_ref = obj_ref.int32_value(scope).unwrap();
+            let obj = if obj_ref.is_number() {
+                let obj_ref = obj_ref.int32_value(scope).unwrap();
 
-        let obj = get_from_scope_cache(scope, obj_ref)
-            .expect(format!("obj {} not found in cache", obj_ref).as_str());
-        v8_println(scope, obj.into());
-        obj
+                let obj = get_from_scope_cache(scope, obj_ref)
+                    .expect(format!("obj {} not found in cache", obj_ref).as_str());
+                v8_println(scope, obj.into());
+                obj
+            } else {
+                v8::Object::new(scope)
+            };
+
+            obj
+        } else {
+            v8::Object::new(scope)
+        }
     } else {
         v8::Object::new(scope)
     };
