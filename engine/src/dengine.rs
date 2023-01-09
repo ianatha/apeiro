@@ -80,7 +80,25 @@ impl EventLoop {
             match message {
                 DEngineCmd::Tick => {
                     let dengine = self.dengine.clone();
-                    let _s = dengine.get_all_subscriptions().await;
+                    let subscriptions = dengine.get_all_subscriptions().await;
+                    for (proc_id, subscription) in subscriptions {
+                        if let Some(subscription) = subscription.as_object() {
+                            if let Some(serde_json::Value::Number(time)) = subscription.get("$time")
+                            {
+                                let time = time.as_u64().unwrap();
+                                match std::time::SystemTime::now()
+                                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                {
+                                    Result::Ok(n) => {
+                                        if n.as_millis() >= time.into() {
+                                            println!("triggering {} because {}", proc_id, time);
+                                        }
+                                    }
+                                    Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+                                }
+                            }
+                        }
+                    }
                     // TODO
                 }
                 DEngineCmd::Broadcast(proc_id, exec_id, msg) => {
@@ -497,12 +515,12 @@ impl DEngine {
         res
     }
 
-    pub async fn get_all_subscriptions(&self) -> Vec<serde_json::Value> {
+    pub async fn get_all_subscriptions(&self) -> Vec<(String, serde_json::Value)> {
         let mut result = vec![];
         let proc_subscriptions_locked = self.0.proc_subscriptions.read().await;
-        for (_, proc_subscriptions) in proc_subscriptions_locked.iter() {
+        for (proc_id, proc_subscriptions) in proc_subscriptions_locked.iter() {
             for subscription in proc_subscriptions {
-                result.push(subscription.clone());
+                result.push((proc_id.clone(), subscription.clone()));
             }
         }
         result
@@ -510,6 +528,11 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn subscribe_proc_to_events(&self, proc_id: String, subscription: serde_json::Value) {
+        let _subscription_id = self
+            .0
+            .db
+            .proc_subscription_new(&proc_id, &subscription)
+            .unwrap();
         let mut proc_subscriptions_locked = self.0.proc_subscriptions.write().await;
         if let Some(subscriptions) = proc_subscriptions_locked.get_mut(&proc_id) {
             subscriptions.push(subscription);

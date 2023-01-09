@@ -33,6 +33,15 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
         compiled_src: &String,
     ) -> Result<String, anyhow::Error>;
 
+    fn proc_subscription_new(
+        &self,
+        proc_id: &String,
+        subscription: &serde_json::Value,
+    ) -> Result<String, anyhow::Error>;
+
+    fn proc_subscriptions_get_all(&self)
+        -> Result<Vec<(String, serde_json::Value)>, anyhow::Error>;
+
     fn proc_update(
         &self,
         id: &String,
@@ -106,8 +115,18 @@ impl ApeiroEnginePersistence for Db {
             (),
         )?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS proc_subscriptions (
+                id TEXT PRIMARY KEY,
+                proc_id TEXT,
+                subscription TEXT
+            );",
+            (),
+        )?;
+
         Ok(())
     }
+
     fn proc_new(
         &self,
         mount_id: &String,
@@ -365,6 +384,45 @@ impl ApeiroEnginePersistence for Db {
             })?;
 
         Ok(result)
+    }
+
+    fn proc_subscriptions_get_all(
+        &self,
+    ) -> Result<Vec<(String, serde_json::Value)>, anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt = conn.prepare("SELECT proc_id, subscription FROM proc_subscriptions")?;
+
+        let result = stmt
+            .query_map((), |row| {
+                let proc_id: String = row.get(0)?;
+                let subscription: String = row.get(1)?;
+                let subscription = serde_json::from_str(subscription.as_str()).unwrap();
+
+                Ok((proc_id, subscription))
+            })?
+            .map(Result::unwrap)
+            .collect();
+
+        Ok(result)
+    }
+
+    fn proc_subscription_new(
+        &self,
+        proc_id: &String,
+        subscription: &serde_json::Value,
+    ) -> Result<String, anyhow::Error> {
+        let id = nanoid!();
+
+        let conn = self.pool.get()?;
+
+        let subscription = serde_json::to_string(subscription)?;
+
+        conn.execute(
+            "INSERT INTO proc_subscriptions (id, proc_id, subscription) VALUES (?, ?, ?)",
+            params![&id, proc_id, subscription],
+        )?;
+
+        Ok(id)
     }
 }
 
