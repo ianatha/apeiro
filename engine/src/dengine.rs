@@ -234,7 +234,8 @@ impl DEngine {
     #[instrument(skip(self))]
     pub async fn mount_new(&self, req: MountNewRequest) -> Result<String, anyhow::Error> {
         let src = req.src.clone();
-        let compiled_src = apeiro_bundle_and_compile(src)?;
+        let compiled_src =
+            tokio::task::spawn_blocking(move || apeiro_bundle_and_compile(src)).await??;
 
         let mount = self.0.db.mount_new(&req.src, &compiled_src)?;
 

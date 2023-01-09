@@ -70,26 +70,20 @@ impl ApeiroCompiler {
         f: &FileName,
         special_main: &Option<String>,
     ) -> Result<(Lrc<SourceFile>, Module)> {
+        println!("loading module {:?}", f);
         let contents = match f {
             FileName::Anon => special_main.clone().unwrap(),
             FileName::Real(path) => fs::read_to_string(path)?,
             FileName::Url(url) => {
-                event!(Level::INFO, "fetching url {:?}", url);
-                let success = false;
-                let mut attempts = 0;
-                let mut result: Option<String> = None;
-                while !success && attempts < 3 {
-                    let t = reqwest::blocking::get(url.clone())?.text();
-                    if let Ok(res) = t {
-                        result = Some(res);
-                        break;
-                    }
-                    event!(Level::INFO, "fetching url {:?} failed", url);
-                    std::thread::sleep(core::time::Duration::from_millis(200));
-                    attempts = attempts + 1;
-                }
-                event!(Level::INFO, "fecthed url {:?}", url);
-                result.unwrap()
+                println!("fetching url {:?}", url);
+                // let handle = Handle::current();
+                // let _guard = handle.enter();
+                println!("tokio handle enter");
+                let res = futures::executor::block_on(reqwest::get(url.clone())).unwrap();
+                println!("after get");
+                let t = futures::executor::block_on(res.text()).unwrap();
+                println!("fecthed url {:?}", url);
+                t
             }
             _ => unreachable!(),
         };
