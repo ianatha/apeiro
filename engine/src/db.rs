@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::StepResultStatus;
 use anyhow::anyhow;
-use apeiro_internal_api::{EngineStatus, ProcStatusDebug, ProcSummary, StepResult, MountSummary};
+use apeiro_internal_api::{EngineStatus, MountSummary, ProcStatusDebug, ProcSummary, StepResult};
 use nanoid::nanoid;
 use r2d2::Pool;
 use r2d2_sqlite::rusqlite::params;
@@ -343,9 +343,7 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, src, compiled_src FROM mounts",
-        )?;
+        let mut stmt = conn.prepare("SELECT id, src, compiled_src FROM mounts")?;
 
         let result = stmt
             .query_map((), |row| {
@@ -367,21 +365,19 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, src, compiled_src FROM mounts WHERE id = ?",
-        )?;
+        let mut stmt = conn.prepare("SELECT id, src, compiled_src FROM mounts WHERE id = ?")?;
 
         let result: MountSummary = stmt.query_row(&[mount_id], |row| {
-                let id: String = row.get(0)?;
-                let src: String = row.get(1)?;
-                let compiled_src: String = row.get(2)?;
+            let id: String = row.get(0)?;
+            let src: String = row.get(1)?;
+            let compiled_src: String = row.get(2)?;
 
-                Ok(MountSummary {
-                    id,
-                    src,
-                    compiled_src,
-                })
-            })?;
+            Ok(MountSummary {
+                id,
+                src,
+                compiled_src,
+            })
+        })?;
 
         Ok(result)
     }

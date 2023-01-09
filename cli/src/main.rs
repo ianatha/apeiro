@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use apeiro_internal_api::{
-    ApeiroError, ProcListOutput, ProcNewOutput, ProcNewRequest, ProcSendRequest, ProcStatus,
-    ProcStatusDebug, StepResult, StepResultStatus, MountSummary, MountNewRequest,
+    ApeiroError, MountNewRequest, MountSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
+    ProcSendRequest, ProcStatus, ProcStatusDebug, StepResult, StepResultStatus,
 };
 use clap::{command, Parser, Subcommand};
 use cli_table::format::VerticalLine;
@@ -55,7 +55,7 @@ enum Commands {
         srcfile: PathBuf,
     },
     /// List mounts
-    Mounts { },
+    Mounts {},
     /// Start a new process
     New {
         #[clap(short, long)]
@@ -332,7 +332,7 @@ async fn main() -> Result<()> {
             } else {
                 Err(anyhow::anyhow!("either --src or --mount must be specified"))
             }
-        },
+        }
         Commands::Ps {} => ps(remote, cli.output_json).await,
         Commands::Mounts {} => mounts_list(remote).await,
         Commands::Mount { srcfile } => mount_new(remote, srcfile).await,

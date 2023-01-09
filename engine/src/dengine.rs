@@ -465,8 +465,7 @@ impl DEngine {
 
             event!(Level::INFO, "after proc lock guard");
 
-            let mut engine =
-                crate::Engine::new(Some(crate::get_engine_runtime), proc.pid.clone());
+            let mut engine = crate::Engine::new(Some(crate::get_engine_runtime), proc.pid.clone());
 
             engine.dengine = Some(self.clone());
 

@@ -79,7 +79,6 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-
 #[put("/proc/{proc_id}")]
 async fn proc_send(
     req: HttpRequest,
@@ -113,7 +112,12 @@ async fn proc_post_send(
         .parse()?;
 
     let res = dengine
-        .proc_send_and_watch_step_result(proc_id, ProcSendRequest { msg: body.into_inner() })
+        .proc_send_and_watch_step_result(
+            proc_id,
+            ProcSendRequest {
+                msg: body.into_inner(),
+            },
+        )
         .await
         .map_err(apeiro_err)?;
 
