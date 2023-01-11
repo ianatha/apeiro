@@ -76,8 +76,6 @@ function $reanimate_funcs(inp) {
 	for (const key of keys) {
 		let value = inp[key];
 		if (value !== undefined && typeof value == "object") {
-			log("creating weakref");
-			log(JSON.stringify(value));
 			inp[key] = new WeakRef(value);
 		}
 	}
@@ -106,7 +104,6 @@ function debugDisplayFrame(frame: Frame) {
 
 export function $frame_end(dead_child: Frame) {
 	if ($frames[$frames.length - 1] !== dead_child) {
-		log("invalid frame");
 		throw new ApeiroEngineError("invalid frame being dropped");
 	}
 	dead_child.scope = undefined;
@@ -207,6 +204,7 @@ export function $get_engine_status(): {
 	frames: any;
 	funcs: any;
 } {
+	globalThis.$frames_snapshot_store = $frames;
 	return {
 		current_frame: current_frame,
 		frames: $frames,
@@ -217,14 +215,22 @@ export function $get_engine_status(): {
 export default function $step(): StepResult {
 	let fn = $usercode().default;
 	current_frame = 0;
-	$frames = $get_frames();
-	$fns = $reanimate_funcs($get_funcs());
+	if (globalThis.$frames_snapshot_store === undefined) {
+		log("v2 reanimation")
+		$frames = $get_frames();
+		$fns = $reanimate_funcs($get_funcs());
+	} else {
+		$frames = globalThis.$frames_snapshot_store;
+		log("frames length " + $frames.length);
+		log("fns length " + Object.keys($fns).length);
+	}
 	let val = undefined;
 	try {
 		if (isGenerator(fn)) {
 			let generator_instance = fn(this);
 			val = generator_instance.next().value;
 			generator_instance.next().value;
+			log("generator done");
 			return {
 				status: "SUSPEND",
 				suspension: {$generator: true},
@@ -232,6 +238,7 @@ export default function $step(): StepResult {
 			};
 		} else {
 			const val = fn();
+			log("fn done");
 			return {
 				status: "DONE",
 				val: val,
@@ -239,6 +246,7 @@ export default function $step(): StepResult {
 		}
 	} catch (e) {
 		if ($isSuspendSignal(e)) {
+			log("suspend");
 			return {
 				status: "SUSPEND",
 				val,

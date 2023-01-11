@@ -709,6 +709,18 @@ pub fn resolve_fn<'s>(
         v8::Object::new(scope)
     };
 
+    let native_code = src.contains("{ [native code] }");
+    let mut src = if native_code {
+        "function() { throw new Error(\"bad ser\"); }".to_string()
+    } else {
+        src
+    };
+
+    let function_header = src.starts_with("function");
+    if !function_header {
+        src = format!("function {}", src);
+    }
+
     let src = format!(
         r#"(function($sc1) {{
     return {};

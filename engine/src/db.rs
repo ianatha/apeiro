@@ -158,7 +158,7 @@ impl ApeiroEnginePersistence for Db {
         let conn = self.pool.get()?;
 
         conn.execute(
-            "UPDATE procs SET status=?, val=?, suspension=?, frames=?, funcs=? WHERE id=?",
+            "UPDATE procs SET status=?, val=?, suspension=?, frames=?, funcs=?, snapshot=? WHERE id=?",
             params![
                 serde_json::to_string(&state.status).unwrap(),
                 state
@@ -171,6 +171,7 @@ impl ApeiroEnginePersistence for Db {
                     .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
                 frames_json,
                 funcs_json,
+                engine_status.snapshot,
                 id
             ],
         )?;
@@ -184,7 +185,7 @@ impl ApeiroEnginePersistence for Db {
         let (proc_id, mount_id, name, state) = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
-            conn.prepare("SELECT compiled_src, frames, funcs FROM procs WHERE id = ?")?;
+            conn.prepare("SELECT compiled_src, frames, funcs, snapshot FROM procs WHERE id = ?")?;
 
         let result = stmt.query_row(&[&proc_id.clone()], |row| {
             let compiled_src: String = row.get(0)?;
@@ -192,7 +193,12 @@ impl ApeiroEnginePersistence for Db {
             let frames: Option<serde_json::Value> = serde_json::from_str(&frames).unwrap();
             let funcs: String = row.get(2)?;
             let funcs: Option<serde_json::Value> = serde_json::from_str(&funcs).unwrap();
-            let engine_status = EngineStatus { frames, funcs };
+            let snapshot: Option<Vec<u8>> = row.get(3)?;
+            let engine_status = EngineStatus {
+                frames,
+                funcs,
+                snapshot,
+            };
             Ok(ProcDetails {
                 pid: proc_id,
                 mount_id,
@@ -294,7 +300,7 @@ impl ApeiroEnginePersistence for Db {
     fn proc_list(&self) -> Result<Vec<ProcSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt = conn.prepare(
-            "SELECT id, status, suspension, name, 0, length(funcs) + length(frames) FROM procs",
+            "SELECT id, status, suspension, name, length(snapshot), length(funcs) + length(frames) FROM procs",
         )?;
 
         let result = stmt

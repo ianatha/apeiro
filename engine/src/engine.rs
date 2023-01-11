@@ -63,6 +63,7 @@ impl Engine {
         src: String,
         funcs: Option<Value>,
         frames: Option<Value>,
+        snapshot: Option<Vec<u8>>,
     ) -> Result<(StepResult, EngineStatus)> {
         let mut engine_instance = EngineInstance::default();
         let align = std::mem::align_of::<usize>();
@@ -73,13 +74,70 @@ impl Engine {
         .unwrap();
         assert!(layout.size() > 0);
 
-        let mut isolate = self.setup_isolate(Isolate::new(CreateParams::default()));
+        let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
+        let engine_instance_external_ref = (&engine_instance as *const _) as *mut std::ffi::c_void;
+
+        let use_v8_snapshot = true;
+        let (mut isolate, snapshot_existed) = if use_v8_snapshot {
+            use v8::MapFnTo;
+
+            let refs = v8::ExternalReferences::new(&[
+                v8::ExternalReference {
+                    function: log_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: mbox_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: usercode_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: send_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: funcs_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: frames_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: get_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: pid_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: spawn_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    function: http_post_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
+                    pointer: engine_instance_external_ref,
+                },
+                v8::ExternalReference {
+                    pointer: engine_external_ref,
+                },
+            ]);
+            let refs: &'static v8::ExternalReferences = Box::leak(Box::new(refs));
+
+            let (snapshot_creator, snapshot_existed) = match snapshot {
+                Some(snapshot) => (
+                    Isolate::snapshot_creator_from_existing_snapshot(snapshot, Some(refs)),
+                    true,
+                ),
+                None => (Isolate::snapshot_creator(Some(refs)), false),
+            };
+            (self.setup_isolate(snapshot_creator), snapshot_existed)
+        } else {
+            (
+                self.setup_isolate(Isolate::new(CreateParams::default())),
+                false,
+            )
+        };
 
         let new_state: Result<(StepResult, EngineStatus)> = {
             let handle_scope = &mut HandleScope::new(&mut isolate);
-            let engine_external_ref = (self as *const _) as *mut std::ffi::c_void;
-            let engine_instance_external_ref =
-                (&engine_instance as *const _) as *mut std::ffi::c_void;
 
             let engine_ref = v8::External::new(handle_scope, engine_external_ref);
             let engine_instance_ref = v8::External::new(handle_scope, engine_instance_external_ref);
@@ -162,13 +220,15 @@ impl Engine {
                 v8::String::new(handle_scope, "$spawn").unwrap().into(),
                 spawn_fn_builder.into(),
             );
-
             global.set(
                 v8::String::new(handle_scope, "$http_post").unwrap().into(),
                 http_post_fn_builder.into(),
             );
 
             let context = v8::Context::new_from_template(handle_scope, global);
+            if use_v8_snapshot {
+                handle_scope.set_default_context(context);
+            }
             let context_scope = &mut ContextScope::new(handle_scope, context);
 
             if let Some(funcs) = funcs {
@@ -218,7 +278,6 @@ impl Engine {
                             "$scope",
                             "$frame_end",
                             "$isSuspendSignal",
-                            "$delay",
                         ],
                     );
                 }
@@ -335,12 +394,12 @@ impl Engine {
                             apeiro_serde::from_v8(context_scope, new_suspension).unwrap();
                         res_json.suspension = Some(json_val);
                     }
-
                     // event!(Level::INFO, "res_json: {:?}", res_json);
 
                     let engine_status = EngineStatus {
                         funcs: Some(new_fns),
                         frames: Some(new_frames),
+                        snapshot: None,
                     };
 
                     (res_json, engine_status)
@@ -365,8 +424,24 @@ impl Engine {
             }
         };
 
+        let snapshot_slice = if use_v8_snapshot {
+            let snapshot = isolate
+                .create_blob(v8::FunctionCodeHandling::Keep)
+                .expect("create snapshot");
+            Some((&*snapshot).to_vec())
+        } else {
+            None
+        };
+
         match new_state {
-            Result::Ok((res_json, engine_status)) => Ok((res_json, engine_status)),
+            Result::Ok((res_json, engine_status)) => Ok((
+                res_json,
+                EngineStatus {
+                    frames: engine_status.frames,
+                    funcs: engine_status.funcs,
+                    snapshot: snapshot_slice,
+                },
+            )),
             Err(e) => {
                 event!(Level::INFO, "error: {:?}", e);
                 Err(e)
@@ -418,12 +493,13 @@ impl Engine {
 
         let counter = RefCell::new(-1);
         scope.set_data(1, usize::MAX as *mut c_void);
-        let filter = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
+        let filter_def: serde_json::Value = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
             apeiro_serde::from_v8(scope, args.get(0)).unwrap()
         });
-        let filter = serde_json_matcher::from_json(filter).unwrap();
+        let is_json_schema = filter_def.as_object().unwrap().contains_key("$schema");
+        let filter = serde_json_matcher::from_json(filter_def).unwrap();
         for (index, msg) in self.mbox.iter().enumerate() {
-            if filter.matches(msg) {
+            if is_json_schema || filter.matches(msg) {
                 let msg = self.mbox.remove(index);
                 event!(
                     Level::INFO,

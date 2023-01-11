@@ -72,6 +72,7 @@ pub struct StepResult {
 pub struct EngineStatus {
     pub frames: Option<Value>,
     pub funcs: Option<Value>,
+    pub snapshot: Option<Vec<u8>>,
 }
 
 impl std::fmt::Display for StepResult {
@@ -106,8 +107,8 @@ pub struct ProcStatus {
     pub mount_id: String,
     pub name: Option<String>,
     pub status: StepResultStatus,
-    pub val: Option<String>,
-    pub suspension: Option<String>,
+    pub val: Option<serde_json::Value>,
+    pub suspension: Option<serde_json::Value>,
     pub executing: bool,
 }
 
@@ -131,14 +132,8 @@ impl ProcStatus {
             mount_id,
             name,
             status: step_result.status,
-            val: step_result
-                .val
-                .as_ref()
-                .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
-            suspension: step_result
-                .suspension
-                .as_ref()
-                .map(|v| serde_json::to_string(&v).unwrap_or("error".to_string())),
+            val: step_result.val,
+            suspension: step_result.suspension,
             executing,
         }
     }
