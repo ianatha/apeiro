@@ -70,17 +70,11 @@ impl ApeiroCompiler {
         f: &FileName,
         special_main: &Option<String>,
     ) -> Result<(Lrc<SourceFile>, Module)> {
-        println!("loading module {:?}", f);
         let contents = match f {
             FileName::Anon => special_main.clone().unwrap(),
             FileName::Real(path) => fs::read_to_string(path)?,
             FileName::Url(url) => {
-                println!("fetching url {:?}", url);
-                // let handle = Handle::current();
-                // let _guard = handle.enter();
-                println!("tokio handle enter");
                 let res = futures::executor::block_on(reqwest::get(url.clone())).unwrap();
-                println!("after get");
                 let t = futures::executor::block_on(res.text()).unwrap();
                 println!("fecthed url {:?}", url);
                 t

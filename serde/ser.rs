@@ -709,18 +709,6 @@ pub fn resolve_fn<'s>(
         v8::Object::new(scope)
     };
 
-    let native_code = src.contains("{ [native code] }");
-    let mut src = if native_code {
-        "function() { throw new Error(\"bad ser\"); }".to_string()
-    } else {
-        src
-    };
-
-    let function_header = src.starts_with("function");
-    if !function_header {
-        src = format!("function {}", src);
-    }
-
     let src = format!(
         r#"(function($sc1) {{
     return {};
@@ -731,7 +719,26 @@ pub fn resolve_fn<'s>(
     println!("{}", src);
 
     let v8_src = v8::String::new(scope, &src).unwrap();
-    let script = v8::Script::compile(scope, v8_src, None).unwrap();
+    let script = v8::Script::compile(scope, v8_src, None);
+    if let Some(script) = script {
+        func_from_script(script, scope, obj)
+    } else {
+        println!("failed to compile script: {}", src);
+        let src = format!(
+            r#"(function x($sc1) {{ return function y() {{ throw new Error("bad function"); }} }})"#
+        );
+        let v8_src = v8::String::new(scope, &src).unwrap();
+        println!("src: {}", src);
+        let script = v8::Script::compile(scope, v8_src, None).unwrap();
+        func_from_script(script, scope, obj)
+    }
+}
+
+fn func_from_script<'a>(
+    script: v8::Local<'a, v8::Script>,
+    scope: &mut v8::HandleScope<'a>,
+    obj: v8::Local<'a, v8::Object>,
+) -> v8::Local<'a, v8::Function> {
     let script_output = script.run(scope).unwrap();
     let function: v8::Local<v8::Function> = unsafe { v8::Local::cast(script_output) };
     let undefined = v8::undefined(scope);
@@ -739,11 +746,12 @@ pub fn resolve_fn<'s>(
         .call(scope, undefined.into(), &[obj.into()])
         .unwrap();
     let function_res: v8::Local<v8::Function> = unsafe { v8::Local::cast(function_res) };
-    let scope_key = v8_struct_key(scope, "$$scope");
-    assert!(function_res
-        .set(scope, scope_key.into(), obj.into())
-        .unwrap());
-
+    if !obj.is_null_or_undefined() {
+        let scope_key = v8_struct_key(scope, "$$scope");
+        assert!(function_res
+            .set(scope, scope_key.into(), obj.into())
+            .unwrap());
+    }
     return function_res;
 }
 
