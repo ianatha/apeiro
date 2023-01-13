@@ -229,13 +229,21 @@ export default function $step(): StepResult {
 		if (isGenerator(fn)) {
 			let generator_instance = fn(this);
 			val = generator_instance.next().value;
-			generator_instance.next().value;
-			log("generator done");
-			return {
-				status: "SUSPEND",
-				suspension: {$generator: true},
-				val: val,
-			};
+			let next_step = generator_instance.next();
+			if (next_step.done) {
+				log("generator done");
+				return {
+					status: "DONE",
+					val: val,
+				};
+			} else {
+				log("generator suspended");
+				return {
+					status: "SUSPEND",
+					suspension: {$generator: true},
+					val: val,
+				};	
+			}
 		} else {
 			const val = fn();
 			log("fn done");
