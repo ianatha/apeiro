@@ -213,11 +213,14 @@ async fn new(remote: String, mount_id: &String, name: &Option<String>) -> Result
     Ok(())
 }
 
-async fn ps(remote: String, _output_json: bool) -> Result<()> {
+use anyhow::anyhow;
+
+async fn ps(remote: awc::Client, _output_json: bool) -> Result<()> {
     use cli_table::{format::Justify, Cell, Style, Table};
 
-    let resp = reqwest::get(remote + "/proc/")
-        .await?
+    let resp = remote.get("http://localhost:5151/proc/").send()
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?
         .json::<ProcListOutput>()
         .await?;
 
@@ -306,10 +309,13 @@ async fn mount_new(remote: String, srcfile: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let remote = cli.remote.unwrap_or("http://localhost:5151".to_string());
+
+    let connector = awc::Connector::new().connector(awc_uds::UdsConnector::new("/tmp/apeirod.socket"));
+    let mut client = awc::ClientBuilder::new().connector(connector).finish();
 
     match &cli.command {
         Commands::Cleanup {} => cleanup(remote).await,
@@ -333,7 +339,7 @@ async fn main() -> Result<()> {
                 Err(anyhow::anyhow!("either --src or --mount must be specified"))
             }
         }
-        Commands::Ps {} => ps(remote, cli.output_json).await,
+        Commands::Ps {} => ps(client, cli.output_json).await,
         Commands::Mounts {} => mounts_list(remote).await,
         Commands::Mount { srcfile } => mount_new(remote, srcfile).await,
     }

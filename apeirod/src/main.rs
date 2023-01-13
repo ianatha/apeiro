@@ -130,6 +130,7 @@ async fn main() -> anyhow::Result<()> {
             .service(handlers::mount_list)
             .service(handlers::mount_get)
     })
+    .bind_uds("/tmp/apeirod.socket")?
     .bind(("127.0.0.1", port))?
     .run()
     .await?;
