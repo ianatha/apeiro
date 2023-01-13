@@ -300,6 +300,8 @@ dependencies = [
  "once_cell",
  "reqwest",
  "rustc-hash",
+ "serde",
+ "serde_json",
  "swc",
  "swc_atoms",
  "swc_bundler",

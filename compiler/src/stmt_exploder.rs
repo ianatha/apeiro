@@ -2,7 +2,6 @@ use swc_common::util::take::Take;
 use swc_common::BytePos;
 use swc_common::Span;
 use swc_common::SyntaxContext;
-use swc_common::DUMMY_SP;
 
 use swc_ecma_ast::BlockStmt;
 
@@ -13,12 +12,12 @@ use swc_ecma_ast::Function;
 use swc_ecma_ast::Ident;
 use swc_ecma_ast::Stmt;
 
+use super::utils::is_use_strict;
+use swc_common::Spanned;
 use swc_ecma_ast::VarDecl;
 use swc_ecma_ast::VarDeclarator;
 use swc_ecmascript::visit::{as_folder, Fold};
 use swc_ecmascript::visit::{VisitMut, VisitMutWith};
-
-use super::utils::is_use_strict;
 
 pub fn folder() -> impl Fold {
     as_folder(StmtExploder {
@@ -56,6 +55,7 @@ impl VisitMut for CallExprExploder {
     }
 
     fn visit_mut_expr(&mut self, n: &mut Expr) {
+        let orig_span = n.span();
         match n {
             Expr::Call(call_expr) => {
                 self.count += 1;
@@ -63,7 +63,7 @@ impl VisitMut for CallExprExploder {
                 let my_id = self.count;
 
                 let ident = Ident {
-                    span: DUMMY_SP,
+                    span: orig_span,
                     sym: ("_temp$".to_owned() + &my_id.to_string()).into(),
                     optional: false,
                 };
@@ -77,7 +77,7 @@ impl VisitMut for CallExprExploder {
                         VarDecl {
                             kind: swc_ecma_ast::VarDeclKind::Const,
                             declare: false,
-                            span: DUMMY_SP,
+                            span: orig_span,
                             decls: vec![VarDeclarator {
                                 span: Span {
                                     lo: BytePos::DUMMY,
@@ -95,9 +95,9 @@ impl VisitMut for CallExprExploder {
                     // push delete statement
                     self.post_stmts.push(
                         ExprStmt {
-                            span: DUMMY_SP,
+                            span: orig_span,
                             expr: swc_ecma_ast::UnaryExpr {
-                                span: DUMMY_SP,
+                                span: orig_span,
                                 op: swc_ecma_ast::UnaryOp::Delete,
                                 arg: Box::new(Expr::Ident(ident.clone())),
                             }

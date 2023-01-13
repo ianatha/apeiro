@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use swc_common::util::take::Take;
 use swc_common::BytePos;
 use swc_common::Spanned;
@@ -52,6 +54,7 @@ use swc_ecmascript::{
 };
 use tracing::{event, Level};
 
+use crate::helpers::HELPERS;
 use crate::utils::ast_to_hash;
 
 use super::utils::is_use_strict;
@@ -382,6 +385,12 @@ impl WrapFunctions {
                     res.push(self.expr_end_frame());
                     res
                 } else {
+                    HELPERS.with(|mut helpers| {
+                        let helpers = helpers.borrow_mut();
+                        let fnhash = *self.fn_hash.last().unwrap();
+                        let orig_span: swc_common::Span = stmt.span();
+                        helpers.add_pc_to_src(fnhash, pc, orig_span.lo.0, orig_span.hi.0);
+                    });
                     let mut res = vec![];
                     res.append(&mut self.move_var_assignments(stmt));
                     res.push(self.expr_set_frame_pc(pc + 1));
@@ -442,9 +451,9 @@ impl<'a> VisitMut for VarRewriter<'a> {
         if let Some(mut target_ident) = target_ident {
             *pat = Pat::Expr(
                 MemberExpr {
-                    span: DUMMY_SP,
+                    span: target_ident.span(),
                     obj: MemberExpr {
-                        span: DUMMY_SP,
+                        span: target_ident.span(),
                         obj: Expr::Ident(self.top_level.clone()).into(),
                         prop: target_ident.take().into(),
                     }
@@ -470,7 +479,7 @@ impl<'a> VisitMut for VarRewriter<'a> {
             *expr = MemberExpr {
                 span: target_ident.span,
                 obj: MemberExpr {
-                    span: DUMMY_SP,
+                    span: target_ident.span(),
                     obj: Expr::Ident(self.top_level.clone()).into(),
                     prop: target_ident.take().into(),
                 }

@@ -1,7 +1,12 @@
 // copied from swc_ecma_transforms_base/src/helpers/mod.rs
 use std::{
+    borrow::BorrowMut,
+    cell::RefCell,
     mem::replace,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use once_cell::sync::Lazy;
@@ -164,12 +169,21 @@ better_scoped_tls::scoped_tls!(
     pub static HELPERS: Helpers
 );
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProgramCounterToSourceLocation {
+    pub fnhash: u64,
+    pub pc: i32,
+    pub start_loc: u32,
+    pub end_loc: u32,
+}
+
 /// Tracks used helper methods. (e.g. __extends)
 #[derive(Debug, Default)]
 pub struct Helpers {
     external: bool,
     mark: HelperMark,
     inner: Inner,
+    pc_to_src: RefCell<Vec<ProgramCounterToSourceLocation>>,
 }
 
 impl Helpers {
@@ -178,6 +192,7 @@ impl Helpers {
             external,
             mark: Default::default(),
             inner: Default::default(),
+            pc_to_src: Default::default(),
         }
     }
 
@@ -187,6 +202,21 @@ impl Helpers {
 
     pub const fn external(&self) -> bool {
         self.external
+    }
+
+    pub fn add_pc_to_src(&self, fnhash: u64, pc: i32, start_loc: u32, end_loc: u32) {
+        self.pc_to_src
+            .borrow_mut()
+            .push(ProgramCounterToSourceLocation {
+                fnhash,
+                pc,
+                start_loc,
+                end_loc,
+            });
+    }
+
+    pub fn pc_to_src_get(&self) -> Vec<ProgramCounterToSourceLocation> {
+        self.pc_to_src.borrow().clone()
     }
 }
 
