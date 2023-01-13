@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Ok, Result};
-use apeiro_compiler::apeiro_bundle_and_compile;
+use apeiro_compiler::apeiro_compile;
 use apeiro_internal_api::MountNewRequest;
 use apeiro_internal_api::MountSummary;
 use apeiro_internal_api::ProcListOutput;
@@ -253,7 +253,7 @@ impl DEngine {
     pub async fn mount_new(&self, req: MountNewRequest) -> Result<String, anyhow::Error> {
         let src = req.src.clone();
         let compiled_src =
-            tokio::task::spawn_blocking(move || apeiro_bundle_and_compile(src)).await??;
+            tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
 
         let mount = self.0.db.mount_new(&req.src, &compiled_src)?;
 

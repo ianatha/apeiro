@@ -15,6 +15,7 @@ pub use apeiro_internal_api::StepResultStatus;
 pub use db::Db;
 pub use dengine::DEngine;
 pub use engine::Engine;
+pub use engine::PristineRunError;
 
 static INIT: Once = Once::new();
 

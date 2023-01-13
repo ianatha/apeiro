@@ -150,3 +150,11 @@ pub struct MountSummary {
     pub src: String,
     pub compiled_src: String,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct StackTraceFrame {
+    pub script_name: String,
+    pub func_name: String,
+    pub line_number: u32,
+    pub column_number: u32,
+}

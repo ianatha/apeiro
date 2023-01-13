@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Ok, Result};
 use apeiro_internal_api::EngineStatus;
 use apeiro_internal_api::ProcSendRequest;
+use apeiro_internal_api::StackTraceFrame;
 use apeiro_internal_api::StepResult;
 use serde_json::Value;
 use tracing::{event, instrument, Level};
@@ -9,7 +10,7 @@ use v8::CreateParams;
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::throw_exception;
-use crate::v8_helpers::stack_trace_to_string;
+use crate::v8_helpers::stack_trace_to_frames;
 use crate::v8_helpers::v8_struct_key;
 use crate::v8_init;
 use crate::v8_str;
@@ -282,7 +283,7 @@ impl Engine {
                     );
                 }
 
-                let usercode_module = instantiate_module(context_scope, "usercode".into(), src)?;
+                let usercode_module = instantiate_module(context_scope, "usercode".into(), src.clone())?;
                 engine_instance.usercode = Some(usercode_module);
 
                 event!(Level::INFO, "before kickoff");
@@ -410,12 +411,7 @@ impl Engine {
 
             match (context_scope.exception(), context_scope.message()) {
                 (Some(exception), Some(message)) => {
-                    let exception_str = exception.to_string(context_scope).unwrap();
-                    let exception_str = exception_str.to_rust_string_lossy(context_scope);
-
-                    let stack_trace_str = message.get_stack_trace(context_scope).unwrap();
-                    let stack_trace_str = stack_trace_to_string(context_scope, stack_trace_str);
-                    Err(anyhow!("Exception: {} {}", exception_str, stack_trace_str))
+                    Err(anyhow::Error::new(map_exception_to_original_code(src, context_scope, exception, message)))
                 }
                 _ => match new_state {
                     Result::Ok((res_json, engine_status)) => Ok((res_json, engine_status)),
@@ -682,6 +678,55 @@ impl Engine {
             let res = apeiro_serde::to_v8(scope, res).unwrap();
             retval.set(res.into());
         }
+    }
+}
+
+fn extract_src_map_from_src(src: String) -> Option<sourcemap::SourceMap> {
+    let identifier = "//# sourceMappingURL=data:application/json;base64,";
+    if let Some(srcmap_start) = src.find(identifier) {
+        let (_, srcmap) = src.split_at(srcmap_start);
+        let srcmap = base64::decode(&srcmap[identifier.len()..]).unwrap();
+        let sm = sourcemap::SourceMap::from_slice(srcmap.as_slice()).unwrap();
+        Some(sm)
+    } else {
+        None
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct PristineRunError {
+    pub msg: String,
+    pub frames: Vec<StackTraceFrame>,
+}
+
+impl std::fmt::Display for PristineRunError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PristineRunError")
+    }
+}
+
+impl std::error::Error for PristineRunError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+
+    fn description(&self) -> &str {
+        "description() is deprecated; use Display"
+    }
+
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
+}
+
+fn map_exception_to_original_code(src: String, context_scope: &mut v8::TryCatch<HandleScope>, exception: v8::Local<v8::Value>, message: v8::Local<v8::Message>) -> PristineRunError {
+    let sm = extract_src_map_from_src(src).unwrap();
+    let exception_str = exception.to_string(context_scope).unwrap();
+    let exception_str = exception_str.to_rust_string_lossy(context_scope);
+    let stack_trace_frames = stack_trace_to_frames(&sm, context_scope, message);
+    PristineRunError {
+        msg: exception_str,
+        frames: stack_trace_frames,
     }
 }
 

@@ -12,11 +12,23 @@ struct ApeiroError(anyhow::Error);
 
 impl From<ApeiroError> for actix_web::Error {
     fn from(e: ApeiroError) -> Self {
-        error::ErrorBadRequest(serde_json::json! {{
-            "Err": {
-                "error": e.0.to_string()
-            }
-        }})
+        let e0_to_string = e.0.to_string();
+        let downcasted = e.0.downcast::<apeiro_engine::PristineRunError>();
+        if let Ok(runerror) = downcasted {
+            error::ErrorBadRequest(serde_json::json! {{
+                    "Err": {
+                        "msg": runerror.msg,
+                        "frames": serde_json::to_value(runerror.frames).unwrap(),
+                    }
+                }},
+            )
+        } else {
+            error::ErrorBadRequest(serde_json::json! {{
+                "Err": {
+                    "error": e0_to_string
+                }
+            }})
+        }
     }
 }
 

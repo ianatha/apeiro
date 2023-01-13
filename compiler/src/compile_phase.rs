@@ -175,9 +175,7 @@ impl ApeiroCompiler {
 
     #[instrument]
     pub fn parse(&self, input: String) -> (Lrc<SourceFile>, Program) {
-        let cm: Lrc<SourceMap> = Default::default();
-        let compiler = Compiler::new(cm.clone());
-        let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(cm.clone()));
+        let handler = Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(self.cm.clone()));
 
         let config = TsConfig {
             tsx: true,
@@ -187,9 +185,9 @@ impl ApeiroCompiler {
 
         let comments: SwcComments = Default::default();
 
-        let file = cm.new_source_file(FileName::Custom("input.js".into()), input);
+        let file = self.cm.new_source_file(FileName::Custom("input.js".into()), input);
 
-        let program = compiler
+        let program = self.compiler
             .parse_js(
                 file.clone(),
                 &handler,

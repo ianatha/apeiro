@@ -145,7 +145,7 @@ fn do_test(
                                 ..Default::default()
                             }),
                             mangle: Some(MangleOptions {
-                                top_level: true,
+                                top_level: Some(true),
                                 ..Default::default()
                             }),
                             ..Default::default()

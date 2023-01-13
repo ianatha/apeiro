@@ -261,18 +261,18 @@ impl WrapFunctions {
                         }
                         new_stmts.push(
                             ExprStmt {
-                                span: DUMMY_SP,
+                                span: var.span,
                                 expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
-                                    span: DUMMY_SP,
+                                    span: var.span, // todo?
                                     left: MemberExpr {
-                                        span: DUMMY_SP,
+                                        span: var.span, // todo?
                                         obj: self.current_scope_identifier().unwrap().into(),
                                         prop: assignee_name.id.clone().into(),
                                     }
                                     .into(),
                                     op: swc_ecma_ast::AssignOp::Assign,
                                     right: ObjectLit {
-                                        span: DUMMY_SP,
+                                        span: var.span, // todo?
                                         props: vec![swc_ecma_ast::PropOrSpread::Prop(
                                             Prop::KeyValue(KeyValueProp {
                                                 key: quote_ident!("value").into(),
@@ -357,7 +357,7 @@ impl WrapFunctions {
                                 kind: VarDeclKind::Let,
                                 declare: false,
                                 decls: vec![VarDeclarator {
-                                    span: DUMMY_SP,
+                                    span: return_val.span(),
                                     name: temp.clone().into(),
                                     init: Some(return_val.take()),
                                     definite: false,
@@ -366,7 +366,7 @@ impl WrapFunctions {
                             .into(),
                             self.expr_end_frame(),
                             ReturnStmt {
-                                span: DUMMY_SP,
+                                span: stmt.span(),
                                 arg: Some(temp.into()),
                             }
                             .into(),
@@ -468,7 +468,7 @@ impl<'a> VisitMut for VarRewriter<'a> {
 
         if let Some(mut target_ident) = target_ident {
             *expr = MemberExpr {
-                span: DUMMY_SP,
+                span: target_ident.span,
                 obj: MemberExpr {
                     span: DUMMY_SP,
                     obj: Expr::Ident(self.top_level.clone()).into(),
