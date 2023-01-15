@@ -95,6 +95,10 @@ class ApeiroEngineError extends Error {
 
 }
 
+function isFunctionAsync(fn: any) {
+	return fn[Symbol.toStringTag] === 'AsyncFunction';
+}
+
 function debugDisplayFrame(frame: Frame) {
 	if (!frame) {
 		return "null";
@@ -212,7 +216,7 @@ export function $get_engine_status(): {
 	};
 }
 
-export default function $step(): StepResult {
+export default async function $step(): Promise<StepResult> {
 	let fn = $usercode().default;
 	current_frame = 0;
 	if (globalThis.$frames_snapshot_store === undefined) {
@@ -245,12 +249,22 @@ export default function $step(): StepResult {
 				};	
 			}
 		} else {
-			const val = fn();
-			log("fn done");
-			return {
-				status: "DONE",
-				val: val,
-			};
+			if (isFunctionAsync(fn)) {
+				log("async fn running");
+				const val = await fn();
+				log("async fn done");
+				return {
+					status: "DONE",
+					val: val,
+				};
+			} else {
+				const val = fn();
+				log("sync fn done");
+				return {
+					status: "DONE",
+					val: val,
+				};
+			}
 		}
 	} catch (e) {
 		if ($isSuspendSignal(e)) {

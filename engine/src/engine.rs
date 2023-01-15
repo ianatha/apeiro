@@ -7,11 +7,13 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use tracing::{event, instrument, Level};
 use v8::CreateParams;
+use v8::PromiseState;
 
 use crate::dengine::DEngineCmd;
 use crate::struct_method_to_v8;
 use crate::throw_exception;
 use crate::v8_helpers::stack_trace_to_frames;
+use crate::v8_helpers::v8_println;
 use crate::v8_helpers::v8_struct_key;
 use crate::v8_init;
 use crate::v8_str;
@@ -308,7 +310,27 @@ impl Engine {
                     .call(context_scope, undefined, &[])
                     .ok_or(anyhow!("no result from $step"))?;
 
-                let js_stmt_result_obj = js_stmt_result.to_object(context_scope).unwrap();
+                context_scope.perform_microtask_checkpoint();
+                
+                let js_stmt_result = if js_stmt_result.is_promise() {
+                    let returned_promise: v8::Local<v8::Promise> = unsafe { v8::Local::cast(js_stmt_result) };
+                    match returned_promise.state() {
+                        PromiseState::Pending => panic!("promise should have resovled"),
+                        PromiseState::Fulfilled => {
+                            returned_promise.result(context_scope)
+                        }
+                        PromiseState::Rejected => {
+                            let exception= returned_promise.result(context_scope);
+                            v8_println(context_scope, exception);
+                            context_scope.throw_exception(exception)
+                        }
+                    }
+                } else {
+                    js_stmt_result
+                };
+
+                let js_stmt_result_obj = js_stmt_result.to_object(context_scope).ok_or(anyhow!("no result from $step"))?;
+                v8_println(context_scope, js_stmt_result_obj.into());
                 let val_key = v8_struct_key(context_scope, "val");
                 let new_val = js_stmt_result_obj
                     .get(context_scope, val_key.into())
@@ -679,31 +701,24 @@ impl Engine {
         let url = args.get(0);
         let options = args.get(1);
         if let Result::Ok(url) = v8::Local::<v8::String>::try_from(url) {
-            let mut escapable_scope = v8::EscapableHandleScope::new(scope);
-            let options: FetchConfiguration = apeiro_serde::from_v8(&mut escapable_scope, options)
+            let options: FetchConfiguration = apeiro_serde::from_v8(scope, options)
                 .unwrap_or(FetchConfiguration::default());
 
-            let url = url.to_rust_string_lossy(&mut escapable_scope);
-
-            println!("waiting");
-            // let res = tokio::runtime::Handle::current().spawn(async {
-                // let res = _fetch(url, options).await.unwrap();
-                // let v8_resp = apeiro_serde::to_v8(&mut escapable_scope, &res).unwrap();
-                // retval.set(v8_resp);
-            // });
+            let url = url.to_rust_string_lossy(scope);
             
             let mut res = _fetch(url, options).unwrap();
-            println!("blocking for receiver");
             let mut val_received = res.try_recv();
             while val_received.is_err() {
-                // wait;
+                // TODO: wait
                 val_received = res.try_recv();
             }
             let val_received = val_received.unwrap();
-            println!("after waiting");
 
-            let v8_resp = apeiro_serde::to_v8(&mut escapable_scope, &val_received).unwrap();
-            retval.set(v8_resp);
+            let v8_resp = apeiro_serde::to_v8(scope, &val_received).unwrap();
+            let promise_factory = v8::PromiseResolver::new(scope).unwrap();
+            promise_factory.resolve(scope, v8_resp);
+
+            retval.set(promise_factory.get_promise(scope).into());
         } else {
             throw_exception!(scope, "1st arg to fetch wasn't a string");
         }
