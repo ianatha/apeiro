@@ -3,6 +3,7 @@ use apeiro_internal_api::EngineStatus;
 use apeiro_internal_api::ProcSendRequest;
 use apeiro_internal_api::StackTraceFrame;
 use apeiro_internal_api::StepResult;
+use reqwest::header::HeaderMap;
 use serde_json::Value;
 use tracing::{event, instrument, Level};
 use v8::CreateParams;
@@ -114,6 +115,9 @@ impl Engine {
                     function: http_post_callback.map_fn_to(),
                 },
                 v8::ExternalReference {
+                    function: fetch_callback.map_fn_to(),
+                },
+                v8::ExternalReference {
                     pointer: engine_instance_external_ref,
                 },
                 v8::ExternalReference {
@@ -183,6 +187,10 @@ impl Engine {
                 .data(engine_ref.into())
                 .build(handle_scope);
 
+            let fetch_fn_builder = v8::FunctionTemplate::builder(fetch_callback)
+                .data(engine_ref.into())
+                .build(handle_scope);
+
             let global = v8::ObjectTemplate::new(handle_scope);
             global.set_internal_field_count(1);
             global.set(
@@ -220,6 +228,10 @@ impl Engine {
             global.set(
                 v8::String::new(handle_scope, "$spawn").unwrap().into(),
                 spawn_fn_builder.into(),
+            );
+            global.set(
+                v8::String::new(handle_scope, "fetch").unwrap().into(),
+                fetch_fn_builder.into(),
             );
             global.set(
                 v8::String::new(handle_scope, "$http_post").unwrap().into(),
@@ -283,7 +295,8 @@ impl Engine {
                     );
                 }
 
-                let usercode_module = instantiate_module(context_scope, "usercode".into(), src.clone())?;
+                let usercode_module =
+                    instantiate_module(context_scope, "usercode".into(), src.clone())?;
                 engine_instance.usercode = Some(usercode_module);
 
                 event!(Level::INFO, "before kickoff");
@@ -654,6 +667,50 @@ impl Engine {
     }
 
     #[inline]
+    fn fetch_callback<'a, 's>(
+        &mut self,
+        scope: &mut v8::HandleScope<'a>,
+        args: v8::FunctionCallbackArguments<'a>,
+        mut retval: v8::ReturnValue<'s>,
+    ) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let _guard = runtime.enter();
+
+        let url = args.get(0);
+        let options = args.get(1);
+        if let Result::Ok(url) = v8::Local::<v8::String>::try_from(url) {
+            let mut escapable_scope = v8::EscapableHandleScope::new(scope);
+            let options: FetchConfiguration = apeiro_serde::from_v8(&mut escapable_scope, options)
+                .unwrap_or(FetchConfiguration::default());
+
+            let url = url.to_rust_string_lossy(&mut escapable_scope);
+
+            println!("waiting");
+            // let res = tokio::runtime::Handle::current().spawn(async {
+                // let res = _fetch(url, options).await.unwrap();
+                // let v8_resp = apeiro_serde::to_v8(&mut escapable_scope, &res).unwrap();
+                // retval.set(v8_resp);
+            // });
+            
+            let mut res = _fetch(url, options).unwrap();
+            println!("blocking for receiver");
+            let mut val_received = res.try_recv();
+            while val_received.is_err() {
+                // wait;
+                val_received = res.try_recv();
+            }
+            let val_received = val_received.unwrap();
+            println!("after waiting");
+
+            let v8_resp = apeiro_serde::to_v8(&mut escapable_scope, &val_received).unwrap();
+            retval.set(v8_resp);
+        } else {
+            throw_exception!(scope, "1st arg to fetch wasn't a string");
+        }
+        std::mem::forget(runtime);
+    }
+
+    #[inline]
     fn get_callback(
         &mut self,
         scope: &mut v8::HandleScope,
@@ -696,7 +753,7 @@ pub struct PristineRunError {
 
 impl std::fmt::Display for PristineRunError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "PristineRunError")
+        f.write_fmt(format_args!("{}: {}", "PristineRunError", self.msg,))
     }
 }
 
@@ -753,6 +810,7 @@ struct_method_to_v8!(get_callback -> Engine::get_callback);
 struct_method_to_v8!(pid_callback -> Engine::pid_callback);
 struct_method_to_v8!(spawn_callback -> Engine::spawn_callback);
 struct_method_to_v8!(http_post_callback -> Engine::http_post_callback);
+struct_method_to_v8!(fetch_callback -> Engine::fetch_callback);
 
 fn frames_callback(
     scope: &mut v8::HandleScope,
@@ -859,4 +917,52 @@ pub fn instantiate_module<'a>(
 
 fn string_to_static_str(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct FetchConfiguration {
+    method: Option<String>,
+    headers: Option<serde_json::Value>,
+    body: Option<String>,
+}
+
+fn _fetch(url: String, options: FetchConfiguration) -> Result<tokio::sync::oneshot::Receiver<serde_json::Value>> {
+    let (sender, receiver) = tokio::sync::oneshot::channel::<serde_json::Value>();
+
+    println!("before spawn");
+    tokio::task::spawn(async {
+        println!("spawned start");
+        let headers = if let Some(headers) = options.headers {
+            let headers = headers.as_object().unwrap();
+            let mut result = reqwest::header::HeaderMap::new();
+            for (k, v) in headers {
+                let k = string_to_static_str(k.clone());
+                let v = v.as_str().unwrap();
+                let v = reqwest::header::HeaderValue::from_str(v).unwrap();
+                result.insert(k, v);
+            }
+            result
+        } else {
+            reqwest::header::HeaderMap::new()
+        };
+    
+        let mut req = reqwest::Client::new().get(url);
+        // .headers(headers);
+    
+        // if let Some(body) = options.body {
+        //     req = req.body(body);
+        // };
+        println!("request sent");
+        let res = req.send().await.unwrap();
+        println!("request received");
+    
+        let resp: serde_json::Value = res.json().await.unwrap();
+        println!("request completed");
+
+        sender.send(resp).unwrap();
+    });
+
+    println!("afetr spawn");
+
+    Ok(receiver)
 }

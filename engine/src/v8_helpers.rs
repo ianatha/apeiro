@@ -108,10 +108,10 @@ macro_rules! throw_exception {
 #[macro_export]
 macro_rules! struct_method_to_v8 {
     ($struct_less_name:ident -> $struct_type:ident :: $method:ident) => {
-        fn $struct_less_name(
-            scope: &mut v8::HandleScope,
-            args: v8::FunctionCallbackArguments,
-            retval: v8::ReturnValue,
+        fn $struct_less_name<'a, 's>(
+            scope: &mut v8::HandleScope<'a>,
+            args: v8::FunctionCallbackArguments<'a>,
+            retval: v8::ReturnValue<'s>,
         ) {
             let external = v8::Local::<v8::External>::try_from(args.data()).unwrap();
             let struct_instance = unsafe { &mut *(external.value() as *mut $struct_type) };
