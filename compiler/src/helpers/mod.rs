@@ -1,12 +1,8 @@
 // copied from swc_ecma_transforms_base/src/helpers/mod.rs
 use std::{
-    borrow::BorrowMut,
     cell::RefCell,
     mem::replace,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use once_cell::sync::Lazy;
@@ -16,6 +12,8 @@ use swc_common::{FileName, FilePathMapping, Mark, SourceMap, SyntaxContext, DUMM
 use swc_ecma_ast::*;
 use swc_ecma_utils::{prepend_stmts, DropSpan};
 use swc_ecma_visit::{as_folder, noop_visit_mut_type, Fold, VisitMut, VisitMutWith};
+
+use crate::ProgramCounterToSourceLocation;
 
 #[doc(hidden)]
 #[macro_export]
@@ -168,14 +166,6 @@ better_scoped_tls::scoped_tls!(
     /// The instance contains flags where each flag denotes if a helper script should be injected.
     pub static HELPERS: Helpers
 );
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProgramCounterToSourceLocation {
-    pub fnhash: u64,
-    pub pc: i32,
-    pub start_loc: u32,
-    pub end_loc: u32,
-}
 
 /// Tracks used helper methods. (e.g. __extends)
 #[derive(Debug, Default)]

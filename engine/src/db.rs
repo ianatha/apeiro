@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::StepResultStatus;
 use anyhow::anyhow;
+use apeiro_compiler::CompilationResult;
 use apeiro_internal_api::{EngineStatus, MountSummary, ProcStatusDebug, ProcSummary, StepResult};
 use nanoid::nanoid;
 use r2d2::Pool;
@@ -62,7 +63,13 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
 
     fn proc_delete(&self, id: &String) -> Result<(), anyhow::Error>;
 
-    fn mount_new(&self, src: &String, compiled_src: &String) -> Result<String, anyhow::Error>;
+    fn mount_new(
+        &self,
+        src: &String,
+        compiled_src: &CompilationResult,
+    ) -> Result<String, anyhow::Error>;
+
+    fn mount_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error>;
 
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error>;
 
@@ -83,7 +90,10 @@ impl ApeiroEnginePersistence for Db {
             "CREATE TABLE IF NOT EXISTS mounts (
                 id TEXT PRIMARY KEY,
                 src TEXT,
-                compiled_src TEXT
+                compiled_src TEXT,
+                source_map TEXT,
+                pc_to_map TEXT,
+                hash_sha256 TEXT
             );",
             (),
         )?;
@@ -334,17 +344,39 @@ impl ApeiroEnginePersistence for Db {
         Ok(result)
     }
 
-    fn mount_new(&self, src: &String, compiled_src: &String) -> Result<String, anyhow::Error> {
+    fn mount_new(
+        &self,
+        src: &String,
+        compiled_src: &CompilationResult,
+    ) -> Result<String, anyhow::Error> {
         let id = nanoid!();
 
         let conn = self.pool.get()?;
+        use sha256::digest;
+        let hash_sha256 = digest(src.clone());
+        let source_map = serde_json::to_string(&compiled_src.source_map)?;
+        let pc_to_map = serde_json::to_string(&compiled_src.program_counter_mapping)?;
 
         conn.execute(
-            "INSERT INTO mounts (id, src, compiled_src) VALUES (?, ?, ?)",
-            params![&id, src, compiled_src],
+            "INSERT INTO mounts (id, src, compiled_src, source_map, pc_to_map, hash_sha256) VALUES (?, ?, ?, ?, ?, ?)",
+            params![&id, src, compiled_src.compiled_src, &source_map, &pc_to_map, &hash_sha256],
         )?;
 
         Ok(id)
+    }
+
+    fn mount_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt = conn.prepare("SELECT id FROM mounts WHERE hash_sha256 = ?")?;
+
+        let result = stmt
+            .query_row(params![hash_sha256], |row| {
+                let id: String = row.get(0)?;
+                Ok(Some(id))
+            })
+            .unwrap_or(None);
+
+        Ok(result)
     }
 
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {

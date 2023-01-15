@@ -18,7 +18,7 @@ use tracing::{event, instrument, Level};
 use crate::helpers::{Helpers, HELPERS};
 use crate::{
     either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers, stmt_exploder,
-    BASELINE_ES_VERSION,
+    CompilationResult, BASELINE_ES_VERSION,
 };
 
 pub struct ApeiroCompiler {
@@ -38,7 +38,7 @@ pub fn custom_apeiro_compile<P>(
     source_map: bool,
     external_helpers: bool,
     minify: bool,
-) -> Result<String>
+) -> Result<CompilationResult>
 where
     P: swc_ecmascript::visit::Fold,
 {
@@ -108,7 +108,8 @@ impl ApeiroCompiler {
             self.custom_apeiro_compile_string(contents, |_| noop(), true, false, false)?
         };
 
-        let (file, program) = GLOBALS.set(&Globals::new(), || self.parse(compiled_str));
+        let (file, program) =
+            GLOBALS.set(&Globals::new(), || self.parse(compiled_str.compiled_src));
 
         if let swc_ecma_ast::Program::Module(module) = program {
             Ok((file, module))
@@ -125,7 +126,7 @@ impl ApeiroCompiler {
         source_map: bool,
         external_helpers: bool,
         minify: bool,
-    ) -> Result<String>
+    ) -> Result<CompilationResult>
     where
         P: swc_ecmascript::visit::Fold,
     {
@@ -154,7 +155,7 @@ impl ApeiroCompiler {
                         ..Default::default()
                     },
                     source_maps: if source_map {
-                        Some(swc::config::SourceMapsConfig::Str("inline".into()))
+                        Some(swc::config::SourceMapsConfig::Bool(true))
                     } else {
                         None
                     },
@@ -165,21 +166,13 @@ impl ApeiroCompiler {
                 |p| chain!(folder_chain(p), helpers::inject_helpers(),),
             )?;
 
-            let mut result_str = String::new();
-
-            result_str.push_str(&result.code);
-
             let pc_to_src = HELPERS.with(|helpers| helpers.pc_to_src_get());
 
-            result_str.push_str(
-                format!(
-                    "\n\n//# programCounterMapping={}",
-                    serde_json::to_string(&pc_to_src).unwrap()
-                )
-                .as_str(),
-            );
-
-            Ok(result_str)
+            Ok(CompilationResult {
+                compiled_src: result.code,
+                source_map: result.map,
+                program_counter_mapping: pc_to_src,
+            })
         })
     }
 
@@ -222,7 +215,7 @@ impl ApeiroCompiler {
         source_map: bool,
         external_helpers: bool,
         minify: bool,
-    ) -> Result<String>
+    ) -> Result<CompilationResult>
     where
         P: swc_ecmascript::visit::Fold,
     {

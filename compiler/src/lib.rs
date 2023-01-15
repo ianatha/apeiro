@@ -24,10 +24,24 @@ use anyhow::Result;
 use swc_ecma_transforms::pass::noop;
 
 pub fn engine_runtime_compile(input: String) -> Result<String> {
-    custom_apeiro_compile(input, |_| noop(), false, false, false)
+    Ok(custom_apeiro_compile(input, |_| noop(), false, false, false)?.compiled_src)
 }
 
-pub fn apeiro_compile(input: String) -> Result<String> {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProgramCounterToSourceLocation {
+    pub fnhash: u64,
+    pub pc: i32,
+    pub start_loc: u32,
+    pub end_loc: u32,
+}
+
+pub struct CompilationResult {
+    pub compiled_src: String,
+    pub source_map: Option<String>,
+    pub program_counter_mapping: Vec<ProgramCounterToSourceLocation>,
+}
+
+pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
     custom_apeiro_compile(
         input,
         |_| {

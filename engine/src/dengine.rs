@@ -250,14 +250,23 @@ impl DEngine {
     }
 
     #[instrument(skip(self))]
+    // calculate hash
+    // check if hash exists in db
+    // if it does, return the mount id
+    // if it doesn't, compile and insert into db
     pub async fn mount_new(&self, req: MountNewRequest) -> Result<String, anyhow::Error> {
-        let src = req.src.clone();
-        let compiled_src =
-            tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
+        use sha256::digest;
+        let hash = digest(req.src.clone());
+        if let Result::Ok(Some(mount)) = self.0.db.mount_find_by_hash(&hash) {
+            Ok(mount)
+        } else {
+            let src = req.src.clone();
+            let compiled_src = tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
 
-        let mount = self.0.db.mount_new(&req.src, &compiled_src)?;
+            let mount = self.0.db.mount_new(&req.src, &compiled_src)?;
 
-        Ok(mount)
+            Ok(mount)
+        }
     }
 
     #[instrument(skip(self))]
