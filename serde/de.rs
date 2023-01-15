@@ -48,6 +48,25 @@ pub fn from_v8<'de, 'a, 'b, 's, T>(
 where
     T: Deserialize<'de>,
 {
+    let previous_data = scope.get_data(1) as usize;
+    scope.set_data(1, usize::MAX as *mut c_void);
+    let mut deserializer = Deserializer::new(scope, input, None);
+    let t = T::deserialize(&mut deserializer)?;
+    scope.set_data(1, previous_data as *mut c_void);
+    Ok(t)
+}
+
+pub fn from_v8_advanced<'de, 'a, 'b, 's, T>(
+    scope: &'b mut v8::HandleScope<'s>,
+    input: v8::Local<'a, v8::Value>,
+) -> Result<T>
+where
+    T: Deserialize<'de>,
+{
+    let previous_data = scope.get_data(1) as usize;
+    if previous_data != usize::MAX {
+        scope.set_data(1, 100 as *mut c_void);
+    }
     let mut deserializer = Deserializer::new(scope, input, None);
     let t = T::deserialize(&mut deserializer)?;
     Ok(t)

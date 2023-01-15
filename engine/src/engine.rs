@@ -343,17 +343,16 @@ impl Engine {
                     .get(context_scope, frames_key.into())
                     .unwrap();
 
-                context_scope.set_data(1, 100 as *mut c_void);
                 let counter = RefCell::new(0);
                 let (res_json, engine_status) = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
                     let new_fns: serde_json::Value =
-                        apeiro_serde::from_v8(context_scope, new_fns).unwrap();
+                        apeiro_serde::from_v8_advanced(context_scope, new_fns).unwrap();
 
                     let new_frames: serde_json::Value =
-                        apeiro_serde::from_v8(context_scope, new_frames).unwrap();
+                        apeiro_serde::from_v8_advanced(context_scope, new_frames).unwrap();
 
                     let mut res_json: StepResult =
-                        apeiro_serde::from_v8(context_scope, js_stmt_result).unwrap();
+                        apeiro_serde::from_v8_advanced(context_scope, js_stmt_result).unwrap();
 
                     if res_json.val.is_some() {
                         let new_val = apeiro_serde::resolve_ref(context_scope, new_val);
@@ -371,7 +370,7 @@ impl Engine {
                             .unwrap());
 
                         let json_val: serde_json::Value =
-                            apeiro_serde::from_v8(context_scope, new_val).unwrap();
+                            apeiro_serde::from_v8_advanced(context_scope, new_val).unwrap();
                         res_json.val = Some(json_val);
                     }
 
@@ -392,7 +391,7 @@ impl Engine {
                             .unwrap());
 
                         let json_val: serde_json::Value =
-                            apeiro_serde::from_v8(context_scope, new_suspension).unwrap();
+                            apeiro_serde::from_v8_advanced(context_scope, new_suspension).unwrap();
                         res_json.suspension = Some(json_val);
                     }
                     // event!(Level::INFO, "res_json: {:?}", res_json);
@@ -410,9 +409,9 @@ impl Engine {
             })();
 
             match (context_scope.exception(), context_scope.message()) {
-                (Some(exception), Some(message)) => {
-                    Err(anyhow::Error::new(map_exception_to_original_code(src, context_scope, exception, message)))
-                }
+                (Some(exception), Some(message)) => Err(anyhow::Error::new(
+                    map_exception_to_original_code(src, context_scope, exception, message),
+                )),
                 _ => match new_state {
                     Result::Ok((res_json, engine_status)) => Ok((res_json, engine_status)),
                     Err(e) => Err(e),
@@ -463,9 +462,9 @@ impl Engine {
         if let Some(dengine) = self.dengine.clone() {
             let msg = args.get(0);
             let counter = RefCell::new(-1);
-            scope.set_data(1, usize::MAX as *mut c_void);
-            let msg = apeiro_serde::OBJ_COUNT_DE
-                .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
+            let msg = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
+                apeiro_serde::from_v8_advanced(scope, msg).unwrap()
+            });
             let proc_id = self.proc_id.clone();
             tokio::task::spawn(async move {
                 // TODO: 2nd proc_id should be exec
@@ -488,7 +487,6 @@ impl Engine {
         let _context = v8::Context::new(scope);
 
         let counter = RefCell::new(-1);
-        scope.set_data(1, usize::MAX as *mut c_void);
         let filter_def: serde_json::Value = apeiro_serde::OBJ_COUNT_DE.set(&counter, || {
             apeiro_serde::from_v8(scope, args.get(0)).unwrap()
         });
@@ -543,7 +541,6 @@ impl Engine {
 
             let msg = args.get(1);
             let counter = RefCell::new(-1);
-            scope.set_data(1, usize::MAX as *mut c_void);
             let msg = apeiro_serde::OBJ_COUNT_DE
                 .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
 
@@ -615,7 +612,6 @@ impl Engine {
         let msg = args.get(1);
         let headers = args.get(2);
         if let Result::Ok(url) = v8::Local::<v8::String>::try_from(url) {
-            scope.set_data(1, usize::MAX as *mut c_void);
             let msg: serde_json::Value = apeiro_serde::from_v8(scope, msg).unwrap();
             let headers: Option<serde_json::Value> = apeiro_serde::from_v8(scope, headers).unwrap();
 
@@ -638,7 +634,6 @@ impl Engine {
             );
 
             let url = url.to_rust_string_lossy(scope);
-            scope.set_data(1, 0 as *mut c_void);
 
             tokio::task::spawn(async move {
                 let res = reqwest::Client::new()
@@ -719,11 +714,19 @@ impl std::error::Error for PristineRunError {
     }
 }
 
-fn map_exception_to_original_code(src: String, context_scope: &mut v8::TryCatch<HandleScope>, exception: v8::Local<v8::Value>, message: v8::Local<v8::Message>) -> PristineRunError {
-    let sm = extract_src_map_from_src(src).unwrap();
+fn map_exception_to_original_code(
+    src: String,
+    context_scope: &mut v8::TryCatch<HandleScope>,
+    exception: v8::Local<v8::Value>,
+    message: v8::Local<v8::Message>,
+) -> PristineRunError {
     let exception_str = exception.to_string(context_scope).unwrap();
     let exception_str = exception_str.to_rust_string_lossy(context_scope);
-    let stack_trace_frames = stack_trace_to_frames(&sm, context_scope, message);
+    let stack_trace_frames = if let Some(sm) = extract_src_map_from_src(src) {
+        stack_trace_to_frames(&sm, context_scope, message)
+    } else {
+        vec![]
+    };
     PristineRunError {
         msg: exception_str,
         frames: stack_trace_frames,
