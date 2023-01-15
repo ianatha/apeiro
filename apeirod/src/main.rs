@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
             // .allowed_origin_fn(|origin, _req_head| {
             //     origin.as_bytes().ends_with(b".rust-lang.org")
             // })
-            .allowed_methods(vec!["GET", "POST"])
+            .allowed_methods(vec!["GET", "POST", "PUT"])
             .allowed_headers(vec![
                 "apeiro-wait",
                 http::header::AUTHORIZATION.as_str(),
