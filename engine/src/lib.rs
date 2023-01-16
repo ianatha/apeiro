@@ -4,6 +4,7 @@ mod tests;
 mod db;
 pub mod dengine;
 mod engine;
+mod eventloop;
 mod v8_helpers;
 
 use std::sync::Once;
