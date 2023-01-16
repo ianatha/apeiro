@@ -16,6 +16,9 @@ use tracing::Level;
 #[command(propagate_version = true)]
 struct Cli {
     #[clap(short, long)]
+    listen: Option<String>,
+    
+    #[clap(short, long)]
     port: Option<u16>,
 
     #[clap(short, long)]
@@ -94,7 +97,8 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    println!("Starting HTTP daemon on port {}", port);
+    let listen_addr = cli.listen.unwrap_or("127.0.0.1".to_string());
+    println!("Starting HTTP daemon on port {}:{}", listen_addr, port);
     HttpServer::new(move || {
         use actix_cors::Cors;
         use actix_web::http;
@@ -130,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
             .service(handlers::mount_list)
             .service(handlers::mount_get)
     })
-    .bind(("127.0.0.1", port))?
+    .bind((listen_addr, port))?
     .run()
     .await?;
 
