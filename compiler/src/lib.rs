@@ -15,6 +15,7 @@ mod stmt_exploder;
 mod utils;
 
 pub use bundle_phase::apeiro_bundle_and_compile;
+use compile_phase::ApeiroCompiler;
 pub use compile_phase::custom_apeiro_compile;
 
 use swc_common::chain;
@@ -39,6 +40,56 @@ pub struct CompilationResult {
     pub compiled_src: String,
     pub source_map: Option<String>,
     pub program_counter_mapping: Vec<ProgramCounterToSourceLocation>,
+}
+
+fn default_name() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let start = SystemTime::now();
+    let now = start
+        .duration_since(UNIX_EPOCH)
+        .expect("time went backwards")
+        .as_millis();
+    format!("untitled{}", now)
+}
+
+fn top_level_from_program(parsed: &swc_ecma_ast::Program) -> Option<String> {
+    match parsed.as_module() {
+        Some(module) => {
+            module.body.iter().find_map(|stmt| {
+                match stmt {
+                    swc_ecma_ast::ModuleItem::ModuleDecl(swc_ecma_ast::ModuleDecl::ExportDefaultExpr(default_expr)) => {
+                        match &*default_expr.expr {
+                            swc_ecma_ast::Expr::Ident(ident) => Some(ident.sym.to_string()),
+                            _ => None
+                        }
+                    }
+                    swc_ecma_ast::ModuleItem::ModuleDecl(swc_ecma_ast::ModuleDecl::ExportDefaultDecl(default_decl)) => {
+                        match &default_decl.decl {
+                            swc_ecma_ast::DefaultDecl::Fn(f) => {
+                                match &f.ident {
+                                    Some(ident) => Some(ident.sym.to_string()),
+                                    _ => None
+                                }
+                            },
+                            _ => None
+                        }
+                    }
+                    _ => None
+                }
+            })
+        }
+        _ => None
+    }
+}
+
+pub fn extract_export_name(input: String) -> String {
+    let compiler = ApeiroCompiler::new();
+    let (_source_file, parsed) = swc_common::GLOBALS.set(&swc_common::Globals::new(), || compiler.parse(input));
+    if let Some(name) = top_level_from_program(&parsed) {
+        name
+    } else {
+        default_name()
+    }
 }
 
 pub fn apeiro_compile(input: String) -> Result<CompilationResult> {

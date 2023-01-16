@@ -210,3 +210,13 @@ async fn mount_new(
         .map_err(apeiro_err)?;
     Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": res })))
 }
+
+#[post("/helper_extract_export_name")]
+async fn helper_extract_export_name(
+    _req: HttpRequest,
+    body: String,
+    dengine: web::Data<DEngine>,
+) -> impl Responder {
+    let name = dengine.extract_export_name(body);
+    Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "name": name })))
+}

@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Ok, Result};
 use apeiro_compiler::apeiro_compile;
+use apeiro_compiler::extract_export_name;
 use apeiro_internal_api::MountNewRequest;
 use apeiro_internal_api::MountSummary;
 use apeiro_internal_api::ProcListOutput;
@@ -152,6 +153,10 @@ impl EventLoop {
 }
 
 impl DEngine {
+    pub fn extract_export_name(&self, input: String) -> String {
+        extract_export_name(input)
+    }
+
     pub fn new(
         runtime_js_src: Option<fn() -> String>,
         db: Box<dyn ApeiroEnginePersistence>,
