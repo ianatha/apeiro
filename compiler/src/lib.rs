@@ -42,14 +42,17 @@ pub struct CompilationResult {
     pub program_counter_mapping: Vec<ProgramCounterToSourceLocation>,
 }
 
-fn default_name() -> String {
+fn now_as_millis() -> u128 {
     use std::time::{SystemTime, UNIX_EPOCH};
     let start = SystemTime::now();
-    let now = start
+    start
         .duration_since(UNIX_EPOCH)
         .expect("time went backwards")
-        .as_millis();
-    format!("untitled{}", now)
+        .as_millis()
+}
+
+fn default_name() -> String {
+    format!("untitled{}", now_as_millis())
 }
 
 fn top_level_from_program(parsed: &swc_ecma_ast::Program) -> Option<String> {
@@ -84,12 +87,12 @@ fn top_level_from_program(parsed: &swc_ecma_ast::Program) -> Option<String> {
 
 pub fn extract_export_name(input: String) -> String {
     let compiler = ApeiroCompiler::new();
-    let (_source_file, parsed) = swc_common::GLOBALS.set(&swc_common::Globals::new(), || compiler.parse(input));
-    if let Some(name) = top_level_from_program(&parsed) {
-        name
-    } else {
-        default_name()
+    if let Ok((_source_file, parsed)) = swc_common::GLOBALS.set(&swc_common::Globals::new(), || compiler.parse(input)) {
+        if let Some(name) = top_level_from_program(&parsed) {
+            return name;
+        }
     }
+    return default_name();
 }
 
 pub fn apeiro_compile(input: String) -> Result<CompilationResult> {

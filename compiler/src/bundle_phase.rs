@@ -22,18 +22,19 @@ use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith;
 use tracing::{event, Level};
 
-use crate::compile_phase::ApeiroCompiler;
+use crate::{compile_phase::ApeiroCompiler, CompilationResult};
 
-fn get_bundle(cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: bool) -> String {
+fn get_bundle(cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: bool) -> CompilationResult {
     if modules.len() != 1 {
         panic!("Expected 1 bundle, but got {}", modules.len());
     }
     let bundled = modules.get(0).unwrap();
     let code = {
-        let mut buf = vec![];
+        let mut src_buf = vec![];
+        let mut srcmap_buf = vec![];
 
         {
-            let wr = JsWriter::new(cm.clone(), "\n", &mut buf, None);
+            let wr = JsWriter::new(cm.clone(), "\n", &mut src_buf, Some(&mut srcmap_buf));
             let mut emitter = Emitter {
                 cfg: swc_ecma_codegen::Config {
                     minify,
@@ -51,13 +52,19 @@ fn get_bundle(cm: Lrc<SourceMap>, modules: Vec<Bundle>, minify: bool) -> String 
             emitter.emit_module(&bundled.module).unwrap();
         }
 
-        String::from_utf8_lossy(&buf).to_string()
+        String::from_utf8_lossy(&src_buf).to_string()
     };
 
     #[cfg(feature = "concurrent")]
     rayon::spawn(move || drop(bundled));
 
-    code
+    // TODO: iwa
+
+    CompilationResult {
+        compiled_src: code,
+        source_map: None,
+        program_counter_mapping: vec![],
+    }
 }
 
 struct ApeiroResolver {}
@@ -94,7 +101,7 @@ fn do_test(
     inline: bool,
     minify: bool,
     special_main: Option<String>,
-) -> Result<String, Error> {
+) -> Result<CompilationResult, Error> {
     let globals = Box::leak(Box::new(Globals::default()));
     let resolver = ApeiroResolver {};
     let mut bundler = Bundler::new(
@@ -167,7 +174,7 @@ fn do_test(
     Ok(get_bundle(cm, modules, minify))
 }
 
-pub fn apeiro_bundle_and_compile(src: String) -> Result<String, Error> {
+pub fn apeiro_bundle_and_compile(src: String) -> Result<CompilationResult, Error> {
     let minify = false;
     let mut entries = HashMap::default();
 

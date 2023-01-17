@@ -109,7 +109,7 @@ impl ApeiroCompiler {
         };
 
         let (file, program) =
-            GLOBALS.set(&Globals::new(), || self.parse(compiled_str.compiled_src));
+            GLOBALS.set(&Globals::new(), || self.parse(compiled_str.compiled_src))?;
 
         if let swc_ecma_ast::Program::Module(module) = program {
             Ok((file, module))
@@ -177,7 +177,7 @@ impl ApeiroCompiler {
     }
 
     #[instrument]
-    pub fn parse(&self, input: String) -> (Lrc<SourceFile>, Program) {
+    pub fn parse(&self, input: String) -> Result<(Lrc<SourceFile>, Program)> {
         let handler =
             Handler::with_tty_emitter(ColorConfig::Auto, true, false, Some(self.cm.clone()));
 
@@ -202,10 +202,9 @@ impl ApeiroCompiler {
                 Syntax::Typescript(config),
                 swc::config::IsModule::Bool(true),
                 Some(&comments),
-            )
-            .expect("Failed to parse JS");
+            )?;
 
-        (file, program)
+        Ok((file, program))
     }
 
     pub fn custom_apeiro_compile_string<P>(
@@ -219,7 +218,7 @@ impl ApeiroCompiler {
     where
         P: swc_ecmascript::visit::Fold,
     {
-        let (file, program) = self.parse(input);
+        let (file, program) = self.parse(input)?;
 
         self.custom_apeiro_compile(
             file,
