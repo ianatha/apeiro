@@ -3,7 +3,7 @@ use apeiro_internal_api::EngineStatus;
 use apeiro_internal_api::ProcSendRequest;
 use apeiro_internal_api::StackTraceFrame;
 use apeiro_internal_api::StepResult;
-use reqwest::header::HeaderMap;
+
 use serde_json::Value;
 use tracing::{event, instrument, Level};
 use v8::CreateParams;
@@ -19,7 +19,7 @@ use crate::v8_init;
 use crate::v8_str;
 use crate::DEngine;
 use std::cell::RefCell;
-use std::ffi::c_void;
+
 use std::string::String;
 
 use v8::{ContextScope, HandleScope, Isolate};
@@ -82,7 +82,7 @@ impl Engine {
         let engine_instance_external_ref = (&engine_instance as *const _) as *mut std::ffi::c_void;
 
         let use_v8_snapshot = true;
-        let (mut isolate, snapshot_existed) = if use_v8_snapshot {
+        let (mut isolate, _snapshot_existed) = if use_v8_snapshot {
             use v8::MapFnTo;
 
             let refs = v8::ExternalReferences::new(&[
@@ -311,16 +311,15 @@ impl Engine {
                     .ok_or(anyhow!("no result from $step"))?;
 
                 context_scope.perform_microtask_checkpoint();
-                
+
                 let js_stmt_result = if js_stmt_result.is_promise() {
-                    let returned_promise: v8::Local<v8::Promise> = unsafe { v8::Local::cast(js_stmt_result) };
+                    let returned_promise: v8::Local<v8::Promise> =
+                        unsafe { v8::Local::cast(js_stmt_result) };
                     match returned_promise.state() {
                         PromiseState::Pending => panic!("promise should have resovled"),
-                        PromiseState::Fulfilled => {
-                            returned_promise.result(context_scope)
-                        }
+                        PromiseState::Fulfilled => returned_promise.result(context_scope),
                         PromiseState::Rejected => {
-                            let exception= returned_promise.result(context_scope);
+                            let exception = returned_promise.result(context_scope);
                             v8_println(context_scope, exception);
                             context_scope.throw_exception(exception)
                         }
@@ -329,7 +328,9 @@ impl Engine {
                     js_stmt_result
                 };
 
-                let js_stmt_result_obj = js_stmt_result.to_object(context_scope).ok_or(anyhow!("no result from $step"))?;
+                let js_stmt_result_obj = js_stmt_result
+                    .to_object(context_scope)
+                    .ok_or(anyhow!("no result from $step"))?;
                 v8_println(context_scope, js_stmt_result_obj.into());
                 let val_key = v8_struct_key(context_scope, "val");
                 let new_val = js_stmt_result_obj
@@ -681,7 +682,7 @@ impl Engine {
                     .send()
                     .await;
 
-                let resp: serde_json::Value = res.unwrap().json().await.unwrap();
+                let _resp: serde_json::Value = res.unwrap().json().await.unwrap();
             });
 
             let v8_true = v8::Boolean::new(scope, true);
@@ -704,11 +705,11 @@ impl Engine {
         let url = args.get(0);
         let options = args.get(1);
         if let Result::Ok(url) = v8::Local::<v8::String>::try_from(url) {
-            let options: FetchConfiguration = apeiro_serde::from_v8(scope, options)
-                .unwrap_or(FetchConfiguration::default());
+            let options: FetchConfiguration =
+                apeiro_serde::from_v8(scope, options).unwrap_or(FetchConfiguration::default());
 
             let url = url.to_rust_string_lossy(scope);
-            
+
             let mut res = _fetch(url, options).unwrap();
             let mut val_received = res.try_recv();
             while val_received.is_err() {
@@ -944,13 +945,16 @@ struct FetchConfiguration {
     body: Option<String>,
 }
 
-fn _fetch(url: String, options: FetchConfiguration) -> Result<tokio::sync::oneshot::Receiver<serde_json::Value>> {
+fn _fetch(
+    url: String,
+    options: FetchConfiguration,
+) -> Result<tokio::sync::oneshot::Receiver<serde_json::Value>> {
     let (sender, receiver) = tokio::sync::oneshot::channel::<serde_json::Value>();
 
     println!("before spawn");
     tokio::task::spawn(async {
         println!("spawned start");
-        let headers = if let Some(headers) = options.headers {
+        let _headers = if let Some(headers) = options.headers {
             let headers = headers.as_object().unwrap();
             let mut result = reqwest::header::HeaderMap::new();
             for (k, v) in headers {
@@ -963,17 +967,17 @@ fn _fetch(url: String, options: FetchConfiguration) -> Result<tokio::sync::onesh
         } else {
             reqwest::header::HeaderMap::new()
         };
-    
-        let mut req = reqwest::Client::new().get(url);
+
+        let req = reqwest::Client::new().get(url);
         // .headers(headers);
-    
+
         // if let Some(body) = options.body {
         //     req = req.body(body);
         // };
         println!("request sent");
         let res = req.send().await.unwrap();
         println!("request received");
-    
+
         let resp: serde_json::Value = res.json().await.unwrap();
         println!("request completed");
 

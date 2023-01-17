@@ -193,16 +193,14 @@ impl ApeiroCompiler {
             .cm
             .new_source_file(FileName::Custom("input.js".into()), input);
 
-        let program = self
-            .compiler
-            .parse_js(
-                file.clone(),
-                &handler,
-                BASELINE_ES_VERSION,
-                Syntax::Typescript(config),
-                swc::config::IsModule::Bool(true),
-                Some(&comments),
-            )?;
+        let program = self.compiler.parse_js(
+            file.clone(),
+            &handler,
+            BASELINE_ES_VERSION,
+            Syntax::Typescript(config),
+            swc::config::IsModule::Bool(true),
+            Some(&comments),
+        )?;
 
         Ok((file, program))
     }

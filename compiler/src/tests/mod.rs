@@ -23,18 +23,24 @@ pub fn compiler_test<P>(
 
 #[test]
 pub fn test_extract_export_name_1() {
-    let res = extract_export_name(r#"export default function hello_world() {
+    let res = extract_export_name(
+        r#"export default function hello_world() {
         return "Hello, world!";
-    }"#.to_string());
+    }"#
+        .to_string(),
+    );
     assert_eq!(res, "hello_world".to_string());
 }
 
 #[test]
 pub fn test_extract_export_name_2() {
-    let res = extract_export_name(r#"function hello_world() {
+    let res = extract_export_name(
+        r#"function hello_world() {
         return "Hello, world!";
     };
     
-    export default hello_world;"#.to_string());
+    export default hello_world;"#
+            .to_string(),
+    );
     assert_eq!(res, "hello_world".to_string());
 }

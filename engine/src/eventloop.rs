@@ -1,10 +1,10 @@
-use anyhow::{Result};
+use anyhow::Result;
 use apeiro_internal_api::ProcSendRequest;
 use tokio::sync::mpsc;
-use tracing::{Level, event, instrument};
+use tracing::{event, instrument, Level};
 
+use crate::dengine::{DEngineCmd, DEngineStorage, PluginStorage, ProcEvent};
 use crate::DEngine;
-use crate::dengine::{DEngineCmd, ProcEvent, DEngineCmdSend, PluginStorage, DEngineStorage};
 
 pub struct EventLoop {
     pub dengine: DEngine,
@@ -14,13 +14,16 @@ pub struct EventLoop {
 
 trait PluginInstance {
     fn pid(&self) -> String;
-    fn receive(&self, dengine: DEngine, storage: Box<dyn PluginStorage>, msg: serde_json::Value) -> Result<()>;
+    fn receive(
+        &self,
+        dengine: DEngine,
+        storage: Box<dyn PluginStorage>,
+        msg: serde_json::Value,
+    ) -> Result<()>;
     fn tick(&self, dengine: DEngine, storage: Box<dyn PluginStorage>) -> Result<()>;
 }
 
-struct ClockProcessor {
-    
-}
+struct ClockProcessor {}
 
 pub fn now_as_millis() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -34,31 +37,47 @@ pub fn now_as_millis() -> u64 {
 impl PluginInstance for ClockProcessor {
     fn tick(&self, dengine: DEngine, storage: Box<dyn PluginStorage>) -> Result<()> {
         let now = now_as_millis();
-        let default_val: serde_json::Value = serde_json::to_value::<Vec<serde_json::Value>>(vec![]).unwrap();
+        let default_val: serde_json::Value =
+            serde_json::to_value::<Vec<serde_json::Value>>(vec![]).unwrap();
         let state = storage.get().unwrap_or(default_val);
         let mut state = state.as_array().unwrap().clone();
-        let state: Vec<serde_json::Value> = state.iter_mut().filter_map(|subscription| {
-            let obj_subscription = subscription.as_object().unwrap();
-            let target_proc_id = obj_subscription["target_pid"].as_str().unwrap();
-            let target_proc_id = target_proc_id.to_string().clone();
-            let time = obj_subscription["time"].as_u64().unwrap();
-            if time > now {
-                Some(subscription.clone())
-            } else {
-                event!(Level::TRACE, "sending tick to {}, now = {}", target_proc_id, now);
-            
-                let dengine = dengine.clone();
-                tokio::task::spawn(async move {
-                    dengine.proc_send(target_proc_id, None, ProcSendRequest {
-                        msg: serde_json::json!({
-                            "type": "$tick",
-                            "tick": now,
-                        }),
-                    }).await.unwrap();
-                });
-                None
-            }
-        }).collect();
+        let state: Vec<serde_json::Value> = state
+            .iter_mut()
+            .filter_map(|subscription| {
+                let obj_subscription = subscription.as_object().unwrap();
+                let target_proc_id = obj_subscription["target_pid"].as_str().unwrap();
+                let target_proc_id = target_proc_id.to_string().clone();
+                let time = obj_subscription["time"].as_u64().unwrap();
+                if time > now {
+                    Some(subscription.clone())
+                } else {
+                    event!(
+                        Level::TRACE,
+                        "sending tick to {}, now = {}",
+                        target_proc_id,
+                        now
+                    );
+
+                    let dengine = dengine.clone();
+                    tokio::task::spawn(async move {
+                        dengine
+                            .proc_send(
+                                target_proc_id,
+                                None,
+                                ProcSendRequest {
+                                    msg: serde_json::json!({
+                                        "type": "$tick",
+                                        "tick": now,
+                                    }),
+                                },
+                            )
+                            .await
+                            .unwrap();
+                    });
+                    None
+                }
+            })
+            .collect();
         storage.set(serde_json::to_value(state).unwrap()).unwrap();
         Ok(())
     }
@@ -67,14 +86,20 @@ impl PluginInstance for ClockProcessor {
         "clock".to_string()
     }
 
-    fn receive(&self, dengine: DEngine, storage: Box<dyn PluginStorage>, msg: serde_json::Value) -> Result<()> {
+    fn receive(
+        &self,
+        _dengine: DEngine,
+        storage: Box<dyn PluginStorage>,
+        msg: serde_json::Value,
+    ) -> Result<()> {
         let msg_val = msg;
         let target_proc_id = msg_val["sender"].as_str().unwrap();
         let wait_time = msg_val["wait"].as_u64().unwrap();
 
-        let default_val: serde_json::Value = serde_json::to_value::<Vec<serde_json::Value>>(vec![]).unwrap();
+        let default_val: serde_json::Value =
+            serde_json::to_value::<Vec<serde_json::Value>>(vec![]).unwrap();
         let mut state = storage.get().unwrap_or(default_val);
-        let mut state = state.as_array_mut().unwrap();
+        let state = state.as_array_mut().unwrap();
         state.push(serde_json::json!({
             "target_pid": target_proc_id,
             "time": now_as_millis() + wait_time,
@@ -87,7 +112,7 @@ impl PluginInstance for ClockProcessor {
 
 fn special_pid_processor(pid: &str) -> Option<Box<dyn PluginInstance>> {
     if pid == "clock" {
-        Some(Box::new(ClockProcessor{}))
+        Some(Box::new(ClockProcessor {}))
     } else {
         None
     }
@@ -151,7 +176,9 @@ impl EventLoop {
                                 dengine: dengine.clone(),
                                 plugin_id: cmd.proc_id.clone(),
                             };
-                            processor.receive(dengine, Box::new(plugin_storage), cmd.req.msg).unwrap();
+                            processor
+                                .receive(dengine, Box::new(plugin_storage), cmd.req.msg)
+                                .unwrap();
                         }
                         _ => {
                             tokio::task::spawn(async move {

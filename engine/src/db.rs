@@ -26,17 +26,11 @@ pub struct ProcDetails {
 pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn init(&self) -> Result<(), anyhow::Error>;
 
-    fn plugin_get_state(
-        &self,
-        name: &String,
-    ) -> Result<serde_json::Value, anyhow::Error>;
+    fn plugin_get_state(&self, name: &String) -> Result<serde_json::Value, anyhow::Error>;
 
-    fn plugin_set_state(
-        &self,
-        name: &String,
-        val: &serde_json::Value 
-    ) -> Result<(), anyhow::Error>;
-    
+    fn plugin_set_state(&self, name: &String, val: &serde_json::Value)
+        -> Result<(), anyhow::Error>;
+
     fn proc_new(
         &self,
         mount_id: &String,
@@ -158,10 +152,7 @@ impl ApeiroEnginePersistence for Db {
         Ok(())
     }
 
-    fn plugin_get_state(
-        &self,
-        name: &String,
-    ) -> Result<serde_json::Value, anyhow::Error> {
+    fn plugin_get_state(&self, name: &String) -> Result<serde_json::Value, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt = conn.prepare("SELECT state FROM plugins WHERE id = ?")?;
 
@@ -177,13 +168,13 @@ impl ApeiroEnginePersistence for Db {
     fn plugin_set_state(
         &self,
         name: &String,
-        val: &serde_json::Value 
+        val: &serde_json::Value,
     ) -> Result<(), anyhow::Error> {
         let conn = self.pool.get()?;
 
         let val_json = serde_json::to_string(val)?;
 
-        let stmt = conn.execute(
+        let _stmt = conn.execute(
             "INSERT INTO plugins (id, state) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET state = ?",
             params![name, &val_json, &val_json],
         )?;
@@ -461,7 +452,8 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name FROM mounts WHERE id = ?")?;
+        let mut stmt =
+            conn.prepare("SELECT id, src, compiled_src, name FROM mounts WHERE id = ?")?;
 
         let (id, src, compiled_src, name) = stmt.query_row(&[mount_id], |row| {
             let id: String = row.get(0)?;

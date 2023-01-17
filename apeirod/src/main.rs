@@ -17,7 +17,7 @@ use tracing::Level;
 struct Cli {
     #[clap(short, long)]
     listen: Option<String>,
-    
+
     #[clap(short, long)]
     port: Option<u16>,
 

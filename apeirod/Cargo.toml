@@ -29,10 +29,6 @@ actix-cors = "0.6.4"
 [dev-dependencies]
 criterion = { version = "0.3", features = ["async_futures", "html_reports"] }
 
-[[bench]]
-name = "snapshot"
-harness = false
-
 [features]
 default = ["mqtt"]
 mqtt = ["dep:rumqttc"]

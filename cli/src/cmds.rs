@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use apeiro_internal_api::{
-    MountNewRequest, MountSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
-    ProcSendRequest, ProcStatus, ProcStatusDebug, StepResult, StepResultStatus, ApeiroError,
+    ApeiroError, MountNewRequest, MountSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
+    ProcSendRequest, ProcStatus, ProcStatusDebug, StepResult, StepResultStatus,
 };
 use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
@@ -30,7 +30,12 @@ pub(crate) async fn watch(remote: &String, proc_id: &String) -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn get(remote: &String, proc_id: &String, value: &bool, output_json: bool) -> Result<()> {
+pub(crate) async fn get(
+    remote: &String,
+    proc_id: &String,
+    value: &bool,
+    output_json: bool,
+) -> Result<()> {
     let resp = reqwest::get(remote.clone() + "/proc/" + proc_id)
         .await?
         .json::<ProcStatus>()

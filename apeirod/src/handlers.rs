@@ -16,12 +16,11 @@ impl From<ApeiroError> for actix_web::Error {
         let downcasted = e.0.downcast::<apeiro_engine::PristineRunError>();
         if let Ok(runerror) = downcasted {
             error::ErrorBadRequest(serde_json::json! {{
-                    "Err": {
-                        "msg": runerror.msg,
-                        "frames": serde_json::to_value(runerror.frames).unwrap(),
-                    }
-                }},
-            )
+                "Err": {
+                    "msg": runerror.msg,
+                    "frames": serde_json::to_value(runerror.frames).unwrap(),
+                }
+            }})
         } else {
             error::ErrorBadRequest(serde_json::json! {{
                 "Err": {

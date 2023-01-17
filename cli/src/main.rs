@@ -66,7 +66,6 @@ enum Commands {
     },
 }
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -99,4 +98,3 @@ async fn main() -> Result<()> {
         Commands::Mount { srcfile } => mount_new(remote, srcfile).await,
     }
 }
-

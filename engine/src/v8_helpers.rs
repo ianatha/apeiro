@@ -1,6 +1,6 @@
 use apeiro_internal_api::StackTraceFrame;
 use sourcemap::SourceMap;
-use v8::{Context, HandleScope, Local, Value, Message};
+use v8::{Context, HandleScope, Local, Message, Value};
 
 pub fn stack_trace_to_frames<'s>(
     sm: &SourceMap,
@@ -21,8 +21,10 @@ pub fn stack_trace_to_frames<'s>(
             Some(name) => name.to_rust_string_lossy(scope),
             None => "<unknown>".to_string(),
         };
-        
-        let original_token = sm.lookup_token(line_number as u32 - 1, column_number as u32 - 1).unwrap();
+
+        let original_token = sm
+            .lookup_token(line_number as u32 - 1, column_number as u32 - 1)
+            .unwrap();
 
         result.push(StackTraceFrame {
             script_name,
