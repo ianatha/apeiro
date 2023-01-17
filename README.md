@@ -5,6 +5,20 @@
 $ cargo run --bin apeirod 
 ```
 
+## ApeiroJS
+
+* `log()`
+* * `$recv(matcher)`
+* `$send(pid, msg)`
+* `$pid()`
+* `$send("clock", { sender: $pid(), wait: ms });`
+* `let new_pid = $spawn(fn)`
+
+Every process must export a default value, that can be:
+* a function,
+* an async function,
+* a generator.
+
 ## Create a process that adds two numbers and run through it
 ```bash
 $ echo "export default function main() { let a = $recv({first:1}); let b = $recv({second:2}); return a + b; }" > func.js

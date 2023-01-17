@@ -191,8 +191,12 @@ interface DoneStepResult {
 
 type StepResult = SuspendStepResult | ErrorStepResult | DoneStepResult;
 
-function isGenerator(fn) {
+function isGenerator(fn: any) {
 	return fn?.constructor?.name === "GeneratorFunction";
+}
+
+function isFunction(fn: any): boolean {
+	return (typeof fn === 'function');
 }
 
 function garbage_collect() {
@@ -248,23 +252,26 @@ export default async function $step(): Promise<StepResult> {
 					val: val,
 				};	
 			}
+		} else if (isFunctionAsync(fn)) {
+			log("async fn running");
+			const val = await fn();
+			log("async fn done");
+			return {
+				status: "DONE",
+				val: val,
+			};
+		} else if (isFunction(fn)) {
+			const val = fn();
+			log("sync fn done");
+			return {
+				status: "DONE",
+				val: val,
+			};
 		} else {
-			if (isFunctionAsync(fn)) {
-				log("async fn running");
-				const val = await fn();
-				log("async fn done");
-				return {
-					status: "DONE",
-					val: val,
-				};
-			} else {
-				const val = fn();
-				log("sync fn done");
-				return {
-					status: "DONE",
-					val: val,
-				};
-			}
+			return {
+				status: "DONE",
+				val: fn,
+			};
 		}
 	} catch (e) {
 		if ($isSuspendSignal(e)) {
