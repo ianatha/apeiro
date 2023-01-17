@@ -33,6 +33,7 @@ pub struct ProcNewRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MountNewRequest {
+    pub name: Option<String>,
     pub src: String,
 }
 
@@ -149,6 +150,8 @@ pub struct MountSummary {
     pub id: String,
     pub src: String,
     pub compiled_src: String,
+    pub name: String,
+    pub procs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

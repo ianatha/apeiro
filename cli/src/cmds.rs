@@ -207,6 +207,7 @@ pub(crate) async fn mount_new_inner(remote: String, srcfile: &PathBuf) -> Result
     let resp = client
         .post(remote + "/mount/")
         .json(&MountNewRequest {
+            name: None,
             src: std::fs::read_to_string(srcfile)?,
         })
         .send()

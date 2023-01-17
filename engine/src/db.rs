@@ -76,6 +76,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
 
     fn mount_new(
         &self,
+        name: &String,
         src: &String,
         compiled_src: &CompilationResult,
     ) -> Result<String, anyhow::Error>;
@@ -100,6 +101,7 @@ impl ApeiroEnginePersistence for Db {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS mounts (
                 id TEXT PRIMARY KEY,
+                name TEXT UNIQUE,
                 src TEXT,
                 compiled_src TEXT,
                 source_map TEXT,
@@ -398,6 +400,7 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_new(
         &self,
+        name: &String,
         src: &String,
         compiled_src: &CompilationResult,
     ) -> Result<String, anyhow::Error> {
@@ -410,8 +413,8 @@ impl ApeiroEnginePersistence for Db {
         let pc_to_map = serde_json::to_string(&compiled_src.program_counter_mapping)?;
 
         conn.execute(
-            "INSERT INTO mounts (id, src, compiled_src, source_map, pc_to_map, hash_sha256) VALUES (?, ?, ?, ?, ?, ?)",
-            params![&id, src, compiled_src.compiled_src, &source_map, &pc_to_map, &hash_sha256],
+            "INSERT INTO mounts (id, name, src, compiled_src, source_map, pc_to_map, hash_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            params![&id, name, src, compiled_src.compiled_src, &source_map, &pc_to_map, &hash_sha256],
         )?;
 
         Ok(id)
@@ -433,18 +436,21 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("SELECT id, src, compiled_src FROM mounts")?;
+        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name FROM mounts")?;
 
         let result = stmt
             .query_map((), |row| {
                 let id: String = row.get(0)?;
                 let src: String = row.get(1)?;
                 let compiled_src: String = row.get(2)?;
+                let name: String = row.get(3)?;
 
                 Ok(MountSummary {
                     id,
                     src,
                     compiled_src,
+                    name,
+                    procs: vec![],
                 })
             })?
             .map(Result::unwrap)
@@ -455,19 +461,31 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("SELECT id, src, compiled_src FROM mounts WHERE id = ?")?;
+        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name FROM mounts WHERE id = ?")?;
 
-        let result: MountSummary = stmt.query_row(&[mount_id], |row| {
+        let (id, src, compiled_src, name) = stmt.query_row(&[mount_id], |row| {
             let id: String = row.get(0)?;
             let src: String = row.get(1)?;
             let compiled_src: String = row.get(2)?;
+            let name: String = row.get(3)?;
 
-            Ok(MountSummary {
-                id,
-                src,
-                compiled_src,
-            })
+            Ok((id, src, compiled_src, name))
         })?;
+
+        let mut stmt = conn.prepare("SELECT id FROM procs WHERE mount_id = ?")?;
+        let procs = stmt.query_map(&[mount_id], |row| row.get(0))?;
+        let mut proc_vec = Vec::new();
+        for proc in procs {
+            proc_vec.push(proc?);
+        }
+
+        let result = MountSummary {
+            id,
+            src,
+            compiled_src,
+            name,
+            procs: proc_vec,
+        };
 
         Ok(result)
     }

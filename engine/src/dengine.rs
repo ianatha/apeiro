@@ -201,7 +201,7 @@ impl DEngine {
             let src = req.src.clone();
             let compiled_src = tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
 
-            let mount = self.0.db.mount_new(&req.src, &compiled_src)?;
+            let mount = self.0.db.mount_new(&req.name.unwrap_or(extract_export_name(req.src.clone())), &req.src, &compiled_src)?;
 
             Ok(mount)
         }
