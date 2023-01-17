@@ -36,7 +36,7 @@ pub struct MountNewRequest {
     pub src: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct ProcSendRequest {
     pub msg: Value,
 }
@@ -61,7 +61,7 @@ impl std::fmt::Display for StepResultStatus {
     }
 }
 
-#[derive(Default, Deserialize, Serialize, Clone)]
+#[derive(Default, Deserialize, Serialize, Clone, PartialEq)]
 pub struct StepResult {
     pub status: StepResultStatus,
     pub val: Option<Value>,

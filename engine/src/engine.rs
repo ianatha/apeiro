@@ -47,13 +47,13 @@ pub struct EngineInstance<'a> {
 }
 
 impl Engine {
-    pub fn new(engine_runtime: Option<fn() -> String>, name: String) -> Engine {
+    pub fn new(engine_runtime: Option<fn() -> String>, name: String, dengine: DEngine) -> Engine {
         v8_init();
         Engine {
             runtime_js_src: engine_runtime,
             mbox: Box::new(vec![]),
             proc_id: name,
-            dengine: None,
+            dengine: Some(dengine),
         }
     }
 
@@ -583,9 +583,12 @@ impl Engine {
                 event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
                 let _ = dengine
                     .proc_send(proc_id, None, ProcSendRequest { msg })
-                    .await;
+                    .await
+                    .unwrap();
                 event!(Level::INFO, "sent!!");
             });
+        } else {
+            panic!();
         }
     }
 

@@ -26,6 +26,17 @@ pub struct ProcDetails {
 pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn init(&self) -> Result<(), anyhow::Error>;
 
+    fn plugin_get_state(
+        &self,
+        name: &String,
+    ) -> Result<serde_json::Value, anyhow::Error>;
+
+    fn plugin_set_state(
+        &self,
+        name: &String,
+        val: &serde_json::Value 
+    ) -> Result<(), anyhow::Error>;
+    
     fn proc_new(
         &self,
         mount_id: &String,
@@ -99,6 +110,14 @@ impl ApeiroEnginePersistence for Db {
         )?;
 
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS plugins (
+                id TEXT PRIMARY KEY,
+                state TEXT
+            );",
+            (),
+        )?;
+
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS procs (
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
@@ -132,6 +151,39 @@ impl ApeiroEnginePersistence for Db {
                 subscription TEXT
             );",
             (),
+        )?;
+
+        Ok(())
+    }
+
+    fn plugin_get_state(
+        &self,
+        name: &String,
+    ) -> Result<serde_json::Value, anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt = conn.prepare("SELECT state FROM plugins WHERE id = ?")?;
+
+        let result: serde_json::Value = stmt.query_row(&[name], |row| {
+            let val_text: String = row.get(0)?;
+            let res = serde_json::from_str(val_text.as_str()).unwrap();
+            Ok(res)
+        })?;
+
+        Ok(result)
+    }
+
+    fn plugin_set_state(
+        &self,
+        name: &String,
+        val: &serde_json::Value 
+    ) -> Result<(), anyhow::Error> {
+        let conn = self.pool.get()?;
+
+        let val_json = serde_json::to_string(val)?;
+
+        let stmt = conn.execute(
+            "INSERT INTO plugins (id, state) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET state = ?",
+            params![name, &val_json, &val_json],
         )?;
 
         Ok(())

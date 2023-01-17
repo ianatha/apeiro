@@ -29,14 +29,14 @@ impl Clone for DEngine {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct DEngineCmdSend {
     pub proc_id: String,
     pub step_id: String,
     pub req: ProcSendRequest,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum DEngineCmd {
     Broadcast(String, String, ProcEvent),
     Send(DEngineCmdSend),
@@ -44,7 +44,7 @@ pub(crate) enum DEngineCmd {
     Tick,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ProcEvent {
     Error(String),
     Log(serde_json::Value),
@@ -68,6 +68,25 @@ use tracing::{event, instrument, Level};
 use crate::db::ApeiroEnginePersistence;
 use crate::eventloop::EventLoop;
 
+pub trait PluginStorage {
+    fn get(&self) -> Result<serde_json::Value, anyhow::Error>;
+    fn set(&self, val: serde_json::Value) -> Result<(), anyhow::Error>;
+}
+
+pub struct DEngineStorage {
+    pub dengine: DEngine,
+    pub plugin_id: String,
+}
+
+impl PluginStorage for DEngineStorage {
+    fn get(&self) -> Result<serde_json::Value, anyhow::Error> {
+        self.dengine.0.db.plugin_get_state(&self.plugin_id)
+    }
+
+    fn set(&self, val: serde_json::Value) -> Result<(), anyhow::Error> {
+        self.dengine.0.db.plugin_set_state(&self.plugin_id, &val)
+    }
+}
 
 impl DEngine {
     pub fn extract_export_name(&self, input: String) -> String {
@@ -116,7 +135,6 @@ impl DEngine {
         }
     }
 
-    #[instrument(skip(self))]
     pub async fn proc_new_compiled(
         &self,
         mount_id: String,
@@ -126,7 +144,7 @@ impl DEngine {
     ) -> Result<ProcNewOutput, anyhow::Error> {
         let proc_id = self.0.db.proc_new(&mount_id, &src, &name, &compiled_src)?;
 
-        let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone());
+        let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), self.clone());
 
         let (res, engine_status) = engine.step_process(compiled_src, None, None, None).await?;
 
@@ -143,14 +161,12 @@ impl DEngine {
         })
     }
 
-    #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let mount = self.mount_get(req.mount_id.clone()).await?;
         self.proc_new_compiled(mount.id, mount.src, mount.compiled_src, req.name)
             .await
     }
 
-    #[instrument(skip(self))]
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
         let procs = self.0.db.proc_list()?;
 
@@ -396,9 +412,7 @@ impl DEngine {
 
             event!(Level::INFO, "after proc lock guard");
 
-            let mut engine = crate::Engine::new(Some(crate::get_engine_runtime), proc.pid.clone());
-
-            engine.dengine = Some(self.clone());
+            let mut engine = crate::Engine::new(Some(crate::get_engine_runtime), proc.pid.clone(), self.clone());
 
             engine.mbox.push(body.msg.clone());
 
