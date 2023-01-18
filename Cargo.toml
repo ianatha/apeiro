@@ -4,6 +4,7 @@ members = [
 	"compiler",
 	"engine",
 	"apeirod",
+	"apeiro_port_mqtt",
 	"internal_api",
 	"cli",
 	"serde"

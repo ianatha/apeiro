@@ -1,14 +1,12 @@
 mod handlers;
-mod plugins;
 
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use apeiro_engine::{get_engine_runtime, DEngine};
 use clap::{command, Parser};
-use plugins::ApeiroPlugin;
+use apeiro_engine::plugins::PluginConfiguration;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use serde::{Deserialize, Serialize};
 use tracing::Level;
 
 #[derive(Parser)]
@@ -43,11 +41,6 @@ pub fn establish_db_connection(
     Ok(pool)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PluginConfiguration {
-    plugins: Vec<Box<dyn ApeiroPlugin>>,
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Starting Apeiro Daemon");
@@ -80,6 +73,9 @@ async fn main() -> anyhow::Result<()> {
     dengine.load_proc_subscriptions().await?;
 
     if let Ok(plugins_json_contents) = std::fs::read_to_string("./plugins.json") {
+        #[allow(unused_imports)]
+        use apeiro_port_mqtt::MqttPlugin;
+
         let plugin_conf: PluginConfiguration =
             serde_json::from_str(plugins_json_contents.as_str())?;
         for plugin in plugin_conf.plugins {

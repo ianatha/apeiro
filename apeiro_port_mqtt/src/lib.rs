@@ -1,15 +1,16 @@
 use std::time::Duration;
 
-use crate::plugins::ApeiroPlugin;
-use anyhow;
+use apeiro_engine::plugins::ApeiroPlugin;
 use apeiro_engine::DEngine;
-use apeiro_internal_api::ProcSendRequest;
+use apeiro_engine::ProcSendRequest;
+
+use anyhow;
 use async_trait::async_trait;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct MqttPlugin {
+pub struct MqttPlugin {
     host: String,
     port: u16,
     keep_alive: Option<Duration>,
@@ -55,7 +56,7 @@ impl ApeiroPlugin for MqttPlugin {
         }
 
         let to_pid = self.to_pid.clone();
-        tokio::task::spawn(async move {
+        apeiro_engine::dengine::spawn(async move {
             while let Ok(notification) = eventloop.poll().await {
                 rcvd_notification(&dengine, notification, &to_pid)
                     .await

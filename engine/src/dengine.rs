@@ -88,6 +88,14 @@ impl PluginStorage for DEngineStorage {
     }
 }
 
+pub fn spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
+where
+    T: futures::Future + Send + 'static,
+    T::Output: Send + 'static,
+{
+    tokio::task::spawn(future)
+}
+
 impl DEngine {
     pub fn extract_export_name(&self, input: String) -> String {
         extract_export_name(input)
@@ -173,18 +181,30 @@ impl DEngine {
         Ok(ProcListOutput { procs })
     }
 
+
+    pub async fn mount_edit(&self, mount_id: String, new_src: String) -> Result<MountSummary, anyhow::Error> {
+        let mount_summary = self.0.db.mount_get(&mount_id)?;
+        
+        let procs_not_done = mount_summary.procs.iter().filter(|proc_id| {
+            let (_, _, _, step_result) = self.0.db.proc_get(proc_id).unwrap();
+            !(step_result.status == StepResultStatus::DONE || step_result.status == StepResultStatus::CRASHED)
+        }).count();
+
+        if procs_not_done > 0 {
+            Err(anyhow!("can't edit mount while there are procs still running"))
+        } else {
+            Err(anyhow!("not implemented"))
+        }
+    }
+
     #[instrument(skip(self))]
     pub async fn mount_get(&self, mount_id: String) -> Result<MountSummary, anyhow::Error> {
-        let mount = self.0.db.mount_get(&mount_id)?;
-
-        Ok(mount)
+        Ok(self.0.db.mount_get(&mount_id)?)
     }
 
     #[instrument(skip(self))]
     pub async fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
-        let procs = self.0.db.mount_list()?;
-
-        Ok(procs)
+        Ok(self.0.db.mount_list()?)
     }
 
     #[instrument(skip(self))]

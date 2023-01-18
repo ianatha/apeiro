@@ -25,6 +25,7 @@ rumqttc = { version = "0.19.0", optional = true }
 typetag = "0.2.4"
 async-trait = "0.1.60"
 actix-cors = "0.6.4"
+apeiro_port_mqtt = { version = "0.1.0", path = "../apeiro_port_mqtt" }
 
 [dev-dependencies]
 criterion = { version = "0.3", features = ["async_futures", "html_reports"] }

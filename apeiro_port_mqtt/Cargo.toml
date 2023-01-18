@@ -1,0 +1,13 @@
+[package]
+name = "apeiro_port_mqtt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.68"
+apeiro_engine = { path = "../engine" }
+async-trait = "0.1.61"
+rumqttc = "0.20.0"
+serde = "1.0.149"
+serde_json = "1.0.91"
+typetag = "0.2.5"

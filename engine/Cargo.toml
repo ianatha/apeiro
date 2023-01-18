@@ -25,6 +25,8 @@ reqwest = { version = "0.11.13", features = ["json", "blocking", "rustls-tls"], 
 sourcemap = "6.2.1"
 base64 = "0.21.0"
 sha256 = "1.1.1"
+async-trait = "0.1.61"
+typetag = "0.2.5"
 
 [dev-dependencies]
 tokio-test = "0.4.2"

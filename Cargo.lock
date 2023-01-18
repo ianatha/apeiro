@@ -268,9 +268,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.66"
+version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
+checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 
 [[package]]
 name = "apeiro_cli"
@@ -331,6 +331,7 @@ dependencies = [
  "apeiro_compiler",
  "apeiro_internal_api",
  "apeiro_serde",
+ "async-trait",
  "base64 0.21.0",
  "brotli",
  "futures",
@@ -348,6 +349,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "typetag",
  "v8",
 ]
 
@@ -361,6 +363,19 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "apeiro_port_mqtt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "apeiro_engine",
+ "async-trait",
+ "rumqttc 0.20.0",
+ "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -388,6 +403,7 @@ dependencies = [
  "anyhow",
  "apeiro_engine",
  "apeiro_internal_api",
+ "apeiro_port_mqtt",
  "async-stream",
  "async-trait",
  "clap 4.0.27",
@@ -398,7 +414,7 @@ dependencies = [
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
- "rumqttc",
+ "rumqttc 0.19.0",
  "serde",
  "serde_json",
  "tokio",
@@ -450,9 +466,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.60"
+version = "0.1.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677d1d8ab452a3936018a687b20e6f7cf5363d713b732b8884001317b0e48aa3"
+checksum = "705339e0e4a9690e2908d2b3d049d85682cf19fbd5782494498fbf7003a6a282"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2593,6 +2609,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rumqttc"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b616bf8b706c2a6235604f5d93f9578c37d0c6161e13898b68a1da4af2d812c"
+dependencies = [
+ "bytes",
+ "flume",
+ "futures",
+ "log",
+ "pollster",
+ "rustls-native-certs",
+ "rustls-pemfile 1.0.1",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+]
+
+[[package]]
 name = "rusqlite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4225,9 +4259,9 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 
 [[package]]
 name = "typetag"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63205b6a08578f24e4288dd01692d5d215b0c2e90613089187d2e9879788ed94"
+checksum = "8eecd98403ae5ea2813689125cf5b3f99c40b8abed46c0a8945c81eadb673b31"
 dependencies = [
  "erased-serde",
  "inventory",
@@ -4238,9 +4272,9 @@ dependencies = [
 
 [[package]]
 name = "typetag-impl"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5fd220a6403b4959b40a7f276a8d8d52a987b010dd8efd5c923f8f2d8933132"
+checksum = "8f9568611f0de5e83e0993b85c54679cd0afd659adcfcb0233f16280b980492e"
 dependencies = [
  "proc-macro2",
  "quote",
