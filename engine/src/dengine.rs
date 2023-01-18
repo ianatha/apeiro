@@ -67,6 +67,7 @@ use tracing::{event, instrument, Level};
 
 use crate::db::ApeiroEnginePersistence;
 use crate::eventloop::EventLoop;
+use crate::eventloop::now_as_millis;
 
 pub trait PluginStorage {
     fn get(&self) -> Result<serde_json::Value, anyhow::Error>;
@@ -145,16 +146,15 @@ impl DEngine {
 
     pub async fn proc_new_compiled(
         &self,
-        mount_id: String,
-        src: String,
-        compiled_src: String,
+        mount: MountSummary,
         name: Option<String>,
     ) -> Result<ProcNewOutput, anyhow::Error> {
-        let proc_id = self.0.db.proc_new(&mount_id, &src, &name, &compiled_src)?;
+        let name = name.unwrap_or_else(|| format!("{}_{}", mount.name, now_as_millis()));
+        let proc_id = self.0.db.proc_new(&mount.id, &Some(name))?;
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), self.clone());
 
-        let (res, engine_status) = engine.step_process(compiled_src, None, None, None).await?;
+        let (res, engine_status) = engine.step_process(mount.compiled_src, None, None, None).await?;
 
         self.0.db.proc_update(&proc_id, &res, &engine_status)?;
 
@@ -171,7 +171,7 @@ impl DEngine {
 
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let mount = self.mount_get(req.mount_id.clone()).await?;
-        self.proc_new_compiled(mount.id, mount.src, mount.compiled_src, req.name)
+        self.proc_new_compiled(mount, req.name)
             .await
     }
 

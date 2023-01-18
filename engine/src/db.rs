@@ -34,9 +34,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn proc_new(
         &self,
         mount_id: &String,
-        src: &String,
         name: &Option<String>,
-        compiled_src: &String,
     ) -> Result<String, anyhow::Error>;
 
     fn proc_subscription_new(
@@ -118,14 +116,22 @@ impl ApeiroEnginePersistence for Db {
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
                 mount_id TEXT,
-                src TEXT,
-                compiled_src TEXT,
+                current_step_id INTEGER
+            );",
+            (),
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS steps (
+                proc_id TEXT,
+                step_id INTEGER NOT NULL,
                 status TEXT,
                 val TEXT,
                 suspension TEXT,
                 snapshot BLOB,
                 frames TEXT,
-                funcs TEXT
+                funcs TEXT,
+                PRIMARY KEY (proc_id, step_id)
             );",
             (),
         )?;
@@ -185,17 +191,15 @@ impl ApeiroEnginePersistence for Db {
     fn proc_new(
         &self,
         mount_id: &String,
-        src: &String,
         name: &Option<String>,
-        compiled_src: &String,
     ) -> Result<String, anyhow::Error> {
         let id = nanoid!();
 
         let conn = self.pool.get()?;
 
         conn.execute(
-            "INSERT INTO procs (id, name, mount_id, src, compiled_src) VALUES (?, ?, ?, ?, ?)",
-            params![&id, name, mount_id, src, compiled_src],
+            "INSERT INTO procs (id, name, mount_id, current_step_id) VALUES (?, ?, ?, ?)",
+            params![&id, name, mount_id, 0],
         )?;
 
         Ok(id)
@@ -211,10 +215,18 @@ impl ApeiroEnginePersistence for Db {
         let funcs_json = serde_json::to_string(&engine_status.funcs).unwrap();
 
         let conn = self.pool.get()?;
-
+        
+        let step_id = conn.prepare("SELECT current_step_id FROM procs WHERE id = ?")?
+            .query_row(&[id], |row| {
+                let current_step_id: i64 = row.get(0)?;
+                Ok(current_step_id + 1)
+            })?;
+        
         conn.execute(
-            "UPDATE procs SET status=?, val=?, suspension=?, frames=?, funcs=?, snapshot=? WHERE id=?",
+            "INSERT INTO steps (proc_id, step_id, status, val, suspension, frames, funcs, snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             params![
+                id,
+                step_id,
                 serde_json::to_string(&state.status).unwrap(),
                 state
                     .val
@@ -227,8 +239,12 @@ impl ApeiroEnginePersistence for Db {
                 frames_json,
                 funcs_json,
                 engine_status.snapshot,
-                id
             ],
+        )?;
+
+        conn.execute(
+            "UPDATE procs SET current_step_id=? WHERE id=?",
+            params![step_id, id],
         )?;
 
         Ok(())
@@ -275,11 +291,11 @@ impl ApeiroEnginePersistence for Db {
 
         let mut stmt = if is_proc_id(proc_id_or_name) {
             conn.prepare(
-                "SELECT status, val, suspension, id, name, mount_id FROM procs WHERE id = ?",
+                "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.mount_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.id = ?",
             )?
         } else {
             conn.prepare(
-                "SELECT status, val, suspension, id, name, mount_id FROM procs WHERE name = ?",
+                "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.mount_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.name = ?",
             )?
         };
 
@@ -355,7 +371,7 @@ impl ApeiroEnginePersistence for Db {
     fn proc_list(&self) -> Result<Vec<ProcSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt = conn.prepare(
-            "SELECT id, status, suspension, name, length(snapshot), length(funcs) + length(frames) FROM procs",
+            "SELECT procs.id, steps.status, steps.suspension, procs.name, length(steps.snapshot), length(steps.funcs) + length(frames) FROM procs JOIN steps ON (procs.id = steps.proc_id AND procs.current_step_id = steps.step_id)",
         )?;
 
         let result = stmt

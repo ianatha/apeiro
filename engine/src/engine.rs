@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Ok, Result};
 use apeiro_internal_api::EngineStatus;
+use apeiro_internal_api::MountSummary;
 use apeiro_internal_api::ProcSendRequest;
 use apeiro_internal_api::StackTraceFrame;
 use apeiro_internal_api::StepResult;
@@ -10,6 +11,7 @@ use v8::CreateParams;
 use v8::PromiseState;
 
 use crate::dengine::DEngineCmd;
+use crate::eventloop::now_as_millis;
 use crate::struct_method_to_v8;
 use crate::throw_exception;
 use crate::v8_helpers::stack_trace_to_frames;
@@ -626,9 +628,13 @@ impl Engine {
             let handle = tokio::runtime::Handle::current();
             let _guard = handle.enter();
             let res = futures::executor::block_on(dengine.proc_new_compiled(
-                "synthetic_id".into(),
-                synthetic_src.clone().into(),
-                synthetic_src.into(),
+                MountSummary {
+                    id: format!("synthetic_{}", now_as_millis()).into(),
+                    name: format!("synthetic_{}", now_as_millis()).into(),
+                    src:synthetic_src.clone().into(),
+                    compiled_src: synthetic_src.into(),
+                    procs: vec![],
+                },
                 None,
             ))
             .unwrap();
