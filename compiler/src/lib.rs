@@ -4,7 +4,6 @@ mod tests;
 #[allow(dead_code)]
 pub mod helpers;
 
-mod bundle_phase;
 mod compile_phase;
 mod either_param_to_closure;
 mod fn_decl_to_fn_expr;
@@ -14,7 +13,6 @@ mod generator;
 mod stmt_exploder;
 mod utils;
 
-pub use bundle_phase::apeiro_bundle_and_compile;
 pub use compile_phase::custom_apeiro_compile;
 use compile_phase::ApeiroCompiler;
 
@@ -36,6 +34,7 @@ pub struct ProgramCounterToSourceLocation {
     pub end_loc: u32,
 }
 
+#[derive(Debug)]
 pub struct CompilationResult {
     pub compiled_src: String,
     pub source_map: Option<String>,
@@ -82,13 +81,18 @@ fn top_level_from_program(parsed: &swc_ecma_ast::Program) -> Option<String> {
 pub fn extract_export_name(input: String) -> String {
     let compiler = ApeiroCompiler::new();
     if let Ok((_source_file, parsed)) =
-        swc_common::GLOBALS.set(&swc_common::Globals::new(), || compiler.parse(input))
+        swc_common::GLOBALS.set(&swc_common::Globals::new(), || compiler.parse("".to_string(), input))
     {
         if let Some(name) = top_level_from_program(&parsed) {
             return name;
         }
     }
     return default_name();
+}
+
+pub fn apeiro_bundle_and_compile(src: String) -> Result<CompilationResult, anyhow::Error> {
+    let compiler = crate::compile_phase::ApeiroCompiler::new();
+    compiler.bundle_main(src, false)
 }
 
 pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
