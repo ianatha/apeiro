@@ -21,6 +21,9 @@ struct Cli {
 
     #[clap(short, long)]
     store: Option<String>,
+
+    #[clap(long)]
+    p2p: bool,
 }
 
 #[cfg(not(test))]
@@ -69,6 +72,12 @@ async fn main() -> anyhow::Result<()> {
     tokio::task::spawn(async move {
         event_loop.run().await;
     });
+
+    if cli.p2p {
+        tokio::task::spawn(async move {
+            apeiro_engine::p2prpc::start_p2p().await.unwrap();
+        });
+    }
 
     dengine.load_proc_subscriptions().await?;
 

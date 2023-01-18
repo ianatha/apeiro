@@ -7,6 +7,7 @@ mod engine;
 mod eventloop;
 mod v8_helpers;
 pub mod plugins;
+pub mod p2prpc;
 
 use std::sync::Once;
 
