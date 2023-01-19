@@ -24,6 +24,9 @@ struct Cli {
 
     #[clap(long)]
     p2p: bool,
+
+    #[clap(short, long)]
+    allowed_origin: Option<String>,
 }
 
 #[cfg(not(test))]
@@ -104,12 +107,13 @@ async fn main() -> anyhow::Result<()> {
 
     let listen_addr = cli.listen.unwrap_or("127.0.0.1".to_string());
     println!("Starting HTTP daemon on port {}:{}", listen_addr, port);
+    let allowed_origin = cli.allowed_origin.unwrap_or("http://localhost:3000".to_string());
     HttpServer::new(move || {
         use actix_cors::Cors;
         use actix_web::http;
 
         let cors = Cors::default()
-            .allowed_origin("http://localhost:3000")
+            .allowed_origin(allowed_origin.as_str())
             // .allowed_origin_fn(|origin, _req_head| {
             //     origin.as_bytes().ends_with(b".rust-lang.org")
             // })
