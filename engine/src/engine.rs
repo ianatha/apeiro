@@ -333,7 +333,7 @@ impl Engine {
                 let js_stmt_result_obj = js_stmt_result
                     .to_object(context_scope)
                     .ok_or(anyhow!("no result from $step"))?;
-                v8_println(context_scope, js_stmt_result_obj.into());
+                // v8_println(context_scope, js_stmt_result_obj.into());
                 let val_key = v8_struct_key(context_scope, "val");
                 let new_val = js_stmt_result_obj
                     .get(context_scope, val_key.into())
@@ -631,7 +631,7 @@ impl Engine {
                 MountSummary {
                     id: format!("synthetic_{}", now_as_millis()).into(),
                     name: format!("synthetic_{}", now_as_millis()).into(),
-                    src:synthetic_src.clone().into(),
+                    src: synthetic_src.clone().into(),
                     compiled_src: synthetic_src.into(),
                     procs: vec![],
                 },

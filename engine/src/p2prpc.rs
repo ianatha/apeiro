@@ -3,8 +3,9 @@ use libp2p::{
     core::upgrade,
     floodsub::{self, Floodsub, FloodsubEvent},
     identity, mdns, mplex, noise,
+    ping::PingEvent,
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, Multiaddr, PeerId, Transport, ping::PingEvent,
+    tcp, Multiaddr, PeerId, Transport,
 };
 use std::error::Error;
 use tokio::io::{self, AsyncBufReadExt};
@@ -108,11 +109,10 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     use tokio::time::{self, Duration};
-    
+
     let tick = time::interval(Duration::from_millis(1000));
     tokio::pin!(tick);
 
-    
     // Kick it off
     loop {
         tokio::select! {
@@ -151,7 +151,7 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
                                 for (peer, addr) in list {
                                     println!("discovered {peer} {addr}");
                                     swarm.dial(addr.clone()).unwrap();
-                                    
+
                                 }
                             }
                             mdns::Event::Expired(list) => {

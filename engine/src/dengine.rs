@@ -89,13 +89,7 @@ impl PluginStorage for DEngineStorage {
     }
 }
 
-pub fn spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
-where
-    T: futures::Future + Send + 'static,
-    T::Output: Send + 'static,
-{
-    tokio::task::spawn(future)
-}
+pub use tokio::task::spawn;
 
 impl DEngine {
     pub fn extract_export_name(&self, input: String) -> String {
@@ -117,7 +111,7 @@ impl DEngine {
     }
 
     #[instrument(skip(self))]
-    async fn get_proc_lock(&self, proc_id: &String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
+    pub async fn get_proc_lock(&self, proc_id: &String) -> Result<Arc<RwLock<()>>, anyhow::Error> {
         let proc_lock = {
             let mut locked_map = self.0.locks.write().await;
             if let Some(proc_lock) = locked_map.get(proc_id) {
@@ -352,11 +346,7 @@ impl DEngine {
     }
 
     pub async fn tick(&self) -> Result<(), anyhow::Error> {
-        self.0
-            .tx
-            .send(DEngineCmd::Tick)
-            .await
-            .map_err(anyhow::Error::msg)
+        self.send(DEngineCmd::Tick).await
     }
 
     #[instrument(skip(self))]
@@ -369,10 +359,8 @@ impl DEngine {
         use nanoid::nanoid;
 
         let exec_id = exec_id.unwrap_or(nanoid!());
-        self.0
-            .tx
-            .send(DEngineCmd::Send(DEngineCmdSend {
-                proc_id: proc_id,
+        self.send(DEngineCmd::Send(DEngineCmdSend {
+                proc_id,
                 step_id: exec_id.clone(),
                 req: body,
             }))
@@ -381,7 +369,6 @@ impl DEngine {
         Ok(exec_id)
     }
 
-    #[instrument(skip(self))]
     pub async fn send_to_watchers(
         &self,
         proc_id: &String,

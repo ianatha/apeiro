@@ -31,11 +31,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn plugin_set_state(&self, name: &String, val: &serde_json::Value)
         -> Result<(), anyhow::Error>;
 
-    fn proc_new(
-        &self,
-        mount_id: &String,
-        name: &Option<String>,
-    ) -> Result<String, anyhow::Error>;
+    fn proc_new(&self, mount_id: &String, name: &Option<String>) -> Result<String, anyhow::Error>;
 
     fn proc_subscription_new(
         &self,
@@ -188,11 +184,7 @@ impl ApeiroEnginePersistence for Db {
         Ok(())
     }
 
-    fn proc_new(
-        &self,
-        mount_id: &String,
-        name: &Option<String>,
-    ) -> Result<String, anyhow::Error> {
+    fn proc_new(&self, mount_id: &String, name: &Option<String>) -> Result<String, anyhow::Error> {
         let id = nanoid!();
 
         let conn = self.pool.get()?;
@@ -215,13 +207,14 @@ impl ApeiroEnginePersistence for Db {
         let funcs_json = serde_json::to_string(&engine_status.funcs).unwrap();
 
         let conn = self.pool.get()?;
-        
-        let step_id = conn.prepare("SELECT current_step_id FROM procs WHERE id = ?")?
+
+        let step_id = conn
+            .prepare("SELECT current_step_id FROM procs WHERE id = ?")?
             .query_row(&[id], |row| {
                 let current_step_id: i64 = row.get(0)?;
                 Ok(current_step_id + 1)
             })?;
-        
+
         conn.execute(
             "INSERT INTO steps (proc_id, step_id, status, val, suspension, frames, funcs, snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             params![
