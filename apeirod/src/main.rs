@@ -87,6 +87,8 @@ async fn main() -> anyhow::Result<()> {
     if let Ok(plugins_json_contents) = std::fs::read_to_string("./plugins.json") {
         #[allow(unused_imports)]
         use apeiro_port_mqtt::MqttPlugin;
+        #[allow(unused_imports)]
+        use apeiro_port_syslog::SyslogPlugin;
 
         let plugin_conf: PluginConfiguration =
             serde_json::from_str(plugins_json_contents.as_str())?;
