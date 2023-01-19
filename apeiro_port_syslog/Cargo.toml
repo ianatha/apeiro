@@ -13,4 +13,4 @@ typetag = "0.2.5"
 bytes = "0.4.12"
 socket2 = { version = "0.3.9", features = ["reuseport"] }
 mio = "^0.6"
-chrono = "0.4.6"
+chrono = { version = "0.4.6", features = ["serde"] }

@@ -2,9 +2,9 @@ mod handlers;
 
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
+use apeiro_engine::plugins::PluginConfiguration;
 use apeiro_engine::{get_engine_runtime, DEngine};
 use clap::{command, Parser};
-use apeiro_engine::plugins::PluginConfiguration;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tracing::Level;
@@ -85,8 +85,8 @@ async fn main() -> anyhow::Result<()> {
     dengine.load_proc_subscriptions().await?;
 
     if let Ok(plugins_json_contents) = std::fs::read_to_string("./plugins.json") {
-        #[allow(unused_imports)]
-        use apeiro_port_mqtt::MqttPlugin;
+        // #[allow(unused_imports)]
+        // use apeiro_port_mqtt::MqttPlugin;
         #[allow(unused_imports)]
         use apeiro_port_syslog::SyslogPlugin;
 
@@ -109,7 +109,9 @@ async fn main() -> anyhow::Result<()> {
 
     let listen_addr = cli.listen.unwrap_or("127.0.0.1".to_string());
     println!("Starting HTTP daemon on port {}:{}", listen_addr, port);
-    let allowed_origin = cli.allowed_origin.unwrap_or("http://localhost:3000".to_string());
+    let allowed_origin = cli
+        .allowed_origin
+        .unwrap_or("http://localhost:3000".to_string());
     HttpServer::new(move || {
         use actix_cors::Cors;
         use actix_web::http;
@@ -144,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
             .service(handlers::mount_new)
             .service(handlers::mount_list)
             .service(handlers::mount_get)
+            .service(handlers::mount_edit)
             .service(handlers::helper_extract_export_name)
     })
     .bind((listen_addr, port))?

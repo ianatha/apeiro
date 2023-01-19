@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::io::{Error, ErrorKind};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use syslog::SyslogMsg;
 
 mod syslog;
 
@@ -44,7 +45,7 @@ struct TcpConn {
     sa: SocketAddr,
 }
 
-fn cli_main() -> Result<(), Error> {
+async fn cli_main(dengine: PrivateSender) -> Result<(), Error> {
     let mut events = Events::with_capacity(256);
     let poll = Poll::new()?;
     let mut buffer = [0; 4096];
@@ -111,13 +112,13 @@ fn cli_main() -> Result<(), Error> {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
-                UDP4 => match receive_udp(&udp4_server_mio, &mut buffer) {
+                UDP4 => match receive_udp(&dengine, &udp4_server_mio, &mut buffer).await {
                     Ok(()) => continue,
                     Err(e) => {
                         eprintln!("IPv4 receive {}", e);
                     }
                 },
-                UDP6 => match receive_udp(&udp6_server_mio, &mut buffer) {
+                UDP6 => match receive_udp(&dengine, &udp6_server_mio, &mut buffer).await {
                     Ok(()) => continue,
                     Err(e) => {
                         eprintln!("IPv6 receive {}", e);
@@ -151,7 +152,7 @@ fn cli_main() -> Result<(), Error> {
                 },
                 tok => {
                     if let Some(conn_ref) = tcp_tokens.get_mut(&tok) {
-                        if receive_tcp(conn_ref, &mut buffer) {
+                        if receive_tcp(&dengine, conn_ref, &mut buffer).await {
                             poll.deregister(&conn_ref.stream)?;
                             tcp_tokens.remove(&tok);
                         }
@@ -165,7 +166,11 @@ fn cli_main() -> Result<(), Error> {
 }
 
 // common receive routine
-fn receive_udp(sock: &UdpSocket, buf: &mut [u8]) -> Result<(), Error> {
+async fn receive_udp(
+    dengine: &PrivateSender,
+    sock: &UdpSocket,
+    buf: &mut [u8],
+) -> Result<(), Error> {
     loop {
         let (len, from) = match sock.recv_from(buf) {
             Ok((len, from)) => (len, from),
@@ -179,7 +184,8 @@ fn receive_udp(sock: &UdpSocket, buf: &mut [u8]) -> Result<(), Error> {
         };
 
         if let Some(msg) = syslog::parse(from, len, buf) {
-            println!("{:?}", msg);
+            println!("\n\n\n\n\n\n\n\n{:?}\n\n\n\n\n\n\n\n", msg);
+            dengine.send(msg).await;
         } else {
             match std::str::from_utf8(buf) {
                 Ok(s) => eprintln!("error parsing: {}", s),
@@ -189,7 +195,7 @@ fn receive_udp(sock: &UdpSocket, buf: &mut [u8]) -> Result<(), Error> {
     }
 }
 
-fn receive_tcp(conn_ref: &mut TcpConn, buf: &mut [u8]) -> bool {
+async fn receive_tcp(dengine: &PrivateSender, conn_ref: &mut TcpConn, buf: &mut [u8]) -> bool {
     loop {
         match conn_ref.stream.read(buf) {
             Ok(0) => {
@@ -199,7 +205,8 @@ fn receive_tcp(conn_ref: &mut TcpConn, buf: &mut [u8]) -> bool {
             Ok(len) => {
                 // we have a message to process
                 if let Some(msg) = syslog::parse(conn_ref.sa, len, buf) {
-                    println!("{:?}", msg);
+                    println!("\n\n\n\n\n\n\n\n{:?}\n\n\n\n\n\n\n\n", msg);
+                    dengine.send(msg).await;
                 } else {
                     println!(
                         "error parsing: {:?}",
@@ -252,13 +259,33 @@ pub struct SyslogPlugin {
 //     Ok(())
 // }
 
+struct PrivateSender {
+    dengine: DEngine,
+    to_pid: String,
+}
+
+impl PrivateSender {
+    async fn send(&self, msg: SyslogMsg) {
+        let dengine = self.dengine.clone();
+        let msg = serde_json::to_value(msg).unwrap();
+        let to_pid = self.to_pid.clone();
+        apeiro_engine::dengine::spawn(async move {
+            dengine
+                .proc_send(to_pid, None, ProcSendRequest { msg })
+                .await
+                .unwrap();
+        });
+    }
+}
+
 #[typetag::serde]
 #[async_trait]
 impl ApeiroPlugin for SyslogPlugin {
     async fn init(&self, dengine: DEngine) -> Result<(), anyhow::Error> {
+        let to_pid = self.to_pid.clone();
         apeiro_engine::dengine::spawn(async move {
             println!("listening");
-            cli_main().unwrap();
+            cli_main(PrivateSender { dengine, to_pid }).await.unwrap();
             // while let Ok(notification) = eventloop.poll().await {
             //     rcvd_notification(&dengine, notification, &to_pid)
             //         .await

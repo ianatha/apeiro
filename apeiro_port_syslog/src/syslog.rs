@@ -1,4 +1,6 @@
 use chrono::prelude::*;
+use chrono::serde::ts_seconds_option;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str;
@@ -98,12 +100,13 @@ impl SliceExt for [u8] {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SyslogMsg {
     from: SocketAddr,
     facility: u8,
     severity: u8,
     version: u8,
+    #[serde(with = "ts_seconds_option")]
     timestamp: Option<DateTime<Utc>>,
     hostname: Option<String>,
     appname: Option<String>,
