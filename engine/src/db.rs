@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::StepResultStatus;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use apeiro_compiler::CompilationResult;
 use apeiro_internal_api::{EngineStatus, MountSummary, ProcStatusDebug, ProcSummary, StepResult};
 use nanoid::nanoid;
@@ -249,7 +249,8 @@ impl ApeiroEnginePersistence for Db {
         let (proc_id, mount_id, name, state) = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
-            conn.prepare("SELECT compiled_src, frames, funcs, snapshot FROM procs WHERE id = ?")?;
+            conn.prepare("SELECT mounts.compiled_src, steps.frames, steps.funcs, steps.snapshot FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) JOIN mounts ON (mounts.id = procs.mount_id) WHERE id = ?")
+                .context("proc_get_details query failed")?;
 
         let result = stmt.query_row(&[&proc_id.clone()], |row| {
             let compiled_src: String = row.get(0)?;
@@ -285,11 +286,13 @@ impl ApeiroEnginePersistence for Db {
         let mut stmt = if is_proc_id(proc_id_or_name) {
             conn.prepare(
                 "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.mount_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.id = ?",
-            )?
+            )
+            .context("proc_get by id query failed")?
         } else {
             conn.prepare(
                 "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.mount_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.name = ?",
-            )?
+            )
+            .context("proc_get by name query failed")?
         };
 
         let result = stmt.query_row(&[proc_id_or_name], |row| {
@@ -341,8 +344,9 @@ impl ApeiroEnginePersistence for Db {
 
     fn proc_inspect(&self, id: &String) -> Result<ProcStatusDebug, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt =
-            conn.prepare("SELECT frames, compiled_src, funcs FROM procs WHERE id = ?")?;
+        let mut stmt = conn
+            .prepare("SELECT frames, compiled_src, funcs FROM procs WHERE id = ?")
+            .context("proc_inspect query failed")?;
 
         let result = stmt.query_row(&[id], |row| {
             let frames: String = row.get(0)?;
@@ -365,7 +369,7 @@ impl ApeiroEnginePersistence for Db {
         let conn = self.pool.get()?;
         let mut stmt = conn.prepare(
             "SELECT procs.id, steps.status, steps.suspension, procs.name, length(steps.snapshot), length(steps.funcs) + length(frames) FROM procs JOIN steps ON (procs.id = steps.proc_id AND procs.current_step_id = steps.step_id)",
-        )?;
+        ).context("proc_list query failed")?;
 
         let result = stmt
             .query_map((), |row| {
