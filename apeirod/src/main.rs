@@ -146,7 +146,6 @@ async fn main() -> anyhow::Result<()> {
             .service(handlers::mount_new)
             .service(handlers::mount_list)
             .service(handlers::mount_get)
-            .service(handlers::mount_edit)
             .service(handlers::helper_extract_export_name)
     })
     .bind((listen_addr, port))?
