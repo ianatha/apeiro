@@ -66,8 +66,8 @@ struct SharedDEngine {
 use tracing::{event, instrument, Level};
 
 use crate::db::ApeiroEnginePersistence;
-use crate::eventloop::EventLoop;
 use crate::eventloop::now_as_millis;
+use crate::eventloop::EventLoop;
 
 pub trait PluginStorage {
     fn get(&self) -> Result<serde_json::Value, anyhow::Error>;
@@ -148,7 +148,9 @@ impl DEngine {
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), self.clone());
 
-        let (res, engine_status) = engine.step_process(mount.compiled_src, None, None, None).await?;
+        let (res, engine_status) = engine
+            .step_process(mount.compiled_src, None, None, None)
+            .await?;
 
         self.0.db.proc_update(&proc_id, &res, &engine_status)?;
 
@@ -165,8 +167,7 @@ impl DEngine {
 
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let mount = self.mount_get(req.mount_id.clone()).await?;
-        self.proc_new_compiled(mount, req.name)
-            .await
+        self.proc_new_compiled(mount, req.name).await
     }
 
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
@@ -175,17 +176,27 @@ impl DEngine {
         Ok(ProcListOutput { procs })
     }
 
-
-    pub async fn mount_edit(&self, mount_id: String, new_src: String) -> Result<MountSummary, anyhow::Error> {
+    pub async fn mount_edit(
+        &self,
+        mount_id: String,
+        new_src: String,
+    ) -> Result<MountSummary, anyhow::Error> {
         let mount_summary = self.0.db.mount_get(&mount_id)?;
-        
-        let procs_not_done = mount_summary.procs.iter().filter(|proc_id| {
-            let (_, _, _, step_result) = self.0.db.proc_get(proc_id).unwrap();
-            !(step_result.status == StepResultStatus::DONE || step_result.status == StepResultStatus::CRASHED)
-        }).count();
+
+        let procs_not_done = mount_summary
+            .procs
+            .iter()
+            .filter(|proc_id| {
+                let (_, _, _, step_result) = self.0.db.proc_get(proc_id).unwrap();
+                !(step_result.status == StepResultStatus::DONE
+                    || step_result.status == StepResultStatus::CRASHED)
+            })
+            .count();
 
         if procs_not_done > 0 {
-            Err(anyhow!("can't edit mount while there are procs still running"))
+            Err(anyhow!(
+                "can't edit mount while there are procs still running"
+            ))
         } else {
             Err(anyhow!("not implemented"))
         }
@@ -215,7 +226,11 @@ impl DEngine {
             let src = req.src.clone();
             let compiled_src = tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
 
-            let mount = self.0.db.mount_new(&req.name.unwrap_or(extract_export_name(req.src.clone())), &req.src, &compiled_src)?;
+            let mount = self.0.db.mount_new(
+                &req.name.unwrap_or(extract_export_name(req.src.clone())),
+                &req.src,
+                &compiled_src,
+            )?;
 
             Ok(mount)
         }
@@ -360,11 +375,11 @@ impl DEngine {
 
         let exec_id = exec_id.unwrap_or(nanoid!());
         self.send(DEngineCmd::Send(DEngineCmdSend {
-                proc_id,
-                step_id: exec_id.clone(),
-                req: body,
-            }))
-            .await?;
+            proc_id,
+            step_id: exec_id.clone(),
+            req: body,
+        }))
+        .await?;
 
         Ok(exec_id)
     }

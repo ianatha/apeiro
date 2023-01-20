@@ -224,18 +224,15 @@ export default async function $step(): Promise<StepResult> {
 	let fn = $usercode().default;
 	current_frame = 0;
 	if (globalThis.$frames_snapshot_store === undefined) {
-		log("v2 reanimation")
 		$frames = $get_frames();
 		$fns = $reanimate_funcs($get_funcs());
 	} else {
 		$frames = globalThis.$frames_snapshot_store;
-		log("frames length " + $frames.length);
-		log("fns length " + Object.keys($fns).length);
 	}
 	let val = undefined;
 	try {
 		if (isGenerator(fn)) {
-			let generator_instance = fn(this);
+			const generator_instance = fn(this);
 			val = generator_instance.next().value;
 			let next_step = generator_instance.next();
 			if (next_step.done) {

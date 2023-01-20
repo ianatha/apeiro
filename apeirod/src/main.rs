@@ -1,5 +1,7 @@
 mod handlers;
 
+use std::time::Duration;
+
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use apeiro_engine::plugins::PluginConfiguration;
@@ -8,6 +10,7 @@ use clap::{command, Parser};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tracing::Level;
+use tracing::instrument::WithSubscriber;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -49,17 +52,22 @@ pub fn establish_db_connection(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    console_subscriber::ConsoleLayer::builder()
+        .retention(Duration::from_secs(120))
+        .init();
+
     println!("Starting Apeiro Daemon");
 
-    let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_span_events(
-            tracing_subscriber::fmt::format::FmtSpan::NEW
-                | tracing_subscriber::fmt::format::FmtSpan::CLOSE,
-        )
-        .with_max_level(Level::TRACE)
-        .with_env_filter("apeiro_engine=trace,apeirod=trace")
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    // let subscriber = tracing_subscriber::FmtSubscriber::builder()
+    //     .with_span_events(
+    //         tracing_subscriber::fmt::format::FmtSpan::NEW
+    //             | tracing_subscriber::fmt::format::FmtSpan::CLOSE,
+    //     )
+    //     .with_max_level(Level::TRACE)
+    //     .with_env_filter("apeiro_engine=trace,apeirod=trace")
+    //     .with_subscriber(subscriber)
+    //     .finish();
+    // tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let cli = Cli::parse();
     let port = cli.port.unwrap_or(5151);
@@ -101,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
         let dengine = dengine.clone();
         tokio::task::spawn(async move {
             loop {
-                dengine.clone().tick().await.unwrap();
+                dengine.tick().await.unwrap();
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
         });
@@ -112,6 +120,7 @@ async fn main() -> anyhow::Result<()> {
     let allowed_origin = cli
         .allowed_origin
         .unwrap_or("http://localhost:3000".to_string());
+
     HttpServer::new(move || {
         use actix_cors::Cors;
         use actix_web::http;

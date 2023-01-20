@@ -27,9 +27,11 @@ async-trait = "0.1.60"
 actix-cors = "0.6.4"
 apeiro_port_mqtt = { version = "0.1.0", path = "../apeiro_port_mqtt" }
 apeiro_port_syslog = { version = "0.1.0", path = "../apeiro_port_syslog" }
+console-subscriber = "0.1.8"
 
 [dev-dependencies]
 criterion = { version = "0.3", features = ["async_futures", "html_reports"] }
+tokio = { version = "1", features = ["full", "time", "tracing"] }
 
 [features]
 default = ["mqtt"]

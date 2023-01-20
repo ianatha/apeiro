@@ -249,7 +249,7 @@ impl ApeiroEnginePersistence for Db {
         let (proc_id, mount_id, name, state) = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
-            conn.prepare("SELECT mounts.compiled_src, steps.frames, steps.funcs, steps.snapshot FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) JOIN mounts ON (mounts.id = procs.mount_id) WHERE id = ?")
+            conn.prepare("SELECT mounts.compiled_src, steps.frames, steps.funcs, steps.snapshot FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) JOIN mounts ON (mounts.id = procs.mount_id) WHERE procs.id = ?")
                 .context("proc_get_details query failed")?;
 
         let result = stmt.query_row(&[&proc_id.clone()], |row| {

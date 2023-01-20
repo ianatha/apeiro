@@ -778,7 +778,7 @@ pub struct PristineRunError {
 
 impl std::fmt::Display for PristineRunError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}: {}", "PristineRunError", self.msg,))
+        f.write_fmt(format_args!("{}: {}\n{:?}", "PristineRunError", self.msg, self.frames))
     }
 }
 
@@ -807,7 +807,7 @@ fn map_exception_to_original_code(
     let stack_trace_frames = if let Some(sm) = extract_src_map_from_src(src) {
         stack_trace_to_frames(&sm, context_scope, message)
     } else {
-        vec![]
+        crate::v8_helpers::stack_trace_to_frames_no_srcmap(context_scope, message)
     };
     PristineRunError {
         msg: exception_str,
