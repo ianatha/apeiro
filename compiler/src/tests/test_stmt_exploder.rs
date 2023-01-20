@@ -30,9 +30,9 @@ console.log(g(f(1)));
     delete _temp$2;
     {
         const _temp$5 = Random.number();
-        let y1 = _temp$5;
+        let y = _temp$5;
         delete _temp$5;
-        console.log(y1);
+        console.log(y);
     }
     const _temp$4 = f(y);
     const _temp$3 = g(_temp$4);
@@ -67,9 +67,9 @@ console.log(g(f(1)));
     delete _temp$2;
     while(true){
         const _temp$5 = Random.number();
-        let y1 = _temp$5;
+        let y = _temp$5;
         delete _temp$5;
-        console.log(y1);
+        console.log(y);
     }
     const _temp$4 = f(y);
     const _temp$3 = g(_temp$4);
