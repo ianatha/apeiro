@@ -1,11 +1,11 @@
 use futures::StreamExt;
 use libp2p::{
-    core::upgrade,
+    core::{upgrade, either::EitherTransport},
     floodsub::{self, Floodsub, FloodsubEvent},
     identity, mdns, mplex, noise,
     ping::PingEvent,
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, Multiaddr, PeerId, Transport, request_response::{RequestResponseEvent, ProtocolSupport, RequestResponseMessage},
+    tcp, Multiaddr, PeerId, Transport, request_response::{RequestResponseEvent, ProtocolSupport, RequestResponseMessage}, pnet::{PreSharedKey, PnetConfig},
 };
 use std::error::Error;
 use tokio::io::{self, AsyncBufReadExt};
@@ -134,9 +134,18 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
     println!("Local peer id: {peer_id:?}");
     println!("pubi {:?}", id_keys.public());
 
-    // Create a tokio-based TCP transport use noise for authenticated
-    // encryption and Mplex for multiplexing of substreams on a TCP stream.
-    let transport = tcp::tokio::Transport::new(tcp::Config::default().nodelay(true))
+    let base_transport = tcp::async_io::Transport::new(tcp::Config::default().nodelay(true));
+
+    let psk = Some(PreSharedKey::new(*b"apeiroasdfasdhfkjhasdlfjhadsjlff"));
+
+    let maybe_encrypted = match psk {
+        Some(psk) => EitherTransport::Left(
+            base_transport.and_then(move |socket, _| PnetConfig::new(psk).handshake(socket)),
+        ),
+        None => EitherTransport::Right(base_transport),
+    };
+
+    let transport = maybe_encrypted
         .upgrade(upgrade::Version::V1)
         .authenticate(
             noise::NoiseAuthenticated::xx(&id_keys)
