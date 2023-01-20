@@ -576,20 +576,33 @@ impl Engine {
         if let Some(dengine) = self.dengine.clone() {
             let proc_id = args.get(0);
             let proc_id: String = proc_id.to_rust_string_lossy(scope);
-
             let msg = args.get(1);
             let counter = RefCell::new(-1);
             let msg = apeiro_serde::OBJ_COUNT_DE
                 .set(&counter, || apeiro_serde::from_v8(scope, msg).unwrap());
 
-            tokio::task::spawn(async move {
-                event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
-                let _ = dengine
-                    .proc_send(proc_id, None, ProcSendRequest { msg })
-                    .await
-                    .unwrap();
-                event!(Level::INFO, "sent!!");
-            });
+            if proc_id.contains("@") {
+                tokio::task::spawn(async move {
+                    let proc_id_split: Vec<&str> = proc_id.split("@").collect();
+                    let proc_id = proc_id_split[0];
+                    let peer_id = proc_id_split[1];
+                    event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
+                    let _ = dengine
+                        .remote_send(peer_id.to_string(), proc_id.to_string(), None, ProcSendRequest { msg })
+                        .await
+                        .unwrap();
+                    event!(Level::INFO, "sent!!");
+                });
+            } else {
+                tokio::task::spawn(async move {
+                    event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
+                    let _ = dengine
+                        .proc_send(proc_id, None, ProcSendRequest { msg })
+                        .await
+                        .unwrap();
+                    event!(Level::INFO, "sent!!");
+                });
+            }
         } else {
             panic!();
         }

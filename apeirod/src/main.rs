@@ -73,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
     let port = cli.port.unwrap_or(5151);
     let store = cli.store.unwrap_or("world.db".into());
 
-    let (dengine, mut event_loop) = DEngine::new(
+    let (mut dengine, mut event_loop) = DEngine::new(
         Some(get_engine_runtime),
         Box::new(apeiro_engine::Db {
             pool: establish_db_connection(store)?,
@@ -85,9 +85,8 @@ async fn main() -> anyhow::Result<()> {
     });
 
     if cli.p2p {
-        tokio::task::spawn(async move {
-            apeiro_engine::p2prpc::start_p2p().await.unwrap();
-        });
+        let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone()).await.unwrap();
+        dengine.set_p2p_channel(p2pchan).await;
     }
 
     dengine.load_proc_subscriptions().await?;

@@ -12,11 +12,15 @@ use apeiro_internal_api::ProcStatusDebug;
 use apeiro_internal_api::StepResult;
 use apeiro_internal_api::StepResultStatus;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tracing::trace;
 
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::string::String;
 use std::sync::Arc;
 
@@ -29,22 +33,22 @@ impl Clone for DEngine {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) struct DEngineCmdSend {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DEngineCmdSend {
     pub proc_id: String,
     pub step_id: String,
     pub req: ProcSendRequest,
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum DEngineCmd {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DEngineCmd {
     Broadcast(String, String, ProcEvent),
     Send(DEngineCmdSend),
     Log((String, String, serde_json::Value)),
     Tick,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ProcEvent {
     Error(String),
     Log(serde_json::Value),
@@ -52,8 +56,15 @@ pub enum ProcEvent {
     None,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RemoteDEngineCmd {
+    pub peer_id: String,
+    pub cmd: crate::dengine::DEngineCmd,
+}
+
 #[derive(Debug)]
 struct SharedDEngine {
+    p2p_channel: RwLock<Option<tokio::sync::mpsc::Sender<RemoteDEngineCmd>>>,
     runtime_js_src: Option<fn() -> String>,
     db: Box<dyn ApeiroEnginePersistence>,
     locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
@@ -92,6 +103,10 @@ impl PluginStorage for DEngineStorage {
 pub use tokio::task::spawn;
 
 impl DEngine {
+    pub async fn set_p2p_channel(&mut self, channel: tokio::sync::mpsc::Sender<RemoteDEngineCmd>) {
+        self.0.set_p2p_channel(channel).await;
+    }
+
     pub fn extract_export_name(&self, input: String) -> String {
         extract_export_name(input)
     }
@@ -384,6 +399,32 @@ impl DEngine {
         Ok(exec_id)
     }
 
+    #[instrument(skip(self))]
+    pub async fn remote_send(
+        &self,
+        peer_id: String,
+        proc_id: String,
+        exec_id: Option<String>,
+        body: ProcSendRequest,
+    ) -> Result<String, anyhow::Error> {
+        use nanoid::nanoid;
+
+        let exec_id = exec_id.unwrap_or(nanoid!());
+        if let Some(p2p_channel) = &*self.0.p2p_channel.read().await {
+            p2p_channel.send(RemoteDEngineCmd {
+                peer_id,
+                cmd: DEngineCmd::Send(DEngineCmdSend {
+                    proc_id,
+                    step_id: exec_id.clone(),
+                    req: body,
+                }),
+            }).await.unwrap();
+            Ok(exec_id)
+        } else {
+            panic!("can't send without p2p enabled")
+        }
+    }
+
     pub async fn send_to_watchers(
         &self,
         proc_id: &String,
@@ -577,6 +618,11 @@ impl DEngine {
 }
 
 impl SharedDEngine {
+    pub async fn set_p2p_channel(&self, channel: tokio::sync::mpsc::Sender<RemoteDEngineCmd>) {
+        let mut p2p_channel = self.p2p_channel.write().await;
+        *p2p_channel = Some(channel);
+    }
+
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
         db: Box<dyn ApeiroEnginePersistence>,
@@ -588,6 +634,7 @@ impl SharedDEngine {
         let (tx, rx) = mpsc::channel(32);
 
         let instance = SharedDEngine {
+            p2p_channel: RwLock::new(None),
             runtime_js_src,
             db,
             locks: Arc::new(RwLock::new(HashMap::new())),

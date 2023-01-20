@@ -5,7 +5,7 @@ use libp2p::{
     identity, mdns, mplex, noise,
     ping::PingEvent,
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, Multiaddr, PeerId, Transport,
+    tcp, Multiaddr, PeerId, Transport, request_response::{RequestResponseEvent, ProtocolSupport, RequestResponseMessage},
 };
 use std::error::Error;
 use tokio::io::{self, AsyncBufReadExt};
@@ -26,7 +26,108 @@ pub async fn load_keys_or_generate() -> Result<identity::Keypair, Box<dyn Error>
     }
 }
 
-pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
+#[derive(Clone)]
+struct Codec {
+    
+}
+
+
+#[derive(Clone)]
+struct ApeiroProtocolName {}
+
+impl libp2p::core::upgrade::ProtocolName for ApeiroProtocolName {
+     fn protocol_name(&self) -> &[u8] {
+        b"/apeiro/1.0"
+     }
+ }
+
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ struct ProtocolRequest(RemoteDEngineCmd);
+
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ struct ProtocolResponse(String);
+
+ use async_trait::async_trait;
+ use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
+
+ use futures::prelude::*;
+
+use crate::{DEngine, dengine::RemoteDEngineCmd};
+
+ #[async_trait]
+impl libp2p::request_response::RequestResponseCodec for Codec {
+    type Protocol = ApeiroProtocolName;
+
+    type Request = ProtocolRequest;
+
+    type Response = ProtocolResponse;
+
+        async fn read_request<T>(
+            &mut self,
+            _: &ApeiroProtocolName,
+            io: &mut T,
+        ) -> io::Result<Self::Request>
+        where
+            T: AsyncRead + Unpin + Send,
+        {
+            let vec = read_length_prefixed(io, 1_000_000).await?;
+
+            if vec.is_empty() {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
+            Ok(ProtocolRequest(serde_json::from_slice(&vec).unwrap()))
+        }
+        async fn read_response<T>(
+            &mut self,
+            _: &ApeiroProtocolName,
+            io: &mut T,
+        ) -> io::Result<Self::Response>
+        where
+            T: AsyncRead + Unpin + Send,
+        {
+            let vec = read_length_prefixed(io, 1_000_000).await?;
+
+            if vec.is_empty() {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
+
+            Ok(ProtocolResponse(String::from_utf8(vec).unwrap()))
+        }
+
+        async fn write_request<T>(
+            &mut self,
+            _: &ApeiroProtocolName,
+            io: &mut T,
+            ProtocolRequest(data): ProtocolRequest,
+        ) -> io::Result<()>
+        where
+            T: AsyncWrite + Unpin + Send,
+        {
+            let data = serde_json::to_vec(&data).unwrap();
+            write_length_prefixed(io, data).await?;
+            io.close().await?;
+
+            Ok(())
+        }
+
+        async fn write_response<T>(
+            &mut self,
+            _: &ApeiroProtocolName,
+            io: &mut T,
+            ProtocolResponse(data): ProtocolResponse,
+        ) -> io::Result<()>
+        where
+            T: AsyncWrite + Unpin + Send,
+        {
+            write_length_prefixed(io, data).await?;
+            io.close().await?;
+
+            Ok(())
+        }
+
+}
+
+pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<RemoteDEngineCmd>, Box<dyn Error>> {
     // Create a random PeerId
     let id_keys = load_keys_or_generate().await?;
     let peer_id = PeerId::from(id_keys.public());
@@ -47,6 +148,11 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
     // Create a Floodsub topic
     let floodsub_topic = floodsub::Topic::new("chat");
 
+    let req_resp = libp2p::request_response::RequestResponse::new(
+        Codec{},
+        std::iter::once((ApeiroProtocolName{}, ProtocolSupport::Full)),
+        libp2p::request_response::RequestResponseConfig::default(),
+    );
     // We create a custom  behaviour that combines floodsub and mDNS.
     // The derive generates a delegating `NetworkBehaviour` impl.
     #[derive(NetworkBehaviour)]
@@ -55,6 +161,7 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
         floodsub: Floodsub,
         mdns: mdns::tokio::Behaviour,
         ping: libp2p::ping::Behaviour,
+        request_response: libp2p::request_response::RequestResponse<Codec>,
     }
 
     #[allow(clippy::large_enum_variant)]
@@ -63,8 +170,15 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
         Floodsub(FloodsubEvent),
         Mdns(mdns::Event),
         Ping(libp2p::ping::Event),
+        ReqResp(RequestResponseEvent<ProtocolRequest, ProtocolResponse>)
     }
 
+    impl From<RequestResponseEvent<ProtocolRequest, ProtocolResponse>> for MyBehaviourEvent {
+        fn from(event: RequestResponseEvent<ProtocolRequest, ProtocolResponse>) -> Self {
+            MyBehaviourEvent::ReqResp(event)
+        }
+    }
+    
     impl From<libp2p::ping::Event> for MyBehaviourEvent {
         fn from(event: libp2p::ping::Event) -> Self {
             MyBehaviourEvent::Ping(event)
@@ -89,6 +203,7 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
         floodsub: Floodsub::new(peer_id),
         mdns: mdns_behaviour,
         ping: libp2p::ping::Behaviour::new(libp2p::ping::Config::new().with_keep_alive(true)),
+        request_response: req_resp,
     };
 
     behaviour.floodsub.subscribe(floodsub_topic.clone());
@@ -113,18 +228,40 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
     let tick = time::interval(Duration::from_millis(1000));
     tokio::pin!(tick);
 
+    let (sender, mut receiver) = tokio::sync::mpsc::channel::<RemoteDEngineCmd>(100);
     // Kick it off
+    tokio::task::spawn(async move {
     loop {
         tokio::select! {
             // _ = tick.tick() => {
             //     println!("tick");
             // }
+            internal_event = receiver.recv() => {
+                match internal_event {
+                    Some(event) => {
+                        swarm.behaviour_mut().request_response.send_request(
+                            &event.peer_id.clone().parse().unwrap(),
+                            ProtocolRequest(event),
+                        );
+                    }
+                    None => {
+                    }
+                }
+            }
             line = stdin.next_line() => {
-                let line = line?.expect("stdin closed");
+                let line = line.unwrap().expect("stdin closed");
                 if line.starts_with("/connect ") {
                     let split = line.split(" ").collect::<Vec<&str>>();
-                    let addr: Multiaddr = split[1].parse()?;
-                    swarm.dial(addr)?;
+                    let addr: Multiaddr = split[1].parse().unwrap();
+                    swarm.dial(addr).unwrap();
+                // } else if line.starts_with("/send ") {
+                //     let split = line.split(" ").collect::<Vec<&str>>();
+                //     let peer_id = split[1];
+                //     let msg = split[2];
+                //     swarm.behaviour_mut().request_response.send_request(
+                //         &peer_id.parse().unwrap(),
+                //         ProtocolRequest(msg.to_string()),
+                //     );
                 } else {
                     swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), line.as_bytes());
                 }
@@ -137,6 +274,17 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
                     }
                     SwarmEvent::NewListenAddr { address, .. } => {
                         println!("Listening on {address:?}");
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::ReqResp(event)) => {
+                        println!("event: {:?}", event);
+                        if let RequestResponseEvent::Message { peer, message } = event {
+                            if let RequestResponseMessage::Request { request_id, request, channel } = message {
+                                println!("Received request from {peer:?} {request:?} {request_id:?}");
+                                let response = ProtocolResponse("hello".to_string());
+                                dengine.send(request.0.cmd).await.unwrap();
+                                swarm.behaviour_mut().request_response.send_response(channel, response).unwrap();
+                            }
+                        }
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::Floodsub(FloodsubEvent::Message(message))) => {
                         println!(
@@ -170,5 +318,6 @@ pub async fn start_p2p() -> Result<(), Box<dyn Error>> {
                 }
             }
         }
-    }
+    }});
+    Ok(sender)
 }
