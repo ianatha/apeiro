@@ -52,22 +52,21 @@ pub fn establish_db_connection(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    console_subscriber::ConsoleLayer::builder()
-        .retention(Duration::from_secs(120))
-        .init();
+    // console_subscriber::ConsoleLayer::builder()
+    //     .retention(Duration::from_secs(120))
+    //     .init();
 
     println!("Starting Apeiro Daemon");
 
-    // let subscriber = tracing_subscriber::FmtSubscriber::builder()
-    //     .with_span_events(
-    //         tracing_subscriber::fmt::format::FmtSpan::NEW
-    //             | tracing_subscriber::fmt::format::FmtSpan::CLOSE,
-    //     )
-    //     .with_max_level(Level::TRACE)
-    //     .with_env_filter("apeiro_engine=trace,apeirod=trace")
-    //     .with_subscriber(subscriber)
-    //     .finish();
-    // tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_span_events(
+            tracing_subscriber::fmt::format::FmtSpan::NEW
+                | tracing_subscriber::fmt::format::FmtSpan::CLOSE,
+        )
+        .with_max_level(Level::TRACE)
+        .with_env_filter("apeiro_engine=trace,apeirod=trace")
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let cli = Cli::parse();
     let port = cli.port.unwrap_or(5151);
