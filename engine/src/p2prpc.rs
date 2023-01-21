@@ -127,7 +127,7 @@ impl libp2p::request_response::RequestResponseCodec for Codec {
 
 }
 
-pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<RemoteDEngineCmd>, Box<dyn Error>> {
+pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<tokio::sync::mpsc::Sender<RemoteDEngineCmd>, Box<dyn Error>> {
     // Create a random PeerId
     let id_keys = load_keys_or_generate().await?;
     let peer_id = PeerId::from(id_keys.public());
@@ -135,6 +135,10 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
     println!("pubi {:?}", id_keys.public());
 
     let base_transport = tcp::async_io::Transport::new(tcp::Config::default().nodelay(true));
+
+    let (relay_transport, relay_client) = libp2p::relay::v2::client::Client::new_transport_and_behaviour(peer_id);
+
+    let base_transport = libp2p::core::transport::OrTransport::new(relay_transport, base_transport);
 
     let psk = Some(PreSharedKey::new(*b"apeiroasdfasdhfkjhasdlfjhadsjlff"));
 
@@ -171,6 +175,7 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
         mdns: mdns::tokio::Behaviour,
         ping: libp2p::ping::Behaviour,
         request_response: libp2p::request_response::RequestResponse<Codec>,
+        relay: libp2p::relay::v2::client::Client,
     }
 
     #[allow(clippy::large_enum_variant)]
@@ -179,7 +184,14 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
         Floodsub(FloodsubEvent),
         Mdns(mdns::Event),
         Ping(libp2p::ping::Event),
-        ReqResp(RequestResponseEvent<ProtocolRequest, ProtocolResponse>)
+        ReqResp(RequestResponseEvent<ProtocolRequest, ProtocolResponse>),
+        Relay(libp2p::relay::v2::client::Event),
+    }
+
+    impl From<libp2p::relay::v2::client::Event> for MyBehaviourEvent {
+        fn from(event: libp2p::relay::v2::client::Event) -> Self {
+            MyBehaviourEvent::Relay(event)
+        }
     }
 
     impl From<RequestResponseEvent<ProtocolRequest, ProtocolResponse>> for MyBehaviourEvent {
@@ -213,22 +225,22 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
         mdns: mdns_behaviour,
         ping: libp2p::ping::Behaviour::new(libp2p::ping::Config::new().with_keep_alive(true)),
         request_response: req_resp,
+        relay: relay_client,
     };
 
     behaviour.floodsub.subscribe(floodsub_topic.clone());
 
     let mut swarm = libp2p::Swarm::with_tokio_executor(transport, behaviour, peer_id);
 
-    // Reach out to another node if specified
-    // if let Some(to_dial) = std::env::args().nth(1) {
-    //     let addr: Multiaddr = to_dial.parse()?;
-    //     swarm.dial(addr)?;
-    //     println!("Dialed {to_dial:?}");
-    // }
+    for to_dial in addrs_to_dial {
+        let addr: Multiaddr = to_dial.parse()?;
+        swarm.dial(addr)?;
+        println!("Dialed {to_dial:?}");
+    }
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
-
+    
     // Listen on all interfaces and whatever port the OS assigns
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
@@ -258,19 +270,29 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
                 }
             }
             line = stdin.next_line() => {
+                println!("{:?}", swarm.connected_peers().collect::<Vec<&PeerId>>());
+                println!("{:?}", swarm.network_info());
                 let line = line.unwrap().expect("stdin closed");
                 if line.starts_with("/connect ") {
                     let split = line.split(" ").collect::<Vec<&str>>();
                     let addr: Multiaddr = split[1].parse().unwrap();
                     swarm.dial(addr).unwrap();
-                // } else if line.starts_with("/send ") {
-                //     let split = line.split(" ").collect::<Vec<&str>>();
-                //     let peer_id = split[1];
-                //     let msg = split[2];
-                //     swarm.behaviour_mut().request_response.send_request(
-                //         &peer_id.parse().unwrap(),
-                //         ProtocolRequest(msg.to_string()),
-                //     );
+                } else if line.starts_with("/send ") {
+                    let split = line.split(" ").collect::<Vec<&str>>();
+                    let peer_id = split[1];
+                    let msg = split[2];
+                    swarm.behaviour_mut().request_response.send_request(
+                        &peer_id.parse().unwrap(),
+                        ProtocolRequest(
+                            RemoteDEngineCmd {
+                                peer_id: peer_id.to_string(),
+                                cmd: crate::dengine::DEngineCmd::Broadcast(
+                                    "test".to_string(),
+                                    "test2".to_string(),
+                                    crate::dengine::ProcEvent::None,
+                                ),
+                            }
+                    ));
                 } else {
                     swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), line.as_bytes());
                 }
@@ -308,7 +330,6 @@ pub async fn start_p2p(dengine: DEngine) -> Result<tokio::sync::mpsc::Sender<Rem
                                 for (peer, addr) in list {
                                     println!("discovered {peer} {addr}");
                                     swarm.dial(addr.clone()).unwrap();
-
                                 }
                             }
                             mdns::Event::Expired(list) => {

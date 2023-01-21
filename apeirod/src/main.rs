@@ -26,9 +26,15 @@ struct Cli {
     store: Option<String>,
 
     #[clap(long)]
-    p2p: bool,
+    swarm: bool,
 
-    #[clap(short, long)]
+    #[clap(long)]
+    swarm_mdns: bool,
+
+    #[clap(long)]
+    swarm_peer_addr: Vec<String>,
+
+    #[clap(long)]
     allowed_origin: Option<String>,
 }
 
@@ -83,8 +89,8 @@ async fn main() -> anyhow::Result<()> {
         event_loop.run().await;
     });
 
-    if cli.p2p {
-        let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone()).await.unwrap();
+    if cli.swarm {
+        let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone(), cli.swarm_peer_addr).await.unwrap();
         dengine.set_p2p_channel(p2pchan).await;
     }
 
