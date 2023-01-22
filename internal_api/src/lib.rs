@@ -1,3 +1,5 @@
+use std::default;
+
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -32,9 +34,15 @@ pub struct ProcNewRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct MountEditRequest {
+    pub src: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MountNewRequest {
     pub name: Option<String>,
     pub src: String,
+    pub singleton: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,6 +160,7 @@ pub struct MountSummary {
     pub src: String,
     pub compiled_src: String,
     pub name: String,
+    pub singleton: bool,
     pub procs: Vec<String>,
 }
 

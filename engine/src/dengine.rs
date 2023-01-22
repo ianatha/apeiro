@@ -158,7 +158,14 @@ impl DEngine {
         mount: MountSummary,
         name: Option<String>,
     ) -> Result<ProcNewOutput, anyhow::Error> {
-        let name = name.unwrap_or_else(|| format!("{}_{}", mount.name, now_as_millis()));
+        let name = if mount.singleton {
+            self.0.db.proc_rename_if_exists(&mount.name, &format!("{}_{}", mount.name, now_as_millis()).clone())?;
+
+            mount.name
+        } else {
+            name.unwrap_or_else(|| format!("{}_{}", mount.name, now_as_millis()))
+        };
+        
         let proc_id = self.0.db.proc_new(&mount.id, &Some(name))?;
 
         let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), self.clone());
@@ -195,7 +202,7 @@ impl DEngine {
         &self,
         mount_id: String,
         new_src: String,
-    ) -> Result<MountSummary, anyhow::Error> {
+    ) -> Result<Option<ProcNewOutput>, anyhow::Error> {
         let mount_summary = self.0.db.mount_get(&mount_id)?;
 
         let procs_not_done = mount_summary
@@ -213,7 +220,20 @@ impl DEngine {
                 "can't edit mount while there are procs still running"
             ))
         } else {
-            Err(anyhow!("not implemented"))
+            let src = new_src.clone();
+            let compiled_src = tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
+
+            self.0.db.mount_edit(&mount_id, &new_src, &compiled_src.compiled_src)?;
+
+            if mount_summary.singleton {
+                let new_proc = self.proc_new(ProcNewRequest {
+                    mount_id: mount_id.clone(),
+                    name: None,
+                }).await?;
+                Ok(Some(new_proc))
+            } else {
+                Ok(None)
+            }
         }
     }
 
@@ -245,6 +265,7 @@ impl DEngine {
                 &req.name.unwrap_or(extract_export_name(req.src.clone())),
                 &req.src,
                 &compiled_src,
+                req.singleton.unwrap_or(false),
             )?;
 
             Ok(mount)

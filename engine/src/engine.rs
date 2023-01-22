@@ -647,6 +647,7 @@ impl Engine {
                     src: synthetic_src.clone().into(),
                     compiled_src: synthetic_src.into(),
                     procs: vec![],
+                    singleton: false,
                 },
                 None,
             ))

@@ -42,6 +42,8 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn proc_subscriptions_get_all(&self)
         -> Result<Vec<(String, serde_json::Value)>, anyhow::Error>;
 
+    fn proc_rename_if_exists(&self, old_name: &String, new_name: &String) -> Result<(), anyhow::Error>;
+
     fn proc_update(
         &self,
         id: &String,
@@ -67,6 +69,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
         name: &String,
         src: &String,
         compiled_src: &CompilationResult,
+        singleton: bool,
     ) -> Result<String, anyhow::Error>;
 
     fn mount_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error>;
@@ -74,6 +77,8 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error>;
 
     fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error>;
+
+    fn mount_edit(&self, mount_id: &String, new_src: &String, compiled_src: &String) -> Result<(), anyhow::Error>;
 }
 
 impl Debug for Db {
@@ -94,7 +99,8 @@ impl ApeiroEnginePersistence for Db {
                 compiled_src TEXT,
                 source_map TEXT,
                 pc_to_map TEXT,
-                hash_sha256 TEXT
+                hash_sha256 TEXT,
+                singleton BOOL
             );",
             (),
         )?;
@@ -407,6 +413,7 @@ impl ApeiroEnginePersistence for Db {
         name: &String,
         src: &String,
         compiled_src: &CompilationResult,
+        singleton: bool,
     ) -> Result<String, anyhow::Error> {
         let id = nanoid!();
 
@@ -417,8 +424,8 @@ impl ApeiroEnginePersistence for Db {
         let pc_to_map = serde_json::to_string(&compiled_src.program_counter_mapping)?;
 
         conn.execute(
-            "INSERT INTO mounts (id, name, src, compiled_src, source_map, pc_to_map, hash_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            params![&id, name, src, compiled_src.compiled_src, &source_map, &pc_to_map, &hash_sha256],
+            "INSERT INTO mounts (id, name, src, compiled_src, source_map, pc_to_map, hash_sha256, singleton) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            params![&id, name, src, compiled_src.compiled_src, &source_map, &pc_to_map, &hash_sha256, &singleton],
         )?;
 
         Ok(id)
@@ -440,7 +447,7 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name FROM mounts")?;
+        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name, singleton FROM mounts")?;
 
         let result = stmt
             .query_map((), |row| {
@@ -448,6 +455,7 @@ impl ApeiroEnginePersistence for Db {
                 let src: String = row.get(1)?;
                 let compiled_src: String = row.get(2)?;
                 let name: String = row.get(3)?;
+                let singleton: bool = row.get(4)?;
 
                 Ok(MountSummary {
                     id,
@@ -455,6 +463,7 @@ impl ApeiroEnginePersistence for Db {
                     compiled_src,
                     name,
                     procs: vec![],
+                    singleton,
                 })
             })?
             .map(Result::unwrap)
@@ -463,18 +472,29 @@ impl ApeiroEnginePersistence for Db {
         Ok(result)
     }
 
+    fn mount_edit(&self, mount_id: &String, new_src: &String, compiled_src: &String) -> Result<(), anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt =
+            conn.prepare("UPDATE mounts SET src = ?, compiled_src = ? WHERE id = ?")?;
+
+        stmt.execute(params![new_src, compiled_src, mount_id])?;
+
+        Ok(())
+    }
+
     fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt =
-            conn.prepare("SELECT id, src, compiled_src, name FROM mounts WHERE id = ?")?;
+            conn.prepare("SELECT id, src, compiled_src, name, singleton FROM mounts WHERE id = ?")?;
 
-        let (id, src, compiled_src, name) = stmt.query_row(&[mount_id], |row| {
+        let (id, src, compiled_src, name, singleton) = stmt.query_row(&[mount_id], |row| {
             let id: String = row.get(0)?;
             let src: String = row.get(1)?;
             let compiled_src: String = row.get(2)?;
             let name: String = row.get(3)?;
+            let singleton: bool = row.get(4)?;
 
-            Ok((id, src, compiled_src, name))
+            Ok((id, src, compiled_src, name, singleton))
         })?;
 
         let mut stmt = conn.prepare("SELECT id FROM procs WHERE mount_id = ?")?;
@@ -489,10 +509,18 @@ impl ApeiroEnginePersistence for Db {
             src,
             compiled_src,
             name,
+            singleton,
             procs: proc_vec,
         };
 
         Ok(result)
+    }
+
+    fn proc_rename_if_exists(&self, old_name: &String, new_name: &String) -> Result<(), anyhow::Error> {
+        let conn = self.pool.get()?;
+        let mut stmt = conn.prepare("UPDATE procs SET name = ? WHERE name = ?")?;
+        stmt.execute(params![new_name, old_name])?;
+        Ok(())
     }
 
     fn proc_subscriptions_get_all(

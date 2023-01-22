@@ -214,6 +214,7 @@ pub(crate) async fn mount_new_inner(remote: String, srcfile: &PathBuf) -> Result
         .json(&MountNewRequest {
             name: None,
             src: std::fs::read_to_string(srcfile)?,
+            singleton: Some(false),
         })
         .send()
         .await?

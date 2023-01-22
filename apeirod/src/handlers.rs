@@ -197,17 +197,43 @@ async fn mount_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respon
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[put("/mount/{mount_id}")]
+async fn mount_edit(req: HttpRequest, body: web::Json<MountEditRequest>, dengine: web::Data<DEngine>) -> impl Responder {
+    let mount_id: String = req
+        .match_info()
+        .get("mount_id")
+        .ok_or(ErrorBadRequest("no mount_id"))?
+        .parse()?;
+
+    let res = dengine
+        .mount_edit(mount_id, body.src.clone())
+        .await
+        .map_err(apeiro_err)?;
+
+    Ok::<_, actix_web::Error>(web::Json(res))
+}
+
 #[post("/mount/")]
 async fn mount_new(
     _req: HttpRequest,
     body: web::Json<MountNewRequest>,
     dengine: web::Data<DEngine>,
 ) -> impl Responder {
-    let res = dengine
+    let mount_id = dengine
         .mount_new(body.into_inner())
         .await
         .map_err(apeiro_err)?;
-    Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": res })))
+
+    // if body.mode.map_or(false, |x| { x == MountMode::Singleton }) {
+    //     let res = dengine
+    //         .proc_new(ProcNewRequest { mount_id: mount_id.clone(), name })
+    //         .await
+    //         .map_err(apeiro_err)?;
+
+    //     Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": mount_id, "pid": res.proc_id })))
+    // } else {
+    Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": mount_id })))
+    // }
 }
 
 #[post("/helper_extract_export_name")]
