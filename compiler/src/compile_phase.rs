@@ -181,7 +181,7 @@ impl swc_common::source_map::SourceMapGenConfig for ApeiroSourceMapConfig {
         f.to_string()
     }
 
-    fn inline_sources_content(&self, f: &FileName) -> bool {
+    fn inline_sources_content(&self, _f: &FileName) -> bool {
         true
     }
 
@@ -363,8 +363,8 @@ impl ApeiroCompiler {
         f: &FileName,
     ) -> Result<(Lrc<SourceFile>, Module)> {
         let filename = match f {
-            FileName::Custom(src) => "toplevel".to_string(),
-            FileName::Real(path) => "path".to_string(),
+            FileName::Custom(_src) => "toplevel".to_string(),
+            FileName::Real(_path) => "path".to_string(),
             FileName::Url(url) => url.to_string(),
             _ => unreachable!(),
         };

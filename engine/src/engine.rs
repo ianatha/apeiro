@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Ok, Result};
 use apeiro_internal_api::EngineStatus;
+use apeiro_internal_api::MountNewRequest;
 use apeiro_internal_api::MountSummary;
 use apeiro_internal_api::ProcSendRequest;
 use apeiro_internal_api::StackTraceFrame;
@@ -31,6 +32,7 @@ pub struct Engine {
     runtime_js_src: Option<fn() -> String>,
     pub mbox: Box<Vec<serde_json::Value>>,
     proc_id: String,
+    step_id: String,
     pub dengine: Option<DEngine>,
 }
 
@@ -49,12 +51,13 @@ pub struct EngineInstance<'a> {
 }
 
 impl Engine {
-    pub fn new(engine_runtime: Option<fn() -> String>, name: String, dengine: DEngine) -> Engine {
+    pub fn new(engine_runtime: Option<fn() -> String>, proc_id: String, step_id: String, dengine: DEngine) -> Engine {
         v8_init();
         Engine {
             runtime_js_src: engine_runtime,
             mbox: Box::new(vec![]),
-            proc_id: name,
+            proc_id,
+            step_id,
             dengine: Some(dengine),
         }
     }
@@ -242,6 +245,13 @@ impl Engine {
                 http_post_fn_builder.into(),
             );
 
+            let state_obj = v8::ObjectTemplate::new(handle_scope);
+            let state_obj_key = v8::String::new(handle_scope, "$state").unwrap().into();
+            global.set(
+                state_obj_key,
+                state_obj.into(),
+            );
+
             let context = v8::Context::new_from_template(handle_scope, global);
             if use_v8_snapshot {
                 handle_scope.set_default_context(context);
@@ -359,6 +369,12 @@ impl Engine {
                 context_scope
                     .request_garbage_collection_for_testing(v8::GarbageCollectionType::Full);
 
+                // fetch $state
+                let global = context_scope.get_current_context().global(context_scope);
+                let updated_state = global.get(context_scope, state_obj_key.into()).unwrap();
+                let updated_state: serde_json::Value = apeiro_serde::from_v8(context_scope, updated_state).unwrap();
+                println!("\n\n\n\n\n{:?}\n\n\n\n\n", updated_state);
+
                 // fetch engine_status
                 let get_engine_status = get_module_fn(
                     context_scope,
@@ -447,9 +463,11 @@ impl Engine {
             })();
 
             match (context_scope.exception(), context_scope.message()) {
-                (Some(exception), Some(message)) => Err(anyhow::Error::new(
-                    map_exception_to_original_code(src, context_scope, exception, message),
-                )),
+                (Some(exception), Some(message)) => {
+                    Err(anyhow::Error::new(
+                        map_exception_to_original_code(src, context_scope, exception, message),
+                    ))
+                },
                 _ => match new_state {
                     Result::Ok((res_json, engine_status)) => Ok((res_json, engine_status)),
                     Err(e) => Err(e),
@@ -593,6 +611,11 @@ impl Engine {
                         .unwrap();
                     event!(Level::INFO, "sent!!");
                 });
+            } else if proc_id.contains("$subscribe") {
+                let dengine = self.dengine.clone().unwrap();
+                tokio::task::spawn(async move {
+                    dengine.subscribe_proc_to_events(proc_id.clone(), msg).await;
+                });
             } else {
                 tokio::task::spawn(async move {
                     event!(Level::INFO, "about to send {} {:?}", proc_id, msg);
@@ -640,15 +663,17 @@ impl Engine {
 
             let handle = tokio::runtime::Handle::current();
             let _guard = handle.enter();
+            let new_mount = futures::executor::block_on(dengine.mount_new(MountNewRequest {
+                src: synthetic_src.clone(),
+                name: Some(format!("synthetic_{}", now_as_millis())),
+                singleton: None,
+                src_is_compiled: Some(true),
+            })).unwrap();
+
+            let new_mount = futures::executor::block_on(dengine.mount_get(new_mount)).unwrap();
+
             let res = futures::executor::block_on(dengine.proc_new_compiled(
-                MountSummary {
-                    id: format!("synthetic_{}", now_as_millis()).into(),
-                    name: format!("synthetic_{}", now_as_millis()).into(),
-                    src: synthetic_src.clone().into(),
-                    compiled_src: synthetic_src.into(),
-                    procs: vec![],
-                    singleton: false,
-                },
+                new_mount,
                 None,
             ))
             .unwrap();
@@ -772,6 +797,7 @@ impl Engine {
     }
 }
 
+#[instrument]
 fn extract_src_map_from_src(src: String) -> Option<sourcemap::SourceMap> {
     let identifier = "//# sourceMappingURL=data:application/json;base64,";
     if let Some(srcmap_start) = src.find(identifier) {
@@ -818,6 +844,7 @@ fn map_exception_to_original_code(
 ) -> PristineRunError {
     let exception_str = exception.to_string(context_scope).unwrap();
     let exception_str = exception_str.to_rust_string_lossy(context_scope);
+    event!(Level::INFO, "exception: {:?}", exception_str);
     let stack_trace_frames = if let Some(sm) = extract_src_map_from_src(src) {
         stack_trace_to_frames(&sm, context_scope, message)
     } else {

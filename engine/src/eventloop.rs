@@ -182,7 +182,7 @@ impl EventLoop {
                         }
                         _ => {
                             tokio::task::spawn(async move {
-                                let res = dengine.inner_proc_send(&cmd.proc_id, &cmd.req).await;
+                                let res = dengine.inner_proc_send(&cmd.proc_id, &cmd.step_id, &cmd.req).await;
                                 match res {
                                     Err(err) => {
                                         tx.send(DEngineCmd::Broadcast(

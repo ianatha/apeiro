@@ -1,5 +1,3 @@
-use std::default;
-
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -31,6 +29,7 @@ pub struct ProcListOutput {
 pub struct ProcNewRequest {
     pub mount_id: String,
     pub name: Option<String>,
+    pub version: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,6 +42,7 @@ pub struct MountNewRequest {
     pub name: Option<String>,
     pub src: String,
     pub singleton: Option<bool>,
+    pub src_is_compiled: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,7 +125,6 @@ pub struct ProcStatus {
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ProcStatusDebug {
     pub frames: Option<Value>,
-    pub compiled_src: String,
     pub funcs: Option<Value>,
 }
 
@@ -151,7 +150,7 @@ impl ProcStatus {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ApeiroError {
-    error: String,
+    pub error: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -160,7 +159,7 @@ pub struct MountSummary {
     pub src: String,
     pub compiled_src: String,
     pub name: String,
-    pub singleton: bool,
+    pub singleton: Option<u32>,
     pub procs: Vec<String>,
 }
 

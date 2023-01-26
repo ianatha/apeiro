@@ -8,6 +8,7 @@ brotli = "3.3.4"
 v8 = "0.60.0"
 anyhow = "1.0.66"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.4", 	features=["compat"] }
 apeiro_compiler = { path = "../compiler" }
 apeiro_internal_api = { path = "../internal_api"}
 serde = { version = "^1.0.100", features = ["derive"] }
@@ -21,13 +22,14 @@ serde_json_matcher = "0.1.4"
 tracing = { version = "0.1", features = ["log-always"] }
 serde_v8 = "0.75.0"
 futures = "0.3.25"
-reqwest = { version = "0.11.13", features = ["json", "blocking", "rustls-tls"], default-features = false }
+reqwest = { version = "0.11.13", features = ["json", "blocking", "rustls-tls" ], default-features = false }
 sourcemap = "6.2.1"
 base64 = "0.21.0"
 sha256 = "1.1.1"
 async-trait = "0.1.61"
 typetag = "0.2.5"
 libp2p = { version = "0.50.0", features = ["full"]}
+chrono = "0.4.23"
 
 [dev-dependencies]
 tokio-test = "0.4.2"

@@ -143,11 +143,17 @@ async fn main() -> anyhow::Result<()> {
             .allowed_header(http::header::CONTENT_TYPE)
             .max_age(3600);
 
+            let json_cfg = actix_web::web::JsonConfig::default()
+    .error_handler(|err, req| {
+        handlers::ApeiroError::new(anyhow::anyhow!("Error parsing JSON: {:?}", err)).into()
+    });
+
         App::new()
             .wrap(Logger::default())
             .wrap(Logger::new("%a %{User-Agent}i"))
             .wrap(cors)
             .app_data(actix_web::web::Data::new(dengine.clone()))
+            .app_data(json_cfg)
             .service(handlers::proc_new)
             .service(handlers::proc_list)
             .service(handlers::proc_get)

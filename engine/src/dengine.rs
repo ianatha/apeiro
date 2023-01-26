@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Ok, Result};
+use apeiro_compiler::CompilationResult;
 use apeiro_compiler::apeiro_compile;
 use apeiro_compiler::extract_export_name;
 use apeiro_internal_api::MountNewRequest;
@@ -11,16 +12,13 @@ use apeiro_internal_api::ProcStatus;
 use apeiro_internal_api::ProcStatusDebug;
 use apeiro_internal_api::StepResult;
 use apeiro_internal_api::StepResultStatus;
+use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tracing::trace;
 
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::DerefMut;
 use std::string::String;
 use std::sync::Arc;
 
@@ -158,7 +156,7 @@ impl DEngine {
         mount: MountSummary,
         name: Option<String>,
     ) -> Result<ProcNewOutput, anyhow::Error> {
-        let name = if mount.singleton {
+        let name = if mount.singleton.is_some() {
             self.0.db.proc_rename_if_exists(&mount.name, &format!("{}_{}", mount.name, now_as_millis()).clone())?;
 
             mount.name
@@ -167,8 +165,9 @@ impl DEngine {
         };
         
         let proc_id = self.0.db.proc_new(&mount.id, &Some(name))?;
+        let step_id = nanoid!();
 
-        let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), self.clone());
+        let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), step_id, self.clone());
 
         let (res, engine_status) = engine
             .step_process(mount.compiled_src, None, None, None)
@@ -205,13 +204,23 @@ impl DEngine {
     ) -> Result<Option<ProcNewOutput>, anyhow::Error> {
         let mount_summary = self.0.db.mount_get(&mount_id)?;
 
+        // let mut procs_not_done = 0;
+        // let mut max_version = 0;
+
+        // for proc in mount_summary.procs {
+        //     let proc = self.0.db.proc_get(&proc).unwrap();
+        //     if !(proc.step_result.status == StepResultStatus::DONE || proc.step_result.status == StepResultStatus::CRASHED) {
+        //     } else {
+        //         procs_not_done += 1;
+        //     }
+        // }
         let procs_not_done = mount_summary
             .procs
             .iter()
             .filter(|proc_id| {
-                let (_, _, _, step_result) = self.0.db.proc_get(proc_id).unwrap();
-                !(step_result.status == StepResultStatus::DONE
-                    || step_result.status == StepResultStatus::CRASHED)
+                let proc = self.0.db.proc_get(proc_id).unwrap();
+                !(proc.step_result.status == StepResultStatus::DONE
+                    || proc.step_result.status == StepResultStatus::CRASHED)
             })
             .count();
 
@@ -225,10 +234,11 @@ impl DEngine {
 
             self.0.db.mount_edit(&mount_id, &new_src, &compiled_src.compiled_src)?;
 
-            if mount_summary.singleton {
+            if mount_summary.singleton.is_some() {
                 let new_proc = self.proc_new(ProcNewRequest {
                     mount_id: mount_id.clone(),
                     name: None,
+                    version: None,
                 }).await?;
                 Ok(Some(new_proc))
             } else {
@@ -259,13 +269,25 @@ impl DEngine {
             Ok(mount)
         } else {
             let src = req.src.clone();
-            let compiled_src = tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
+            let compiled_src = if !req.src_is_compiled.unwrap_or(false) {
+                tokio::task::spawn_blocking(move || apeiro_compile(src)).await??
+            } else {
+                CompilationResult {
+                    compiled_src: src,
+                    source_map: None,
+                    program_counter_mapping: vec![],
+                }
+            };
 
             let mount = self.0.db.mount_new(
                 &req.name.unwrap_or(extract_export_name(req.src.clone())),
                 &req.src,
                 &compiled_src,
-                req.singleton.unwrap_or(false),
+                if req.singleton.is_some() {
+                    Some(0)
+                } else {
+                    None
+                }
             )?;
 
             Ok(mount)
@@ -292,15 +314,15 @@ impl DEngine {
 
     #[instrument(skip(self))]
     pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
-        let (res_proc_id, mount_id, name, res) = self
+        let proc = self
             .0
             .db
             .proc_get(&proc_id)
             .map_err(|_e| anyhow!("db problem"))?;
 
-        let executing = self.proc_is_executing(&proc_id).await?;
+        let executing = self.proc_is_executing(&proc.proc_id).await?;
 
-        Ok(ProcStatus::new(res_proc_id, mount_id, name, res, executing))
+        Ok(ProcStatus::new(proc.proc_id, proc.mount_id, proc.name, proc.step_result, executing))
     }
 
     #[instrument]
@@ -404,20 +426,20 @@ impl DEngine {
     pub async fn proc_send(
         &self,
         proc_id: String,
-        exec_id: Option<String>,
+        step_id: Option<String>,
         body: ProcSendRequest,
     ) -> Result<String, anyhow::Error> {
         use nanoid::nanoid;
 
-        let exec_id = exec_id.unwrap_or(nanoid!());
+        let step_id = step_id.unwrap_or(nanoid!());
         self.send(DEngineCmd::Send(DEngineCmdSend {
             proc_id,
-            step_id: exec_id.clone(),
+            step_id: step_id.clone(),
             req: body,
         }))
         .await?;
 
-        Ok(exec_id)
+        Ok(step_id)
     }
 
     #[instrument(skip(self))]
@@ -484,6 +506,7 @@ impl DEngine {
     pub(crate) async fn inner_proc_send(
         &self,
         proc_id_or_name: &String,
+        step_id: &String,
         body: &ProcSendRequest,
     ) -> Result<StepResult, anyhow::Error> {
         let proc = self.0.db.proc_get_details(&proc_id_or_name)?;
@@ -499,6 +522,7 @@ impl DEngine {
             let mut engine = crate::Engine::new(
                 Some(crate::get_engine_runtime),
                 proc.pid.clone(),
+                step_id.clone(),
                 self.clone(),
             );
 

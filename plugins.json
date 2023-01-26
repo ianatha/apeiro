@@ -2,7 +2,7 @@
     "plugins": [
         {
             "module": "SyslogPlugin",
-            "to_pid": "3mGKjMuylWGx9ShCXcEKO",
+            "to_pid": "mqtt",
             "port": 1514
         }
     ]

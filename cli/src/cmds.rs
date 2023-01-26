@@ -103,7 +103,7 @@ pub(crate) async fn inspect(remote: String, proc_id: &String) -> Result<()> {
     let frames = serde_json::to_string_pretty(&resp.frames).unwrap();
     println!(
         "{}\n======\n{}\n=====\n{}",
-        funcs, frames, resp.compiled_src
+        funcs, frames, "TODO"
     );
 
     Ok(())
@@ -135,6 +135,7 @@ pub(crate) async fn new(remote: String, mount_id: &String, name: &Option<String>
         .json(&ProcNewRequest {
             mount_id: mount_id.clone(),
             name: name.clone(),
+            version: None,
         })
         .send()
         .await?;
@@ -215,6 +216,7 @@ pub(crate) async fn mount_new_inner(remote: String, srcfile: &PathBuf) -> Result
             name: None,
             src: std::fs::read_to_string(srcfile)?,
             singleton: Some(false),
+            src_is_compiled: None,
         })
         .send()
         .await?

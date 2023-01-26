@@ -14,6 +14,13 @@ pub struct Db {
     pub pool: Pool<SqliteConnectionManager>,
 }
 
+pub struct ProcGetResponse {
+    pub proc_id: String,
+    pub mount_id: String,
+    pub name: Option<String>,
+    pub step_result: StepResult,
+}
+
 pub struct ProcDetails {
     pub pid: String,
     pub mount_id: String,
@@ -56,7 +63,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
     fn proc_get(
         &self,
         id: &String,
-    ) -> Result<(String, String, Option<String>, StepResult), anyhow::Error>;
+    ) -> Result<ProcGetResponse, anyhow::Error>;
 
     fn proc_list(&self) -> Result<Vec<ProcSummary>, anyhow::Error>;
 
@@ -69,7 +76,7 @@ pub trait ApeiroEnginePersistence: Sync + Send + Debug + 'static {
         name: &String,
         src: &String,
         compiled_src: &CompilationResult,
-        singleton: bool,
+        singleton: Option<u32>,
     ) -> Result<String, anyhow::Error>;
 
     fn mount_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error>;
@@ -92,6 +99,15 @@ impl ApeiroEnginePersistence for Db {
         let conn = self.pool.get()?;
 
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE,
+                created_at DATATIME not null default (datetime('now'))
+            );",
+            (),
+        )?;
+
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS mounts (
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
@@ -100,7 +116,8 @@ impl ApeiroEnginePersistence for Db {
                 source_map TEXT,
                 pc_to_map TEXT,
                 hash_sha256 TEXT,
-                singleton BOOL
+                singleton_version INTEGER,
+                created_at DATATIME not null default (datetime('now'))
             );",
             (),
         )?;
@@ -118,7 +135,10 @@ impl ApeiroEnginePersistence for Db {
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
                 mount_id TEXT,
-                current_step_id INTEGER
+                state BLOB,
+                current_step_id INTEGER,
+                singleton_version INTEGER,
+                created_at DATATIME not null default (datetime('now'))
             );",
             (),
         )?;
@@ -198,7 +218,7 @@ impl ApeiroEnginePersistence for Db {
         conn.execute(
             "INSERT INTO procs (id, name, mount_id, current_step_id) VALUES (?, ?, ?, ?)",
             params![&id, name, mount_id, 0],
-        )?;
+        ).unwrap();
 
         Ok(id)
     }
@@ -252,13 +272,13 @@ impl ApeiroEnginePersistence for Db {
     fn proc_get_details(&self, proc_id_or_name: &String) -> Result<ProcDetails, anyhow::Error> {
         let conn = self.pool.get()?;
 
-        let (proc_id, mount_id, name, state) = self.proc_get(proc_id_or_name)?;
+        let proc = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
             conn.prepare("SELECT mounts.compiled_src, steps.frames, steps.funcs, steps.snapshot FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) JOIN mounts ON (mounts.id = procs.mount_id) WHERE procs.id = ?")
                 .context("proc_get_details query failed")?;
 
-        let result = stmt.query_row(&[&proc_id.clone()], |row| {
+        let result = stmt.query_row(&[&proc.proc_id.clone()], |row| {
             let compiled_src: String = row.get(0)?;
             let frames: String = row.get(1)?;
             let frames: Option<serde_json::Value> = serde_json::from_str(&frames).unwrap();
@@ -271,12 +291,12 @@ impl ApeiroEnginePersistence for Db {
                 snapshot,
             };
             Ok(ProcDetails {
-                pid: proc_id,
-                mount_id,
-                name,
+                pid: proc.proc_id,
+                mount_id: proc.mount_id,
+                name: proc.name,
                 compiled_src,
                 engine_status,
-                state,
+                state: proc.step_result,
             })
         })?;
 
@@ -286,7 +306,7 @@ impl ApeiroEnginePersistence for Db {
     fn proc_get(
         &self,
         proc_id_or_name: &String,
-    ) -> Result<(String, String, Option<String>, StepResult), anyhow::Error> {
+    ) -> Result<ProcGetResponse, anyhow::Error> {
         let conn = self.pool.get()?;
 
         let mut stmt = if is_proc_id(proc_id_or_name) {
@@ -320,16 +340,16 @@ impl ApeiroEnginePersistence for Db {
             let name: Option<String> = row.get(4)?;
             let mount_id: String = row.get(5)?;
 
-            Ok((
+            Ok(ProcGetResponse {
                 proc_id,
                 mount_id,
-                name,
-                StepResult {
+                step_result: StepResult {
                     status,
                     val,
-                    suspension,
+                    suspension
                 },
-            ))
+                name,
+            })
         })?;
 
         Ok(result)
@@ -351,20 +371,18 @@ impl ApeiroEnginePersistence for Db {
     fn proc_inspect(&self, id: &String) -> Result<ProcStatusDebug, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt = conn
-            .prepare("SELECT frames, compiled_src, funcs FROM procs WHERE id = ?")
+            .prepare("SELECT steps.frames, steps.funcs FROM procs JOIN steps ON (procs.id = steps.proc_id AND procs.current_step_id = steps.step_id) WHERE procs.id = ?")
             .context("proc_inspect query failed")?;
 
         let result = stmt.query_row(&[id], |row| {
             let frames: String = row.get(0)?;
-            let compiled_src = row.get(1)?;
             let frames = serde_json::from_str(&frames.as_str()).unwrap();
-            let funcs: String = row.get(2)?;
+            let funcs: String = row.get(1)?;
             let funcs = serde_json::from_str(&funcs.as_str()).unwrap();
 
             Ok(ProcStatusDebug {
                 funcs,
                 frames,
-                compiled_src,
             })
         })?;
 
@@ -413,7 +431,7 @@ impl ApeiroEnginePersistence for Db {
         name: &String,
         src: &String,
         compiled_src: &CompilationResult,
-        singleton: bool,
+        singleton: Option<u32>,
     ) -> Result<String, anyhow::Error> {
         let id = nanoid!();
 
@@ -424,9 +442,23 @@ impl ApeiroEnginePersistence for Db {
         let pc_to_map = serde_json::to_string(&compiled_src.program_counter_mapping)?;
 
         conn.execute(
-            "INSERT INTO mounts (id, name, src, compiled_src, source_map, pc_to_map, hash_sha256, singleton) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            r#"INSERT INTO mounts
+            (id, name, src, compiled_src, source_map, pc_to_map, hash_sha256, singleton_version)
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?)"#,
             params![&id, name, src, compiled_src.compiled_src, &source_map, &pc_to_map, &hash_sha256, &singleton],
-        )?;
+        ).map_err(|e| {
+            match e {
+                r2d2_sqlite::rusqlite::Error::SqliteFailure(error, _) => {
+                    if error.code == r2d2_sqlite::rusqlite::ErrorCode::ConstraintViolation {
+                        anyhow!("mount already exists")
+                    } else {
+                        anyhow!("mount_new failed: {}", e)
+                    }
+                }
+                _ => anyhow!("mount_new failed: {}", e)
+            }
+        })?;
 
         Ok(id)
     }
@@ -447,7 +479,7 @@ impl ApeiroEnginePersistence for Db {
 
     fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name, singleton FROM mounts")?;
+        let mut stmt = conn.prepare("SELECT id, src, compiled_src, name, singleton_version FROM mounts")?;
 
         let result = stmt
             .query_map((), |row| {
@@ -455,7 +487,7 @@ impl ApeiroEnginePersistence for Db {
                 let src: String = row.get(1)?;
                 let compiled_src: String = row.get(2)?;
                 let name: String = row.get(3)?;
-                let singleton: bool = row.get(4)?;
+                let singleton: Option<u32> = row.get(4)?;
 
                 Ok(MountSummary {
                     id,
@@ -485,14 +517,14 @@ impl ApeiroEnginePersistence for Db {
     fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt =
-            conn.prepare("SELECT id, src, compiled_src, name, singleton FROM mounts WHERE id = ?")?;
+            conn.prepare("SELECT id, src, compiled_src, name, singleton_version FROM mounts WHERE id = ?")?;
 
         let (id, src, compiled_src, name, singleton) = stmt.query_row(&[mount_id], |row| {
             let id: String = row.get(0)?;
             let src: String = row.get(1)?;
             let compiled_src: String = row.get(2)?;
             let name: String = row.get(3)?;
-            let singleton: bool = row.get(4)?;
+            let singleton: Option<u32> = row.get(4)?;
 
             Ok((id, src, compiled_src, name, singleton))
         })?;

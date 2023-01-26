@@ -8,7 +8,13 @@ fn apeiro_err(e: anyhow::Error) -> ApeiroError {
     ApeiroError(e)
 }
 
-struct ApeiroError(anyhow::Error);
+pub struct ApeiroError(anyhow::Error);
+
+impl ApeiroError {
+    pub fn new(e: anyhow::Error) -> Self {
+        ApeiroError(e)
+    }
+}
 
 impl From<ApeiroError> for actix_web::Error {
     fn from(e: ApeiroError) -> Self {
