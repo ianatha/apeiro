@@ -130,10 +130,10 @@ async fn main() -> anyhow::Result<()> {
         use actix_web::http;
 
         let cors = Cors::default()
-            .allowed_origin(allowed_origin.as_str())
-            // .allowed_origin_fn(|origin, _req_head| {
-            //     origin.as_bytes().ends_with(b".rust-lang.org")
-            // })
+            // .allowed_origin(allowed_origin.as_str())
+            .allowed_origin_fn(|origin, _req_head| {
+                true
+            })
             .allowed_methods(vec!["GET", "POST", "PUT"])
             .allowed_headers(vec![
                 "apeiro-wait",
