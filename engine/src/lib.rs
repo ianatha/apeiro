@@ -3,6 +3,7 @@ mod tests;
 
 mod db;
 pub mod dengine;
+pub mod plugins2;
 mod engine;
 mod eventloop;
 pub mod p2prpc;

@@ -28,6 +28,7 @@ sha256 = "1.1.1"
 async-trait = "0.1.61"
 typetag = "0.2.5"
 libp2p = { version = "0.50.0", features = ["full"]}
+yamux = "0.11.0"
 
 [dev-dependencies]
 tokio-test = "0.4.2"

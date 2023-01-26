@@ -58,6 +58,14 @@ pub fn establish_db_connection(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let mut cmd = tokio::process::Command::new("/Users/iwa/Developer/pristine/apeiro/go-plugin/printer/printer");
+
+    // cmd.arg("-l").arg("/Users/iwa");
+
+    let ext_plugin = apeiro_engine::plugins2::new_client(apeiro_engine::plugins2::ClientConfig {
+        cmd,
+    });
+
     // console_subscriber::ConsoleLayer::builder()
     //     .retention(Duration::from_secs(120))
     //     .init();

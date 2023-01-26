@@ -424,6 +424,7 @@ dependencies = [
  "async-trait",
  "base64 0.21.0",
  "brotli",
+ "chrono",
  "futures",
  "futures-core",
  "libp2p",
@@ -439,9 +440,11 @@ dependencies = [
  "sourcemap",
  "tokio",
  "tokio-test",
+ "tokio-util",
  "tracing",
  "typetag",
  "v8",
+ "yamux 0.11.0",
 ]
 
 [[package]]
@@ -3753,7 +3756,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "thiserror",
- "yamux",
+ "yamux 0.10.2",
 ]
 
 [[package]]
@@ -8276,6 +8279,20 @@ name = "yamux"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5d9ba232399af1783a58d8eb26f6b5006fbefe2dc9ef36bd283324792d03ea5"
+dependencies = [
+ "futures",
+ "log",
+ "nohash-hasher",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "static_assertions",
+]
+
+[[package]]
+name = "yamux"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5e9d5f7813728599ca8673747903925b558afb61281cbbf8b16f96a07812c68"
 dependencies = [
  "futures",
  "log",
