@@ -999,7 +999,7 @@ fn _fetch(
     let (sender, receiver) = tokio::sync::oneshot::channel::<serde_json::Value>();
 
     println!("before spawn");
-    tokio::task::spawn(async {
+    tokio::task::spawn(async move {
         println!("spawned start");
         let _headers = if let Some(headers) = options.headers {
             let headers = headers.as_object().unwrap();
@@ -1015,15 +1015,23 @@ fn _fetch(
             reqwest::header::HeaderMap::new()
         };
 
-        let req = reqwest::Client::new().get(url);
-        // .headers(headers);
+        let client = reqwest::Client::new();
+        
+        let mut req = if options.method == Some("POST".to_string()) {
+            client.post(url)
+        } else {
+            client.get(url)
+        };
 
-        // if let Some(body) = options.body {
-        //     req = req.body(body);
-        // };
-        println!("request sent");
+        req = req.headers(_headers);
+
+        if let Some(body) = options.body {
+            req = req.body(body);
+        };
+
+        println!("request sending");
         let res = req.send().await.unwrap();
-        println!("request received");
+        println!("request sent");
 
         let resp: serde_json::Value = res.json().await.unwrap();
         println!("request completed");
