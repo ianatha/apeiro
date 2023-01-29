@@ -28,6 +28,9 @@ actix-cors = "0.6.4"
 apeiro_port_mqtt = { version = "0.1.0", path = "../apeiro_port_mqtt" }
 apeiro_port_syslog = { version = "0.1.0", path = "../apeiro_port_syslog" }
 console-subscriber = "0.1.8"
+fdb = { version = "0.3.1", features = [ "fdb-7_1" ] }
+bytes = "1.2.1"
+tokio-stream = "0.1.11"
 
 [dev-dependencies]
 criterion = { version = "0.3", features = ["async_futures", "html_reports"] }
