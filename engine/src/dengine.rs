@@ -348,7 +348,7 @@ impl DEngine {
         use nanoid::nanoid;
 
         let exec_id = nanoid!();
-        let watcher = self.watch(proc_id.clone()).await;
+        let watcher = self.watch(proc_id.clone()).await?;
         self.proc_send(proc_id, Some(exec_id), body).await?;
         Ok(watcher)
     }
@@ -358,7 +358,7 @@ impl DEngine {
         &self,
         proc_id: String,
     ) -> Result<tokio::sync::watch::Receiver<ProcEvent>, anyhow::Error> {
-        let watcher = self.watch(proc_id.clone()).await;
+        let watcher = self.watch(proc_id.clone()).await?;
         Ok(watcher)
     }
 
@@ -598,9 +598,27 @@ impl DEngine {
         }
     }
 
+    pub async fn watch_stats(&self) -> Vec<(String, usize)> {
+        let watchers_locked = self.0.watchers.read().await;
+        watchers_locked.iter().map(|(k, v)| (k.clone(), v.receiver_count())).collect()
+    }
+
+    // TODO: schedule this to run
+    pub async fn watch_gc(&self) -> Result<()> {
+        let mut watchers_locked = self.0.watchers.write().await;
+        watchers_locked.retain(|_, v| {
+            v.receiver_count() > 0
+        });
+        Ok(())
+    }
+
     #[instrument(skip(self))]
-    pub async fn watch(&self, proc_id: String) -> tokio::sync::watch::Receiver<ProcEvent> {
-        event!(Level::INFO, "waiting for watch creation");
+    pub async fn watch(&self, proc_id: String) -> Result<tokio::sync::watch::Receiver<ProcEvent>> {
+        let proc_status = self.proc_get(proc_id.clone()).await?;
+        if proc_status.status != StepResultStatus::SUSPEND {
+            return  Err(anyhow!("can only watch suspended procs"))
+        }
+
         let watcher_subscription = {
             let watchers_locked = self.0.watchers.read().await;
             if let Some(watcher) = watchers_locked.get(&proc_id) {
@@ -612,7 +630,7 @@ impl DEngine {
 
         if let Some(watcher_subscription) = watcher_subscription {
             event!(Level::INFO, "returning watch");
-            watcher_subscription
+            Ok(watcher_subscription)
         } else {
             let (tx, rx) = tokio::sync::watch::channel(ProcEvent::None);
             let mut watchers_locked = self.0.watchers.write().await;
@@ -623,7 +641,7 @@ impl DEngine {
                 proc_id,
                 watchers_locked.len()
             );
-            rx
+            Ok(rx)
         }
     }
 

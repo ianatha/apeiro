@@ -1,6 +1,7 @@
 use actix_web::error::{self, ErrorBadRequest};
 use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse, Responder};
 use apeiro_engine::DEngine;
+use apeiro_engine::dengine::ProcEvent;
 use apeiro_internal_api::*;
 use tracing::{event, Level};
 
@@ -141,6 +142,15 @@ async fn proc_post_send(
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
+#[get("/stats")]
+async fn stats(
+    _req: HttpRequest,
+    dengine: web::Data<DEngine>,
+) -> impl Responder {
+    let res = dengine.watch_stats().await;
+    Ok::<_, actix_web::Error>(web::Json(res))
+}
+
 #[get("/proc/{proc_id}/watch")]
 async fn proc_watch(
     req: HttpRequest,
@@ -154,28 +164,45 @@ async fn proc_watch(
         .unwrap()
         .parse()
         .unwrap();
-
-    let mut res = dengine
-        .proc_watch(proc_id)
-        .await
-        .map_err(|_e| error::ErrorInternalServerError("db problem"))
-        .unwrap();
-
+    
     let stream = async_stream::stream! {
-        while res.changed().await.is_ok() {
-            let val = res.borrow().clone();
-            event!(Level::INFO, "sending update to sse");
-            let mut byt: Vec<u8> = vec![b'd', b'a', b't', b'a', b':', b' '];
-            let mut json = serde_json::to_vec(&val).unwrap();
-            byt.append(&mut json);
-            byt.push(b'\n');
-            byt.push(b'\n');
+        let mut res = dengine
+            .proc_watch(proc_id)
+            .await
+            .map_err(|_e| error::ErrorInternalServerError("db problem"))?;
 
-            let byte = web::Bytes::from(byt);
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
 
-            yield Ok::<web::Bytes, actix_web::Error>(byte)
-        };
-        event!(Level::INFO, "sse stream ended");
+        loop {
+            tokio::select! {
+                // workaround for Stream/Recever doesn't get dropped when client disconnects
+                _ = interval.tick() => {
+                    let mut byt: Vec<u8> = vec![b'e', b'v', b'e', b'n', b't', b':', b' ', b'p', b'i', b'n', b'g'];
+                    byt.push(b'\n');
+                    byt.push(b'\n');
+                    let byte = web::Bytes::from(byt);
+                    yield Ok::<web::Bytes, actix_web::Error>(byte)
+                }
+                changed = res.changed() => {
+                    if !changed.is_ok() {
+                        event!(Level::ERROR, "changed is not ok");
+                        return;
+                    }
+
+                    let val = res.borrow().clone();
+                    event!(Level::INFO, "sending update to sse");
+                    let mut byt: Vec<u8> = vec![b'd', b'a', b't', b'a', b':', b' '];
+                    let mut json = serde_json::to_vec(&val).unwrap();
+                    byt.append(&mut json);
+                    byt.push(b'\n');
+                    byt.push(b'\n');
+        
+                    let byte = web::Bytes::from(byt);
+        
+                    yield Ok::<web::Bytes, actix_web::Error>(byte)
+                }
+            }
+        }
     };
 
     HttpResponse::Ok()

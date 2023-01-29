@@ -10,7 +10,7 @@ apeiro_engine = { path = "../engine" }
 apeiro_internal_api = { path = "../internal_api"}
 anyhow = "1.0.66"
 serde_json = "1.0.89"
-actix-web = "4.2.1"
+actix-web = "4.3.0"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 nanoid = "0.4.0"
