@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (mut dengine, mut event_loop) = DEngine::new(
         Some(get_engine_runtime),
-        Box::new(apeiro_engine::Db {
+        Box::new(apeiro_engine::db_sqlite::Db {
             pool: establish_db_connection(store)?,
         }),
     )?;

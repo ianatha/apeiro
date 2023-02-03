@@ -5,6 +5,24 @@ use serde_json::Value;
 pub type ApeiroId = String;
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct ProcGetResponse {
+    pub proc_id: String,
+    pub mount_id: String,
+    pub name: Option<String>,
+    pub step_result: StepResult,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProcDetails {
+    pub pid: String,
+    pub mount_id: String,
+    pub name: Option<String>,
+    pub compiled_src: String,
+    pub engine_status: EngineStatus,
+    pub state: StepResult,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewOutput {
     pub id: ApeiroId,
     pub state: StepResult,
@@ -69,7 +87,6 @@ impl std::fmt::Display for StepResultStatus {
         }
     }
 }
-
 
 #[derive(Default, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct StepResult {

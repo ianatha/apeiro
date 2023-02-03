@@ -64,7 +64,7 @@ pub struct RemoteDEngineCmd {
 struct SharedDEngine {
     p2p_channel: RwLock<Option<tokio::sync::mpsc::Sender<RemoteDEngineCmd>>>,
     runtime_js_src: Option<fn() -> String>,
-    db: Box<dyn ApeiroEnginePersistence>,
+    db: Box<dyn ApeiroPersistence>,
     locks: Arc<RwLock<HashMap<String, Arc<RwLock<()>>>>>,
     tx: mpsc::Sender<DEngineCmd>,
     watchers: Arc<RwLock<HashMap<String, tokio::sync::watch::Sender<ProcEvent>>>>,
@@ -74,7 +74,7 @@ struct SharedDEngine {
 
 use tracing::{event, instrument, Level};
 
-use crate::db::ApeiroEnginePersistence;
+use crate::db::ApeiroPersistence;
 use crate::eventloop::now_as_millis;
 use crate::eventloop::EventLoop;
 
@@ -111,7 +111,7 @@ impl DEngine {
 
     pub fn new(
         runtime_js_src: Option<fn() -> String>,
-        db: Box<dyn ApeiroEnginePersistence>,
+        db: Box<dyn ApeiroPersistence>,
     ) -> Result<(DEngine, EventLoop)> {
         let (shared_dengine, rx, tx) = SharedDEngine::new_inner(runtime_js_src, db)?;
         let instance = Arc::new(shared_dengine);
@@ -688,7 +688,7 @@ impl SharedDEngine {
 
     fn new_inner(
         runtime_js_src: Option<fn() -> String>,
-        db: Box<dyn ApeiroEnginePersistence>,
+        db: Box<dyn ApeiroPersistence>,
     ) -> Result<(
         SharedDEngine,
         mpsc::Receiver<DEngineCmd>,

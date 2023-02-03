@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests;
 
-mod db;
+pub mod db;
+pub mod db_sqlite;
 pub mod dengine;
 mod engine;
 mod eventloop;
@@ -16,7 +17,6 @@ pub use apeiro_compiler::apeiro_compile;
 pub use apeiro_internal_api::ProcSendRequest;
 pub use apeiro_internal_api::StepResult;
 pub use apeiro_internal_api::StepResultStatus;
-pub use db::Db;
 pub use dengine::DEngine;
 pub use engine::Engine;
 pub use engine::PristineRunError;
