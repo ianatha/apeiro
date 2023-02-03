@@ -336,7 +336,7 @@ impl SyslogMsg {
             Some(val) => Some(val.to_string()),
             None => None,
         };
-        let timestamp = Utc.timestamp(time_sec, time_nanosec);
+        let timestamp = Utc.timestamp_opt(time_sec, time_nanosec).unwrap();
         return Some(SyslogMsg {
             from: from,
             facility: facility,

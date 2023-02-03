@@ -80,9 +80,9 @@ fn top_level_from_program(parsed: &swc_ecma_ast::Program) -> Option<String> {
 
 pub fn extract_export_name(input: String) -> String {
     let compiler = ApeiroCompiler::new();
-    if let Ok((_source_file, parsed)) =
-        swc_common::GLOBALS.set(&swc_common::Globals::new(), || compiler.parse("".to_string(), input))
-    {
+    if let Ok((_source_file, parsed)) = swc_common::GLOBALS.set(&swc_common::Globals::new(), || {
+        compiler.parse("".to_string(), input)
+    }) {
         if let Some(name) = top_level_from_program(&parsed) {
             return name;
         }

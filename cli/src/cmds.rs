@@ -101,10 +101,7 @@ pub(crate) async fn inspect(remote: String, proc_id: &String) -> Result<()> {
 
     let funcs = serde_json::to_string_pretty(&resp.funcs).unwrap();
     let frames = serde_json::to_string_pretty(&resp.frames).unwrap();
-    println!(
-        "{}\n======\n{}\n=====\n{}",
-        funcs, frames, "TODO"
-    );
+    println!("{}\n======\n{}\n=====\n{}", funcs, frames, "TODO");
 
     Ok(())
 }

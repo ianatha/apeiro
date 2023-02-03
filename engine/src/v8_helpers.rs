@@ -1,6 +1,6 @@
 use apeiro_internal_api::StackTraceFrame;
 use sourcemap::SourceMap;
-use tracing::{debug};
+use tracing::debug;
 use v8::{Context, HandleScope, Local, Message, Value};
 
 pub fn stack_trace_to_frames_no_srcmap<'s>(
@@ -41,7 +41,7 @@ pub fn stack_trace_to_frames<'s>(
     let stack_trace = message.get_stack_trace(scope).unwrap();
     let mut result = Vec::new();
     debug!("exception frames: {:?}", stack_trace.get_frame_count());
-    if stack_trace.get_frame_count() > 0  {
+    if stack_trace.get_frame_count() > 0 {
         for i in 0..stack_trace.get_frame_count() {
             let frame = stack_trace.get_frame(scope, i).unwrap();
             let script_name = match frame.get_script_name(scope) {
@@ -54,11 +54,11 @@ pub fn stack_trace_to_frames<'s>(
                 Some(name) => name.to_rust_string_lossy(scope),
                 None => "<unknown>".to_string(),
             };
-    
+
             let original_token = sm
                 .lookup_token(line_number as u32 - 1, column_number as u32 - 1)
                 .unwrap();
-    
+
             result.push(StackTraceFrame {
                 script_name,
                 func_name,
@@ -67,8 +67,14 @@ pub fn stack_trace_to_frames<'s>(
             });
         }
     } else {
-        let script_name = message.get_script_resource_name(scope).unwrap().to_rust_string_lossy(scope);
-        let script_line = message.get_source_line(scope).unwrap().to_rust_string_lossy(scope);
+        let script_name = message
+            .get_script_resource_name(scope)
+            .unwrap()
+            .to_rust_string_lossy(scope);
+        let script_line = message
+            .get_source_line(scope)
+            .unwrap()
+            .to_rust_string_lossy(scope);
         let line_number = message.get_line_number(scope).unwrap();
         let column_number = message.get_start_column();
         result.push(StackTraceFrame {

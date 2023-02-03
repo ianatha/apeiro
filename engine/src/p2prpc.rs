@@ -1,11 +1,12 @@
 use futures::StreamExt;
 use libp2p::{
-    core::{upgrade, either::EitherTransport},
+    core::{either::EitherTransport, upgrade},
     floodsub::{self, Floodsub, FloodsubEvent},
     identity, mdns, mplex, noise,
-    ping::PingEvent,
+    pnet::{PnetConfig, PreSharedKey},
+    request_response::{ProtocolSupport, RequestResponseEvent, RequestResponseMessage},
     swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, Multiaddr, PeerId, Transport, request_response::{RequestResponseEvent, ProtocolSupport, RequestResponseMessage}, pnet::{PreSharedKey, PnetConfig},
+    tcp, Multiaddr, PeerId, Transport,
 };
 use std::error::Error;
 use tokio::io::{self, AsyncBufReadExt};
@@ -27,34 +28,31 @@ pub async fn load_keys_or_generate() -> Result<identity::Keypair, Box<dyn Error>
 }
 
 #[derive(Clone)]
-struct Codec {
-    
-}
-
+struct Codec {}
 
 #[derive(Clone)]
 struct ApeiroProtocolName {}
 
 impl libp2p::core::upgrade::ProtocolName for ApeiroProtocolName {
-     fn protocol_name(&self) -> &[u8] {
+    fn protocol_name(&self) -> &[u8] {
         b"/apeiro/1.0"
-     }
- }
+    }
+}
 
- #[derive(Debug, Clone, PartialEq, Eq)]
- struct ProtocolRequest(RemoteDEngineCmd);
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProtocolRequest(RemoteDEngineCmd);
 
- #[derive(Debug, Clone, PartialEq, Eq)]
- struct ProtocolResponse(String);
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProtocolResponse(String);
 
- use async_trait::async_trait;
- use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
+use async_trait::async_trait;
+use libp2p::core::upgrade::{read_length_prefixed, write_length_prefixed};
 
- use futures::prelude::*;
+use futures::prelude::*;
 
-use crate::{DEngine, dengine::RemoteDEngineCmd};
+use crate::{dengine::RemoteDEngineCmd, DEngine};
 
- #[async_trait]
+#[async_trait]
 impl libp2p::request_response::RequestResponseCodec for Codec {
     type Protocol = ApeiroProtocolName;
 
@@ -62,72 +60,74 @@ impl libp2p::request_response::RequestResponseCodec for Codec {
 
     type Response = ProtocolResponse;
 
-        async fn read_request<T>(
-            &mut self,
-            _: &ApeiroProtocolName,
-            io: &mut T,
-        ) -> io::Result<Self::Request>
-        where
-            T: AsyncRead + Unpin + Send,
-        {
-            let vec = read_length_prefixed(io, 1_000_000).await?;
+    async fn read_request<T>(
+        &mut self,
+        _: &ApeiroProtocolName,
+        io: &mut T,
+    ) -> io::Result<Self::Request>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let vec = read_length_prefixed(io, 1_000_000).await?;
 
-            if vec.is_empty() {
-                return Err(io::ErrorKind::UnexpectedEof.into());
-            }
-            Ok(ProtocolRequest(serde_json::from_slice(&vec).unwrap()))
+        if vec.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
         }
-        async fn read_response<T>(
-            &mut self,
-            _: &ApeiroProtocolName,
-            io: &mut T,
-        ) -> io::Result<Self::Response>
-        where
-            T: AsyncRead + Unpin + Send,
-        {
-            let vec = read_length_prefixed(io, 1_000_000).await?;
+        Ok(ProtocolRequest(serde_json::from_slice(&vec).unwrap()))
+    }
+    async fn read_response<T>(
+        &mut self,
+        _: &ApeiroProtocolName,
+        io: &mut T,
+    ) -> io::Result<Self::Response>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let vec = read_length_prefixed(io, 1_000_000).await?;
 
-            if vec.is_empty() {
-                return Err(io::ErrorKind::UnexpectedEof.into());
-            }
-
-            Ok(ProtocolResponse(String::from_utf8(vec).unwrap()))
+        if vec.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        async fn write_request<T>(
-            &mut self,
-            _: &ApeiroProtocolName,
-            io: &mut T,
-            ProtocolRequest(data): ProtocolRequest,
-        ) -> io::Result<()>
-        where
-            T: AsyncWrite + Unpin + Send,
-        {
-            let data = serde_json::to_vec(&data).unwrap();
-            write_length_prefixed(io, data).await?;
-            io.close().await?;
+        Ok(ProtocolResponse(String::from_utf8(vec).unwrap()))
+    }
 
-            Ok(())
-        }
+    async fn write_request<T>(
+        &mut self,
+        _: &ApeiroProtocolName,
+        io: &mut T,
+        ProtocolRequest(data): ProtocolRequest,
+    ) -> io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        let data = serde_json::to_vec(&data).unwrap();
+        write_length_prefixed(io, data).await?;
+        io.close().await?;
 
-        async fn write_response<T>(
-            &mut self,
-            _: &ApeiroProtocolName,
-            io: &mut T,
-            ProtocolResponse(data): ProtocolResponse,
-        ) -> io::Result<()>
-        where
-            T: AsyncWrite + Unpin + Send,
-        {
-            write_length_prefixed(io, data).await?;
-            io.close().await?;
+        Ok(())
+    }
 
-            Ok(())
-        }
+    async fn write_response<T>(
+        &mut self,
+        _: &ApeiroProtocolName,
+        io: &mut T,
+        ProtocolResponse(data): ProtocolResponse,
+    ) -> io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        write_length_prefixed(io, data).await?;
+        io.close().await?;
 
+        Ok(())
+    }
 }
 
-pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<tokio::sync::mpsc::Sender<RemoteDEngineCmd>, Box<dyn Error>> {
+pub async fn start_p2p(
+    dengine: DEngine,
+    addrs_to_dial: Vec<String>,
+) -> Result<tokio::sync::mpsc::Sender<RemoteDEngineCmd>, Box<dyn Error>> {
     // Create a random PeerId
     let id_keys = load_keys_or_generate().await?;
     let peer_id = PeerId::from(id_keys.public());
@@ -136,7 +136,8 @@ pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<t
 
     let base_transport = tcp::async_io::Transport::new(tcp::Config::default().nodelay(true));
 
-    let (relay_transport, relay_client) = libp2p::relay::v2::client::Client::new_transport_and_behaviour(peer_id);
+    let (relay_transport, relay_client) =
+        libp2p::relay::v2::client::Client::new_transport_and_behaviour(peer_id);
 
     let base_transport = libp2p::core::transport::OrTransport::new(relay_transport, base_transport);
 
@@ -162,8 +163,8 @@ pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<t
     let floodsub_topic = floodsub::Topic::new("chat");
 
     let req_resp = libp2p::request_response::RequestResponse::new(
-        Codec{},
-        std::iter::once((ApeiroProtocolName{}, ProtocolSupport::Full)),
+        Codec {},
+        std::iter::once((ApeiroProtocolName {}, ProtocolSupport::Full)),
         libp2p::request_response::RequestResponseConfig::default(),
     );
     // We create a custom  behaviour that combines floodsub and mDNS.
@@ -199,7 +200,7 @@ pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<t
             MyBehaviourEvent::ReqResp(event)
         }
     }
-    
+
     impl From<libp2p::ping::Event> for MyBehaviourEvent {
         fn from(event: libp2p::ping::Event) -> Self {
             MyBehaviourEvent::Ping(event)
@@ -223,7 +224,7 @@ pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<t
     let mut behaviour = MyBehaviour {
         floodsub: Floodsub::new(peer_id),
         mdns: mdns_behaviour,
-        ping: libp2p::ping::Behaviour::new(libp2p::ping::Config::new().with_keep_alive(true)),
+        ping: libp2p::ping::Behaviour::new(libp2p::ping::Config::new()),
         request_response: req_resp,
         relay: relay_client,
     };
@@ -240,114 +241,114 @@ pub async fn start_p2p(dengine: DEngine, addrs_to_dial: Vec<String>) -> Result<t
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
-    
+
     // Listen on all interfaces and whatever port the OS assigns
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     use tokio::time::{self, Duration};
 
-    let tick = time::interval(Duration::from_millis(1000));
-    tokio::pin!(tick);
+    let mut tick = time::interval(Duration::from_millis(1000));
 
     let (sender, mut receiver) = tokio::sync::mpsc::channel::<RemoteDEngineCmd>(100);
     // Kick it off
     tokio::task::spawn(async move {
-    loop {
-        tokio::select! {
-            // _ = tick.tick() => {
-            //     println!("tick");
-            // }
-            internal_event = receiver.recv() => {
-                match internal_event {
-                    Some(event) => {
-                        swarm.behaviour_mut().request_response.send_request(
-                            &event.peer_id.clone().parse().unwrap(),
-                            ProtocolRequest(event),
-                        );
-                    }
-                    None => {
-                    }
+        loop {
+            tokio::select! {
+                _ = tick.tick() => {
+                    println!("tick");
                 }
-            }
-            line = stdin.next_line() => {
-                println!("{:?}", swarm.connected_peers().collect::<Vec<&PeerId>>());
-                println!("{:?}", swarm.network_info());
-                let line = line.unwrap().expect("stdin closed");
-                if line.starts_with("/connect ") {
-                    let split = line.split(" ").collect::<Vec<&str>>();
-                    let addr: Multiaddr = split[1].parse().unwrap();
-                    swarm.dial(addr).unwrap();
-                } else if line.starts_with("/send ") {
-                    let split = line.split(" ").collect::<Vec<&str>>();
-                    let peer_id = split[1];
-                    let msg = split[2];
-                    swarm.behaviour_mut().request_response.send_request(
-                        &peer_id.parse().unwrap(),
-                        ProtocolRequest(
-                            RemoteDEngineCmd {
-                                peer_id: peer_id.to_string(),
-                                cmd: crate::dengine::DEngineCmd::Broadcast(
-                                    "test".to_string(),
-                                    "test2".to_string(),
-                                    crate::dengine::ProcEvent::None,
-                                ),
-                            }
-                    ));
-                } else {
-                    swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), line.as_bytes());
-                }
-            }
-            event = swarm.select_next_some() => {
-                match event {
-                    SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
-                        println!("Connection with {peer_id:?} established on {endpoint:?}");
-                        swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id);
-                    }
-                    SwarmEvent::NewListenAddr { address, .. } => {
-                        println!("Listening on {address:?}");
-                    }
-                    SwarmEvent::Behaviour(MyBehaviourEvent::ReqResp(event)) => {
-                        println!("event: {:?}", event);
-                        if let RequestResponseEvent::Message { peer, message } = event {
-                            if let RequestResponseMessage::Request { request_id, request, channel } = message {
-                                println!("Received request from {peer:?} {request:?} {request_id:?}");
-                                let response = ProtocolResponse("hello".to_string());
-                                dengine.send(request.0.cmd).await.unwrap();
-                                swarm.behaviour_mut().request_response.send_response(channel, response).unwrap();
-                            }
+                internal_event = receiver.recv() => {
+                    match internal_event {
+                        Some(event) => {
+                            swarm.behaviour_mut().request_response.send_request(
+                                &event.peer_id.clone().parse().unwrap(),
+                                ProtocolRequest(event),
+                            );
+                        }
+                        None => {
                         }
                     }
-                    SwarmEvent::Behaviour(MyBehaviourEvent::Floodsub(FloodsubEvent::Message(message))) => {
-                        println!(
-                                "Received: '{:?}' from {:?}",
-                                String::from_utf8_lossy(&message.data),
-                                message.source
-                            );
+                }
+                line = stdin.next_line() => {
+                    println!("{:?}", swarm.connected_peers().collect::<Vec<&PeerId>>());
+                    println!("{:?}", swarm.network_info());
+                    let line = line.unwrap().expect("stdin closed");
+                    if line.starts_with("/connect ") {
+                        let split = line.split(" ").collect::<Vec<&str>>();
+                        let addr: Multiaddr = split[1].parse().unwrap();
+                        swarm.dial(addr).unwrap();
+                    } else if line.starts_with("/send ") {
+                        let split = line.split(" ").collect::<Vec<&str>>();
+                        let peer_id = split[1];
+                        let _msg = split[2];
+                        swarm.behaviour_mut().request_response.send_request(
+                            &peer_id.parse().unwrap(),
+                            ProtocolRequest(
+                                RemoteDEngineCmd {
+                                    peer_id: peer_id.to_string(),
+                                    cmd: crate::dengine::DEngineCmd::Broadcast(
+                                        "test".to_string(),
+                                        "test2".to_string(),
+                                        crate::dengine::ProcEvent::None,
+                                    ),
+                                }
+                        ));
+                    } else {
+                        swarm.behaviour_mut().floodsub.publish(floodsub_topic.clone(), line.as_bytes());
                     }
-                    SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(event)) => {
-                        match event {
-                            mdns::Event::Discovered(list) => {
-                                for (peer, addr) in list {
-                                    println!("discovered {peer} {addr}");
-                                    swarm.dial(addr.clone()).unwrap();
+                }
+                event = swarm.select_next_some() => {
+                    match event {
+                        SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                            println!("Connection with {peer_id:?} established on {endpoint:?}");
+                            swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer_id);
+                        }
+                        SwarmEvent::NewListenAddr { address, .. } => {
+                            println!("Listening on {address:?}");
+                        }
+                        SwarmEvent::Behaviour(MyBehaviourEvent::ReqResp(event)) => {
+                            println!("event: {:?}", event);
+                            if let RequestResponseEvent::Message { peer, message } = event {
+                                if let RequestResponseMessage::Request { request_id, request, channel } = message {
+                                    println!("Received request from {peer:?} {request:?} {request_id:?}");
+                                    let response = ProtocolResponse("hello".to_string());
+                                    dengine.send(request.0.cmd).await.unwrap();
+                                    swarm.behaviour_mut().request_response.send_response(channel, response).unwrap();
                                 }
                             }
-                            mdns::Event::Expired(list) => {
-                                for (peer, addr) in list {
-                                    println!("expired {peer} {addr}");
-                                    if !swarm.behaviour().mdns.has_node(&peer) {
-                                        // swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
+                        }
+                        SwarmEvent::Behaviour(MyBehaviourEvent::Floodsub(FloodsubEvent::Message(message))) => {
+                            println!(
+                                    "Received: '{:?}' from {:?}",
+                                    String::from_utf8_lossy(&message.data),
+                                    message.source
+                                );
+                        }
+                        SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(event)) => {
+                            match event {
+                                mdns::Event::Discovered(list) => {
+                                    for (peer, addr) in list {
+                                        println!("discovered {peer} {addr}");
+                                        swarm.dial(addr.clone()).unwrap();
+                                    }
+                                }
+                                mdns::Event::Expired(list) => {
+                                    for (peer, addr) in list {
+                                        println!("expired {peer} {addr}");
+                                        if !swarm.behaviour().mdns.has_node(&peer) {
+                                            // swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    e => {
-                        println!("event {:?}", e);
+                        e => {
+                            println!("event {:?}", e);
+                        }
                     }
                 }
             }
         }
-    }});
+    });
     Ok(sender)
 }

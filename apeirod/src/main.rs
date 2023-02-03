@@ -1,7 +1,5 @@
 mod handlers;
 
-use std::time::Duration;
-
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use apeiro_engine::plugins::PluginConfiguration;
@@ -10,7 +8,7 @@ use clap::{command, Parser};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use tracing::Level;
-use tracing::instrument::WithSubscriber;
+// use tracing::instrument::WithSubscriber;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -90,7 +88,9 @@ async fn main() -> anyhow::Result<()> {
     });
 
     if cli.swarm {
-        let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone(), cli.swarm_peer_addr).await.unwrap();
+        let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone(), cli.swarm_peer_addr)
+            .await
+            .unwrap();
         dengine.set_p2p_channel(p2pchan).await;
     }
 
@@ -121,9 +121,10 @@ async fn main() -> anyhow::Result<()> {
 
     let listen_addr = cli.listen.unwrap_or("127.0.0.1".to_string());
     println!("Starting HTTP daemon on port {}:{}", listen_addr, port);
-    let allowed_origin = cli
-        .allowed_origin
-        .unwrap_or("http://localhost:3000".to_string());
+
+    // let allowed_origin = cli
+    //     .allowed_origin
+    //     .unwrap_or("http://localhost:3000".to_string());
 
     HttpServer::new(move || {
         use actix_cors::Cors;
@@ -131,9 +132,7 @@ async fn main() -> anyhow::Result<()> {
 
         let cors = Cors::default()
             // .allowed_origin(allowed_origin.as_str())
-            .allowed_origin_fn(|origin, _req_head| {
-                true
-            })
+            .allowed_origin_fn(|_origin, _req_head| true)
             .allowed_methods(vec!["GET", "POST", "PUT"])
             .allowed_headers(vec![
                 "apeiro-wait",
@@ -143,10 +142,9 @@ async fn main() -> anyhow::Result<()> {
             .allowed_header(http::header::CONTENT_TYPE)
             .max_age(3600);
 
-            let json_cfg = actix_web::web::JsonConfig::default()
-    .error_handler(|err, req| {
-        handlers::ApeiroError::new(anyhow::anyhow!("Error parsing JSON: {:?}", err)).into()
-    });
+        let json_cfg = actix_web::web::JsonConfig::default().error_handler(|err, _req| {
+            handlers::ApeiroError::new(anyhow::anyhow!("Error parsing JSON: {:?}", err)).into()
+        });
 
         App::new()
             .wrap(Logger::default())

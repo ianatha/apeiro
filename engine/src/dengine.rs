@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Ok, Result};
-use apeiro_compiler::CompilationResult;
 use apeiro_compiler::apeiro_compile;
 use apeiro_compiler::extract_export_name;
+use apeiro_compiler::CompilationResult;
 use apeiro_internal_api::MountNewRequest;
 use apeiro_internal_api::MountSummary;
 use apeiro_internal_api::ProcListOutput;
@@ -157,17 +157,25 @@ impl DEngine {
         name: Option<String>,
     ) -> Result<ProcNewOutput, anyhow::Error> {
         let name = if mount.singleton.is_some() {
-            self.0.db.proc_rename_if_exists(&mount.name, &format!("{}_{}", mount.name, now_as_millis()).clone())?;
+            self.0.db.proc_rename_if_exists(
+                &mount.name,
+                &format!("{}_{}", mount.name, now_as_millis()).clone(),
+            )?;
 
             mount.name
         } else {
             name.unwrap_or_else(|| format!("{}_{}", mount.name, now_as_millis()))
         };
-        
+
         let proc_id = self.0.db.proc_new(&mount.id, &Some(name))?;
         let step_id = nanoid!();
 
-        let mut engine = crate::Engine::new(self.0.runtime_js_src, proc_id.clone(), step_id, self.clone());
+        let mut engine = crate::Engine::new(
+            self.0.runtime_js_src,
+            proc_id.clone(),
+            step_id,
+            self.clone(),
+        );
 
         let (res, engine_status) = engine
             .step_process(mount.compiled_src, None, None, None)
@@ -232,14 +240,18 @@ impl DEngine {
             let src = new_src.clone();
             let compiled_src = tokio::task::spawn_blocking(move || apeiro_compile(src)).await??;
 
-            self.0.db.mount_edit(&mount_id, &new_src, &compiled_src.compiled_src)?;
+            self.0
+                .db
+                .mount_edit(&mount_id, &new_src, &compiled_src.compiled_src)?;
 
             if mount_summary.singleton.is_some() {
-                let new_proc = self.proc_new(ProcNewRequest {
-                    mount_id: mount_id.clone(),
-                    name: None,
-                    version: None,
-                }).await?;
+                let new_proc = self
+                    .proc_new(ProcNewRequest {
+                        mount_id: mount_id.clone(),
+                        name: None,
+                        version: None,
+                    })
+                    .await?;
                 Ok(Some(new_proc))
             } else {
                 Ok(None)
@@ -287,7 +299,7 @@ impl DEngine {
                     Some(0)
                 } else {
                     None
-                }
+                },
             )?;
 
             Ok(mount)
@@ -322,7 +334,13 @@ impl DEngine {
 
         let executing = self.proc_is_executing(&proc.proc_id).await?;
 
-        Ok(ProcStatus::new(proc.proc_id, proc.mount_id, proc.name, proc.step_result, executing))
+        Ok(ProcStatus::new(
+            proc.proc_id,
+            proc.mount_id,
+            proc.name,
+            proc.step_result,
+            executing,
+        ))
     }
 
     #[instrument]
@@ -454,14 +472,17 @@ impl DEngine {
 
         let exec_id = exec_id.unwrap_or(nanoid!());
         if let Some(p2p_channel) = &*self.0.p2p_channel.read().await {
-            p2p_channel.send(RemoteDEngineCmd {
-                peer_id,
-                cmd: DEngineCmd::Send(DEngineCmdSend {
-                    proc_id,
-                    step_id: exec_id.clone(),
-                    req: body,
-                }),
-            }).await.unwrap();
+            p2p_channel
+                .send(RemoteDEngineCmd {
+                    peer_id,
+                    cmd: DEngineCmd::Send(DEngineCmdSend {
+                        proc_id,
+                        step_id: exec_id.clone(),
+                        req: body,
+                    }),
+                })
+                .await
+                .unwrap();
             Ok(exec_id)
         } else {
             panic!("can't send without p2p enabled")
@@ -600,15 +621,16 @@ impl DEngine {
 
     pub async fn watch_stats(&self) -> Vec<(String, usize)> {
         let watchers_locked = self.0.watchers.read().await;
-        watchers_locked.iter().map(|(k, v)| (k.clone(), v.receiver_count())).collect()
+        watchers_locked
+            .iter()
+            .map(|(k, v)| (k.clone(), v.receiver_count()))
+            .collect()
     }
 
     // TODO: schedule this to run
     pub async fn watch_gc(&self) -> Result<()> {
         let mut watchers_locked = self.0.watchers.write().await;
-        watchers_locked.retain(|_, v| {
-            v.receiver_count() > 0
-        });
+        watchers_locked.retain(|_, v| v.receiver_count() > 0);
         Ok(())
     }
 
@@ -616,7 +638,7 @@ impl DEngine {
     pub async fn watch(&self, proc_id: String) -> Result<tokio::sync::watch::Receiver<ProcEvent>> {
         let proc_status = self.proc_get(proc_id.clone()).await?;
         if proc_status.status != StepResultStatus::SUSPEND {
-            return  Err(anyhow!("can only watch suspended procs"))
+            return Err(anyhow!("can only watch suspended procs"));
         }
 
         let watcher_subscription = {

@@ -1,7 +1,6 @@
 use actix_web::error::{self, ErrorBadRequest};
 use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse, Responder};
 use apeiro_engine::DEngine;
-use apeiro_engine::dengine::ProcEvent;
 use apeiro_internal_api::*;
 use tracing::{event, Level};
 
@@ -143,10 +142,7 @@ async fn proc_post_send(
 }
 
 #[get("/stats")]
-async fn stats(
-    _req: HttpRequest,
-    dengine: web::Data<DEngine>,
-) -> impl Responder {
+async fn stats(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
     let res = dengine.watch_stats().await;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
@@ -164,7 +160,7 @@ async fn proc_watch(
         .unwrap()
         .parse()
         .unwrap();
-    
+
     let stream = async_stream::stream! {
         let mut res = dengine
             .proc_watch(proc_id)
@@ -196,9 +192,9 @@ async fn proc_watch(
                     byt.append(&mut json);
                     byt.push(b'\n');
                     byt.push(b'\n');
-        
+
                     let byte = web::Bytes::from(byt);
-        
+
                     yield Ok::<web::Bytes, actix_web::Error>(byte)
                 }
             }
@@ -231,7 +227,11 @@ async fn mount_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respon
 }
 
 #[put("/mount/{mount_id}")]
-async fn mount_edit(req: HttpRequest, body: web::Json<MountEditRequest>, dengine: web::Data<DEngine>) -> impl Responder {
+async fn mount_edit(
+    req: HttpRequest,
+    body: web::Json<MountEditRequest>,
+    dengine: web::Data<DEngine>,
+) -> impl Responder {
     let mount_id: String = req
         .match_info()
         .get("mount_id")

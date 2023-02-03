@@ -5,20 +5,25 @@ use std::path::Path;
 use swc::{Compiler, SwcComments};
 
 use swc_atoms::js_word;
-use swc_bundler::{ModuleRecord, ModuleData, Load, Bundler, Bundle};
+use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord};
 use swc_common::comments::SingleThreadedComments;
 use swc_common::errors::ColorConfig;
 use swc_common::sync::Lrc;
 
-use swc_common::{chain, Globals, SourceFile, GLOBALS, Mark, Span};
+use swc_common::{chain, Globals, Mark, SourceFile, Span, GLOBALS};
 use swc_common::{errors::Handler, FileName, SourceMap};
 
-use anyhow::{anyhow, Result, Error};
-use swc_ecma_ast::{Module, Program, KeyValueProp, PropName, Ident, Expr, Lit, Str, MemberExpr, MetaPropKind, MetaPropExpr, MemberProp, Bool};
+use anyhow::{anyhow, Error, Result};
+use swc_ecma_ast::{
+    Bool, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, MetaPropExpr, MetaPropKind,
+    Module, Program, PropName, Str,
+};
+use swc_ecma_codegen::text_writer::{omit_trailing_semi, JsWriter, WriteJs};
 use swc_ecma_codegen::Emitter;
-use swc_ecma_codegen::text_writer::{JsWriter, omit_trailing_semi, WriteJs};
 use swc_ecma_loader::resolvers::lru::CachingResolver;
-use swc_ecma_minifier::option::{MangleOptions, CompressOptions, MinifyOptions, TopLevelOptions, ExtraOptions};
+use swc_ecma_minifier::option::{
+    CompressOptions, ExtraOptions, MangleOptions, MinifyOptions, TopLevelOptions,
+};
 use swc_ecma_parser::{Syntax, TsConfig};
 use swc_ecma_transforms::fixer;
 use swc_ecma_transforms::pass::noop;
@@ -27,8 +32,8 @@ use tracing::{event, instrument, Level};
 
 use crate::helpers::{Helpers, HELPERS};
 use crate::{
-    either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers, stmt_exploder,
-    CompilationResult, BASELINE_ES_VERSION, now_as_millis,
+    either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers, now_as_millis,
+    stmt_exploder, CompilationResult, BASELINE_ES_VERSION,
 };
 
 pub struct ApeiroCompiler {
@@ -157,9 +162,7 @@ impl<'a> Load for Loader<'a> {
         //     panic!("failed to parse")
         // });
 
-        let (fm, module) = self
-            .compiler
-            .load_module_transpiled(f)?;
+        let (fm, module) = self.compiler.load_module_transpiled(f)?;
 
         Ok(ModuleData {
             fm,
@@ -169,10 +172,7 @@ impl<'a> Load for Loader<'a> {
     }
 }
 
-
-struct ApeiroSourceMapConfig {
-
-}
+struct ApeiroSourceMapConfig {}
 
 impl swc_common::source_map::SourceMapGenConfig for ApeiroSourceMapConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
@@ -204,11 +204,7 @@ impl ApeiroCompiler {
         }
     }
 
-    pub fn bundle_main(
-        &self,
-        src: String,
-        minify: bool
-    ) -> Result<CompilationResult, Error> {
+    pub fn bundle_main(&self, src: String, minify: bool) -> Result<CompilationResult, Error> {
         let mut entries = HashMap::default();
         entries.insert("main".to_string(), FileName::Custom(src));
         self.bundle(entries, minify)
@@ -238,15 +234,15 @@ impl ApeiroCompiler {
                         Box::new(wr) as Box<dyn WriteJs>
                     },
                 };
-    
+
                 emitter.emit_module(&bundled.module).unwrap();
             }
 
             println!("srcmap_buf: {:?}\n", srcmap_buf);
-    
+
             String::from_utf8_lossy(&src_buf).to_string()
         };
-    
+
         let map = {
             let mut buf = vec![];
 
@@ -264,22 +260,21 @@ impl ApeiroCompiler {
                 )
                 .to_writer(&mut buf)
                 .unwrap();
-                // .context("failed to write source map")?;
+            // .context("failed to write source map")?;
             String::from_utf8(buf).unwrap()
         };
 
         #[cfg(feature = "concurrent")]
         rayon::spawn(move || drop(bundled));
-    
+
         // TODO: iwa
-    
+
         CompilationResult {
             compiled_src: code,
             source_map: Some(map),
             program_counter_mapping: vec![],
         }
     }
-    
 
     pub fn bundle(
         &self,
@@ -291,9 +286,7 @@ impl ApeiroCompiler {
         let mut bundler = Bundler::new(
             globals,
             self.cm.clone(),
-            Loader {
-                compiler: self,
-            },
+            Loader { compiler: self },
             CachingResolver::new(
                 4096,
                 resolver, // NodeModulesResolver::new(TargetEnv::Node, Default::default(), true),
@@ -309,16 +302,16 @@ impl ApeiroCompiler {
             },
             Box::new(Hook),
         );
-    
+
         let mut modules = bundler.bundle(entries)?;
-    
+
         event!(Level::INFO, "Bundled as {} modules", modules.len());
-    
+
         #[cfg(feature = "concurrent")]
         rayon::spawn(move || {
             drop(bundler);
         });
-    
+
         if minify {
             modules = modules
                 .into_iter()
@@ -352,16 +345,12 @@ impl ApeiroCompiler {
                 })
                 .collect();
         }
-    
+
         Ok(self.get_bundle(modules, minify))
     }
-    
 
     #[instrument]
-    pub fn load_module_transpiled(
-        &self,
-        f: &FileName,
-    ) -> Result<(Lrc<SourceFile>, Module)> {
+    pub fn load_module_transpiled(&self, f: &FileName) -> Result<(Lrc<SourceFile>, Module)> {
         let filename = match f {
             FileName::Custom(_src) => "toplevel".to_string(),
             FileName::Real(_path) => "path".to_string(),
@@ -407,8 +396,9 @@ impl ApeiroCompiler {
             self.custom_apeiro_compile_string(contents, |_| noop(), true, false, false)?
         };
 
-        let (file, program) =
-            GLOBALS.set(&Globals::new(), || self.parse(filename, compiled_str.compiled_src))?;
+        let (file, program) = GLOBALS.set(&Globals::new(), || {
+            self.parse(filename, compiled_str.compiled_src)
+        })?;
 
         if let swc_ecma_ast::Program::Module(module) = program {
             Ok((file, module))
@@ -489,9 +479,7 @@ impl ApeiroCompiler {
 
         let comments: SwcComments = Default::default();
 
-        let file = self
-            .cm
-            .new_source_file(FileName::Custom(name), input);
+        let file = self.cm.new_source_file(FileName::Custom(name), input);
 
         let program = self.compiler.parse_js(
             file.clone(),

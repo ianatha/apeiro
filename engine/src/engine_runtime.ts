@@ -132,7 +132,11 @@ export function $new_frame(fnhash, last_fn_hash) {
 
 // ## Function Declartions
 
-
+/**
+ * Returns the original function (`fn`) annotated with a the "$$scope" and "hash"
+ * fields to aid in its serialization.
+ * 
+ */
 export function $fn(fn, hash, in_scope) {
 	// $fns.set(hash, {
 	// 	id: hash,
