@@ -1,6 +1,6 @@
 mod test_bundle;
 mod test_either_param_to_closure;
-mod test_fn_decl_to_fn_expr;
+mod test_decl_to_expr;
 mod test_fn_instrument;
 mod test_stmt_exploder;
 

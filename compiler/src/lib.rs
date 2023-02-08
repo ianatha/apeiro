@@ -6,7 +6,7 @@ pub mod helpers;
 
 mod compile_phase;
 mod either_param_to_closure;
-mod fn_decl_to_fn_expr;
+mod decl_to_expr;
 mod fn_instrument;
 #[allow(dead_code)]
 mod generator;
@@ -101,7 +101,7 @@ pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
         |_| {
             chain!(
                 either_param_to_closure::folder(),
-                fn_decl_to_fn_expr::folder(),
+                decl_to_expr::folder(),
                 stmt_exploder::folder(),
                 fn_instrument::folder(),
             )
