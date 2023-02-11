@@ -299,6 +299,8 @@ define_helpers!(Helpers {
     define_property: (),
     ts_generator: (),
     ts_values: (),
+    fn_wrap: (),
+    new_scope: (),
 });
 
 pub fn inject_helpers() -> impl Fold + VisitMut {

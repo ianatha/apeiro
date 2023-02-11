@@ -32,8 +32,8 @@ use tracing::{event, instrument, Level};
 
 use crate::helpers::{Helpers, HELPERS};
 use crate::{
-    either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers, now_as_millis,
-    stmt_exploder, CompilationResult, BASELINE_ES_VERSION,
+    either_param_to_closure, decl_to_expr, fn_instrument, helpers, now_as_millis,
+    stmt_exploder, CompilationResult, BASELINE_ES_VERSION, for_stmt_to_while_stmt,
 };
 
 pub struct ApeiroCompiler {
@@ -383,7 +383,7 @@ impl ApeiroCompiler {
                 |_| {
                     chain!(
                         either_param_to_closure::folder(),
-                        fn_decl_to_fn_expr::folder(),
+                        decl_to_expr::folder(),
                         stmt_exploder::folder(),
                         fn_instrument::folder(),
                     )
@@ -429,6 +429,9 @@ impl ApeiroCompiler {
                 ..Default::default()
             };
 
+            let unresolved_mark = swc_common::Mark::new();
+            let top_level_mark = swc_common::Mark::new();
+
             let result = self.compiler.process_js_with_custom_pass(
                 file,
                 Some(program),
@@ -437,7 +440,7 @@ impl ApeiroCompiler {
                     config: swc::config::Config {
                         input_source_map: Some(swc::config::InputSourceMap::Bool(true)),
                         jsc: swc::config::JscConfig {
-                            target: Some(swc_ecma_ast::EsVersion::Es2017),
+                            target: Some(BASELINE_ES_VERSION),
                             syntax: Some(swc_ecma_parser::Syntax::Typescript(config)),
                             ..Default::default()
                         },
@@ -453,7 +456,22 @@ impl ApeiroCompiler {
                 },
                 SingleThreadedComments::default(),
                 |_| noop(),
-                |p| chain!(folder_chain(p), helpers::inject_helpers(),),
+                |p| chain!(
+                    swc_ecma_transforms_compat::es2015::arrow(swc_common::Mark::new()),
+                    swc_ecma_transforms_compat::es2015::destructuring::destructuring(Default::default()),
+                    for_stmt_to_while_stmt::folder(),
+                    swc_ecma_transforms_base::resolver(
+                        unresolved_mark,
+                        top_level_mark,
+                        false
+                    ),
+                    folder_chain(p),
+                    swc_ecma_transforms_base::hygiene::hygiene_with_config(swc_ecma_transforms_base::hygiene::Config {
+                        top_level_mark: top_level_mark,
+                        ..Default::default()
+                    }),
+                    helpers::inject_helpers(),
+                ),
             )?;
 
             let pc_to_src = HELPERS.with(|helpers| helpers.pc_to_src_get());

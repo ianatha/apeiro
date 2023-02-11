@@ -1,6 +1,6 @@
 use swc_common::chain;
 
-use crate::{fn_decl_to_fn_expr, fn_instrument, stmt_exploder};
+use crate::{decl_to_expr, fn_instrument, stmt_exploder, capture_scopes};
 
 use super::compiler_test;
 
@@ -8,8 +8,9 @@ macro_rules! folder_chain {
     () => {
         |_| {
             chain!(
-                fn_decl_to_fn_expr::folder(),
+                decl_to_expr::folder(),
                 stmt_exploder::folder(),
+                capture_scopes::folder(),
                 fn_instrument::folder(),
             )
         }
@@ -19,34 +20,29 @@ macro_rules! folder_chain {
 #[test]
 fn test_fn_calls_many() {
     compiler_test(
-        "function calls_many() { return a() + b(); }",
+        "function calls_many() { let $parentScope = 2; console.log($parentScope); return a() + b(); }",
         folder_chain!(),
-        r#"let calls_many = $fn(function calls_many() {
+        r#"let calls_many = function calls_many() {
     let $f1 = $new_frame("1", null);
-    let $sc1 = $scope(undefined, $f1);
     switch($f1.$pc){
         case 0:
-            $sc1._temp$1 = {
-                value: a()
-            };
+            const _temp$1 = a();
             $f1.$pc = 1;
         case 1:
-            $sc1._temp$2 = {
-                value: b()
-            };
+            const _temp$2 = b();
             $f1.$pc = 2;
         case 2:
-            let __return_val = $sc1._temp$1.value + $sc1._temp$2.value;
+            let __return_val = _temp$1 + _temp$2;
             $frame_end($f1);
             return __return_val;
         case 3:
-            delete $sc1._temp$1.value;
+            delete _temp$1;
             $f1.$pc = 4;
         case 4:
-            delete $sc1._temp$2.value;
+            delete _temp$2;
             $frame_end($f1);
     }
-}, "1", null);
+};
 "#,
     );
 }

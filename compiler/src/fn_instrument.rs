@@ -61,7 +61,6 @@ use super::utils::is_use_strict;
 
 pub fn folder() -> impl Fold {
     as_folder(WrapFunctions {
-        wrapping_function: "$fn".to_string(),
         ..Default::default()
     })
 }
@@ -69,9 +68,7 @@ pub fn folder() -> impl Fold {
 #[derive(Default)]
 struct WrapFunctions {
     frame_depth: i32,
-    moved_vars: Vec<Vec<Id>>,
     fn_hash: Vec<u64>,
-    wrapping_function: String,
 }
 
 fn penultimate(data: &Vec<u64>) -> Option<&u64> {
@@ -85,60 +82,10 @@ fn penultimate(data: &Vec<u64>) -> Option<&u64> {
 impl WrapFunctions {
     fn current_frame_identifier(&self) -> Option<Ident> {
         if self.frame_depth >= 1 {
-            Some(private_ident!(format!("$f{}", self.frame_depth)))
+            Some(quote_ident!(format!("$f{}", self.frame_depth)))
         } else {
             None
         }
-    }
-
-    fn previous_scope_identifier(&self) -> Option<Ident> {
-        if self.frame_depth >= 2 {
-            Some(private_ident!(format!("$sc{}", self.frame_depth - 1)))
-        } else {
-            None
-        }
-    }
-
-    fn current_scope_identifier(&self) -> Option<Ident> {
-        if self.frame_depth >= 1 {
-            Some(private_ident!(format!("$sc{}", self.frame_depth)))
-        } else {
-            None
-        }
-    }
-
-    fn scope_decl(&mut self) -> Stmt {
-        let call_expr = CallExpr {
-            span: DUMMY_SP,
-            type_args: None,
-            callee: Callee::Expr(Box::new(Expr::Ident(quote_ident!("$scope")))),
-            args: vec![
-                match self.previous_scope_identifier() {
-                    Some(id) => id.as_arg(),
-                    None => Ident::new("undefined".into(), DUMMY_SP).as_arg(),
-                },
-                match self.current_frame_identifier() {
-                    Some(id) => id.as_arg(),
-                    None => Ident::new("undefined".into(), DUMMY_SP).as_arg(),
-                },
-            ],
-        };
-        VarDecl {
-            span: DUMMY_SP,
-            kind: VarDeclKind::Let,
-            declare: false,
-            decls: vec![VarDeclarator {
-                span: Span {
-                    lo: BytePos::DUMMY,
-                    hi: BytePos::DUMMY,
-                    ctxt: SyntaxContext::from_u32(91919),
-                },
-                name: self.current_scope_identifier().unwrap().into(),
-                definite: false,
-                init: Some(call_expr.into()),
-            }],
-        }
-        .into()
     }
 
     fn frame_decl(&mut self) -> Stmt {
@@ -184,11 +131,7 @@ impl WrapFunctions {
             kind: VarDeclKind::Let,
             declare: false,
             decls: vec![VarDeclarator {
-                span: Span {
-                    lo: BytePos::DUMMY,
-                    hi: BytePos::DUMMY,
-                    ctxt: SyntaxContext::from_u32(91919),
-                },
+                span: DUMMY_SP,
                 name: self.current_frame_identifier().unwrap().into(),
                 definite: false,
                 init: Some(call_expr.into()),
@@ -233,114 +176,34 @@ impl WrapFunctions {
         .into()
     }
 
-    fn expr_from_fn_expr(&mut self, fn_expr: &mut FnExpr) -> Expr {
-        let hash = self.fn_hash.last().unwrap();
-        Expr::Call(CallExpr {
-            span: fn_expr.span(),
-            callee: Callee::Expr(quote_ident!(self.wrapping_function.clone()).into()),
-            args: vec![
-                fn_expr.take().as_arg(),
-                hash.to_string().as_arg(),
-                match self.current_scope_identifier() {
-                    Some(id) => id.as_arg(),
-                    None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
-                },
-            ],
-            type_args: None,
-        })
-    }
+    // fn expr_from_fn_expr(&mut self, fn_expr: &mut FnExpr) -> Expr {
+    //     let hash = self.fn_hash.last().unwrap();
+    //     Expr::Call(CallExpr {
+    //         span: fn_expr.span(),
+    //         callee: Callee::Expr(quote_ident!(self.wrapping_function.clone()).into()),
+    //         args: vec![
+    //             fn_expr.take().as_arg(),
+    //             hash.to_string().as_arg(),
+    //             match self.current_scope_identifier() {
+    //                 Some(id) => id.as_arg(),
+    //                 None => Lit::Null(Null { span: DUMMY_SP }).as_arg(),
+    //             },
+    //         ],
+    //         type_args: None,
+    //     })
+    // }
 
-    fn move_var_assignments(&mut self, stmt: &mut Stmt) -> Vec<Stmt> {
-        if let Stmt::Decl(Decl::Var(var)) = stmt {
-            let mut new_stmts = Vec::new();
-            for decl in &var.decls {
-                if let Some(init) = &decl.init {
-                    if let Some(assignee_name) = decl.name.as_ident() {
-                        if let Some(moved_vars) = self.moved_vars.last_mut() {
-                            moved_vars.push(assignee_name.to_id());
-                        } else {
-                            // TODO
-                            todo!();
-                        }
-                        new_stmts.push(
-                            ExprStmt {
-                                span: var.span,
-                                expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
-                                    span: var.span, // todo?
-                                    left: MemberExpr {
-                                        span: var.span, // todo?
-                                        obj: self.current_scope_identifier().unwrap().into(),
-                                        prop: assignee_name.id.clone().into(),
-                                    }
-                                    .into(),
-                                    op: swc_ecma_ast::AssignOp::Assign,
-                                    right: ObjectLit {
-                                        span: var.span, // todo?
-                                        props: vec![swc_ecma_ast::PropOrSpread::Prop(
-                                            Prop::KeyValue(KeyValueProp {
-                                                key: quote_ident!("value").into(),
-                                                value: init.clone(),
-                                            })
-                                            .into(),
-                                        )],
-                                    }
-                                    .into(),
-                                })),
-                            }
-                            .into(),
-                        );
-                    } else {
-                        event!(Level::INFO, "{:?}", decl);
-                        // TODO
-                        todo!();
-                        // println!("todo008");
-                        // return stmt.take();
-                    }
-                } else {
-                    if let Some(assignee_name) = decl.name.as_ident() {
-                        new_stmts.push(
-                            ExprStmt {
-                                span: DUMMY_SP,
-                                expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
-                                    span: DUMMY_SP,
-                                    left: MemberExpr {
-                                        span: DUMMY_SP,
-                                        obj: self.current_scope_identifier().unwrap().into(),
-                                        prop: assignee_name.id.clone().into(),
-                                    }
-                                    .into(),
-                                    op: swc_ecma_ast::AssignOp::Assign,
-                                    right: ObjectLit {
-                                        span: DUMMY_SP,
-                                        props: vec![],
-                                    }
-                                    .into(),
-                                })),
-                            }
-                            .into(),
-                        );
-                    }
-                    // no init;
-                    // TODO
-                    // println!("ERROR: can't compile: {:?}", decl);
-                    // event!(Level::ERROR, "{:?}", decl);
-                    // todo!();
-                    // println!("todo009");
-                    // return stmt.take();
-                }
-            }
-            if new_stmts.len() > 0 {
-                return new_stmts;
-            }
-        }
-        vec![stmt.take()]
-    }
-
-    fn block_statement_to_switch(&mut self, stmts: &mut Vec<Stmt>) -> Stmt {
+    fn block_statement_to_switch(&mut self, stmts: &mut Vec<Stmt>) -> Vec<Stmt> {
         let stmts_length = stmts.len();
         let mut cases = Vec::with_capacity(stmts.len());
         let mut pc = 0;
+        let mut result = vec![];
         for (index, stmt) in stmts.iter_mut().enumerate() {
+            if stmt.span().ctxt.as_u32() == 91919 {
+                result.push(stmt.take());
+                continue;
+            }
+
             cases.push(SwitchCase {
                 span: DUMMY_SP,
                 test: Some(
@@ -376,30 +239,30 @@ impl WrapFunctions {
                         ]
                     } else {
                         let mut res = vec![self.expr_end_frame()];
-                        res.append(&mut self.move_var_assignments(stmt));
+                        res.push(stmt.take());
                         res
                     }
                 } else if index == stmts_length - 1 {
                     let mut res = vec![];
-                    res.append(&mut self.move_var_assignments(stmt));
+                    res.push(stmt.take());
                     res.push(self.expr_end_frame());
                     res
                 } else {
-                    HELPERS.with(|mut helpers| {
-                        let helpers = helpers.borrow_mut();
-                        let fnhash = *self.fn_hash.last().unwrap();
-                        let orig_span: swc_common::Span = stmt.span();
-                        helpers.add_pc_to_src(fnhash, pc, orig_span.lo.0, orig_span.hi.0);
-                    });
+                    // HELPERS.with(|mut helpers| {
+                    //     let helpers = helpers.borrow_mut();
+                    //     let fnhash = *self.fn_hash.last().unwrap();
+                    //     let orig_span: swc_common::Span = stmt.span();
+                    //     helpers.add_pc_to_src(fnhash, pc, orig_span.lo.0, orig_span.hi.0);
+                    // });
                     let mut res = vec![];
-                    res.append(&mut self.move_var_assignments(stmt));
+                    res.push(stmt.take());
                     res.push(self.expr_set_frame_pc(pc + 1));
                     res
                 },
             });
             pc = pc + 1;
         }
-        SwitchStmt {
+        result.push(Stmt::Switch(SwitchStmt {
             span: DUMMY_SP,
             discriminant: MemberExpr {
                 span: DUMMY_SP,
@@ -408,8 +271,8 @@ impl WrapFunctions {
             }
             .into(),
             cases: cases,
-        }
-        .into()
+        }));
+        result
     }
 
     fn visit_mut_fn_body(&mut self, fn_body: &mut BlockStmt) {
@@ -423,73 +286,9 @@ impl WrapFunctions {
             stmts.push(fn_body.stmts.remove(0));
         }
         stmts.push(self.frame_decl());
-        stmts.push(self.scope_decl());
-        stmts.push(self.block_statement_to_switch(&mut fn_body.stmts));
+        stmts.append(&mut self.block_statement_to_switch(&mut fn_body.stmts));
 
         fn_body.stmts = stmts;
-    }
-}
-
-struct VarRewriter<'a> {
-    moved_vars: &'a Vec<Id>,
-    top_level: Ident,
-}
-
-impl<'a> VisitMut for VarRewriter<'a> {
-    fn visit_mut_params(&mut self, _params: &mut Vec<Param>) {
-        //noop
-    }
-
-    fn visit_mut_pat(&mut self, pat: &mut Pat) {
-        let mut target_ident = None;
-        if let Pat::Ident(ident) = pat {
-            if self.moved_vars.contains(&ident.id.to_id()) {
-                target_ident = Some(ident.id.clone());
-            }
-        }
-
-        if let Some(mut target_ident) = target_ident {
-            *pat = Pat::Expr(
-                MemberExpr {
-                    span: target_ident.span(),
-                    obj: MemberExpr {
-                        span: target_ident.span(),
-                        obj: Expr::Ident(self.top_level.clone()).into(),
-                        prop: target_ident.take().into(),
-                    }
-                    .into(),
-                    prop: quote_ident!("value").into(),
-                }
-                .into(),
-            );
-        } else {
-            pat.visit_mut_children_with(self);
-        }
-    }
-
-    fn visit_mut_expr(&mut self, expr: &mut Expr) {
-        let mut target_ident = None;
-        if let Expr::Ident(ident) = expr {
-            if self.moved_vars.contains(&ident.to_id()) {
-                target_ident = Some(ident.clone());
-            }
-        }
-
-        if let Some(mut target_ident) = target_ident {
-            *expr = MemberExpr {
-                span: target_ident.span,
-                obj: MemberExpr {
-                    span: target_ident.span(),
-                    obj: Expr::Ident(self.top_level.clone()).into(),
-                    prop: target_ident.take().into(),
-                }
-                .into(),
-                prop: quote_ident!("value").into(),
-            }
-            .into();
-        } else {
-            expr.visit_mut_children_with(self);
-        }
     }
 }
 
@@ -595,46 +394,34 @@ impl VisitMut for WrapFunctions {
         module.visit_mut_children_with(self);
     }
 
-    fn visit_mut_import_decl(&mut self, import: &mut ImportDecl) {
-        // println!("import: {:?}", import);
-        import.visit_mut_children_with(self);
-    }
-
     fn visit_mut_block_stmt(&mut self, block: &mut BlockStmt) {
         // println!("block: {:?}", block);
         self.frame_depth = self.frame_depth + 1;
         self.visit_mut_fn_body(block);
         block.visit_mut_children_with(self);
-        if self.moved_vars.len() > 0 {
-            let var_rewriter = &mut VarRewriter {
-                moved_vars: self.moved_vars.last().unwrap(),
-                top_level: self.current_scope_identifier().unwrap().into(),
-            };
-            block.visit_mut_children_with(var_rewriter);
-        }
         self.frame_depth = self.frame_depth - 1;
     }
 
     fn visit_mut_function(&mut self, function: &mut Function) {
         match function.body {
             Some(ref mut _block_stmt) => {
-                self.moved_vars.push(vec![]);
+                // self.moved_vars.push(vec![]);
                 function.visit_mut_children_with(self);
-                _ = self.moved_vars.pop()
+                // _ = self.moved_vars.pop()
             }
             None => {}
         }
     }
 
-    fn visit_mut_expr(&mut self, expr: &mut Expr) {
-        if let Expr::Fn(fn_expr) = expr {
-            let hash = ast_to_hash(fn_expr);
-            self.fn_hash.push(hash);
-            fn_expr.visit_mut_children_with(self);
-            *expr = self.expr_from_fn_expr(fn_expr);
-            self.fn_hash.pop();
-        } else {
-            expr.visit_mut_children_with(self);
-        }
-    }
+    // fn visit_mut_expr(&mut self, expr: &mut Expr) {
+    //     if let Expr::Fn(fn_expr) = expr {
+    //         let hash = ast_to_hash(fn_expr);
+    //         self.fn_hash.push(hash);
+    //         fn_expr.visit_mut_children_with(self);
+    //         // *expr = self.expr_from_fn_expr(fn_expr);
+    //         self.fn_hash.pop();
+    //     } else {
+    //         expr.visit_mut_children_with(self);
+    //     }
+    // }
 }

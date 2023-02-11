@@ -4,6 +4,7 @@ mod tests;
 #[allow(dead_code)]
 pub mod helpers;
 
+mod capture_scopes;
 mod compile_phase;
 mod either_param_to_closure;
 mod decl_to_expr;
@@ -12,6 +13,8 @@ mod fn_instrument;
 mod generator;
 mod stmt_exploder;
 mod utils;
+mod for_stmt_to_while_stmt;
+mod block_analysis;
 
 pub use compile_phase::custom_apeiro_compile;
 use compile_phase::ApeiroCompiler;
@@ -112,4 +115,4 @@ pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
     )
 }
 
-pub(crate) const BASELINE_ES_VERSION: EsVersion = EsVersion::Es2015;
+pub(crate) const BASELINE_ES_VERSION: EsVersion = EsVersion::Es2022;
