@@ -1,6 +1,6 @@
 use swc_common::chain;
 
-use crate::{decl_to_expr, fn_instrument, stmt_exploder, capture_scopes};
+use crate::{capture_scopes, decl_to_expr, fn_instrument, stmt_exploder};
 
 use super::compiler_test;
 

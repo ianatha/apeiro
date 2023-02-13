@@ -1,8 +1,8 @@
 use swc_common::util::take::Take;
 use swc_common::Spanned;
 use swc_ecma_ast::{
-    Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module, ModuleDecl,
-    ModuleItem, VarDecl, VarDeclKind, VarDeclarator, ClassExpr,
+    ClassExpr, Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module,
+    ModuleDecl, ModuleItem, VarDecl, VarDeclKind, VarDeclarator,
 };
 
 use swc_ecmascript::visit::{as_folder, Fold};
@@ -34,7 +34,7 @@ impl VisitMut for DeclToExpr {
                         declare: false,
                         decls: vec![VarDeclarator {
                             span: ident.span,
-                            name: ident.clone().into(),
+                            name: ident.clone().without_loc().into(),
                             init: Some(function.take().into()),
                             definite: false,
                         }],
@@ -57,53 +57,57 @@ impl VisitMut for DeclToExpr {
     }
 
     fn visit_mut_decl(&mut self, decl: &mut Decl) {
-        match decl {
-            Decl::Fn(fn_decl) => {
-                *decl = VarDecl {
-                    span: fn_decl.span(),
-                    kind: VarDeclKind::Let,
-                    declare: false,
-                    decls: vec![VarDeclarator {
-                        span: fn_decl.function.span(),
-                        name: fn_decl.ident.clone().into(),
-                        definite: false,
-                        init: Some(
-                            FnExpr {
-                                ident: Some(fn_decl.ident.take()),
-                                function: fn_decl.function.take(),
-                            }
-                            .into(),
-                        ),
-                    }],
-                }
-                .into();
-            }
-            Decl::Class(class_decl) => {
-                *decl = VarDecl {
-                    span: class_decl.span(),
-                    kind: VarDeclKind::Let,
-                    declare: false,
-                    decls: vec![VarDeclarator {
-                        span: class_decl.class.span(),
-                        name: class_decl.ident.clone().into(),
-                        definite: false,
-                        init: Some(
-                            ClassExpr {
-                                ident: Some(class_decl.ident.take()),
-                                class: class_decl.class.take(),
-                            }
-                            .into(),
-                        ),
-                    }],
-                }
-                .into();
-            }
-            Decl::Var(_) => todo!(),
+        *decl = decl.into_var_decl().into();
+        decl.visit_mut_children_with(self);
+    }
+}
+
+trait DeclToVarDecl {
+    fn into_var_decl(&mut self) -> VarDecl;
+}
+
+impl DeclToVarDecl for Decl {
+    fn into_var_decl(&mut self) -> VarDecl {
+        match self {
+            Decl::Fn(fn_decl) => VarDecl {
+                span: fn_decl.span(),
+                kind: VarDeclKind::Let,
+                declare: false,
+                decls: vec![VarDeclarator {
+                    span: fn_decl.function.span(),
+                    name: fn_decl.ident.clone().into(),
+                    definite: false,
+                    init: Some(
+                        FnExpr {
+                            ident: Some(fn_decl.ident.take()),
+                            function: fn_decl.function.take(),
+                        }
+                        .into(),
+                    ),
+                }],
+            },
+            Decl::Class(class_decl) => VarDecl {
+                span: class_decl.span(),
+                kind: VarDeclKind::Let,
+                declare: false,
+                decls: vec![VarDeclarator {
+                    span: class_decl.class.span(),
+                    name: class_decl.ident.clone().into(),
+                    definite: false,
+                    init: Some(
+                        ClassExpr {
+                            ident: Some(class_decl.ident.take()),
+                            class: class_decl.class.take(),
+                        }
+                        .into(),
+                    ),
+                }],
+            },
+            Decl::Var(var_decl) => *var_decl.clone(),
             Decl::TsInterface(_) => todo!("typescript interface declaration"),
             Decl::TsTypeAlias(_) => todo!("typescript type alias declaration"),
             Decl::TsEnum(_) => todo!("typescript enum declaration"),
             Decl::TsModule(_) => todo!("typescript module declaration"),
         }
-        decl.visit_mut_children_with(self);
     }
 }

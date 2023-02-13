@@ -85,7 +85,6 @@ fn test_fn_decl_to_fn_expr_simple2() {
     );
 }
 
-
 #[test]
 fn test_fn_decl_to_fn_expr_export_default() {
     compiler_test(

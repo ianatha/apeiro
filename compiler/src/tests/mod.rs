@@ -1,8 +1,7 @@
 mod test_bundle;
+mod test_capture_frames;
 mod test_capture_scopes;
-mod test_either_param_to_closure;
 mod test_decl_to_expr;
-mod test_fn_instrument;
 mod test_stmt_exploder;
 
 use crate::{self as compiler, extract_export_name};
@@ -14,11 +13,18 @@ pub fn compiler_test<P>(
 ) where
     P: swc_ecmascript::visit::Fold,
 {
-    let out = compiler::custom_apeiro_compile(input.to_string(), folder_chain, false, true, false)
-        .unwrap();
+    let external_helpers = false;
+    let out = compiler::custom_apeiro_compile(
+        input.to_string(),
+        folder_chain,
+        false,
+        external_helpers,
+        false,
+    )
+    .unwrap();
 
     // run_test(format!(
-    //     "{}", 
+    //     "{}",
     //     out.compiled_src
     // ).as_str());
 

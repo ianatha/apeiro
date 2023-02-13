@@ -1,8 +1,6 @@
 use swc_common::util::take::Take;
 use swc_common::Spanned;
-use swc_ecma_ast::{
-    Decl, Stmt, ForStmt, WhileStmt, BlockStmt, VarDeclOrExpr, ExprStmt,
-};
+use swc_ecma_ast::{BlockStmt, Decl, ExprStmt, ForStmt, Stmt, VarDeclOrExpr, WhileStmt};
 
 use swc_ecmascript::visit::{as_folder, Fold};
 use swc_ecmascript::visit::{VisitMut, VisitMutWith};
@@ -17,9 +15,7 @@ impl VisitorForStmtToWhileStmt {
     fn for_stmt_to_while_stmt(&self, for_stmt: &mut ForStmt) -> BlockStmt {
         let mut stmts = vec![];
         if let Some(VarDeclOrExpr::VarDecl(init)) = for_stmt.init.take() {
-            stmts.push(
-                Stmt::Decl(Decl::Var(init))
-            );
+            stmts.push(Stmt::Decl(Decl::Var(init)));
         }
 
         let for_stmt_body = *for_stmt.body.take();
@@ -28,9 +24,7 @@ impl VisitorForStmtToWhileStmt {
         } else {
             BlockStmt {
                 span: for_stmt_body.span(),
-                stmts: vec![
-                    for_stmt_body
-                ]
+                stmts: vec![for_stmt_body],
             }
         };
 
@@ -40,7 +34,7 @@ impl VisitorForStmtToWhileStmt {
                 expr: update,
             }));
         }
-        
+
         stmts.push(Stmt::While(WhileStmt {
             span: for_stmt.span(),
             test: for_stmt.test.take().unwrap_or(true.into()),

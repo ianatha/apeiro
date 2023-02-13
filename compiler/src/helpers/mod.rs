@@ -301,6 +301,7 @@ define_helpers!(Helpers {
     ts_values: (),
     fn_wrap: (),
     new_scope: (),
+    new_frame: (),
 });
 
 pub fn inject_helpers() -> impl Fold + VisitMut {

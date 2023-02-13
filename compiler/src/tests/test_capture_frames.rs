@@ -1,19 +1,58 @@
 use super::compiler_test;
-use crate::{capture_scopes, decl_to_expr};
+use crate::{capture_frames, capture_scopes, decl_to_expr, stmt_exploder, hide_internal_arguments};
 use swc_common::chain;
 
 macro_rules! folder_chain2 {
     () => {
-        |_| chain!(decl_to_expr::folder(), capture_scopes::folder(),)
+        |_| {
+            chain!(
+                decl_to_expr::folder(),
+                stmt_exploder::folder(),
+                capture_scopes::folder(),
+                capture_frames::folder(),
+                hide_internal_arguments::folder()
+            )
+        }
     };
+}
+
+#[test]
+fn test_arguments_hiding() {
+    compiler_test(
+        r#"
+        function newCounter(initValue) {
+            let i = initValue;
+            let double_i = i * 2;
+            console.log(arguments);
+            return {
+                init: function init(initValue) {
+                    return newCounter(initValue);
+                },
+                inc: function inc() {
+                    i = i + 1;
+                    return i;
+                },
+                get: function get() {
+                    return i;
+                },
+            };
+        }"#,
+        folder_chain2!(),
+        r#""#,
+    )
 }
 
 #[test]
 fn test_fn_wrap_simple2() {
     compiler_test(
         r#"
+        function func(x) {
+            return x;
+        }
+
         function newCounter(initValue) {
             let i = initValue;
+            let double_i = func(i * 2) + func(i);
             return {
                 init: function init(initValue) {
                     return newCounter(initValue);

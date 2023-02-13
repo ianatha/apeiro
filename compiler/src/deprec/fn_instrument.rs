@@ -1,43 +1,39 @@
-use std::borrow::BorrowMut;
-
 use swc_common::util::take::Take;
-use swc_common::BytePos;
+
 use swc_common::Spanned;
 
-use swc_common::Span;
-use swc_common::SyntaxContext;
 use swc_common::DUMMY_SP;
 
 use swc_ecma_ast::AssignPatProp;
 use swc_ecma_ast::BlockStmt;
 
 use swc_ecma_ast::ExprStmt;
-use swc_ecma_ast::FnExpr;
+
 use swc_ecma_ast::Function;
-use swc_ecma_ast::Id;
+
 use swc_ecma_ast::Ident;
 use swc_ecma_ast::IfStmt;
-use swc_ecma_ast::ImportDecl;
+
 use swc_ecma_ast::ImportSpecifier;
-use swc_ecma_ast::KeyValueProp;
+
 use swc_ecma_ast::MemberExpr;
 use swc_ecma_ast::Module;
 use swc_ecma_ast::ModuleDecl;
 use swc_ecma_ast::ModuleItem;
 use swc_ecma_ast::Null;
-use swc_ecma_ast::ObjectLit;
+
 use swc_ecma_ast::ObjectPat;
 use swc_ecma_ast::ObjectPatProp;
-use swc_ecma_ast::Param;
+
 use swc_ecma_ast::Pat;
-use swc_ecma_ast::Prop;
+
 use swc_ecma_ast::ReturnStmt;
 use swc_ecma_ast::Stmt;
 use swc_ecma_ast::SwitchCase;
 use swc_ecma_ast::SwitchStmt;
 use swc_ecma_ast::ThrowStmt;
 use swc_ecma_ast::TryStmt;
-use swc_ecma_ast::{CallExpr, Callee, Decl, ExprOrSpread, VarDecl, VarDeclKind, VarDeclarator};
+use swc_ecma_ast::{CallExpr, Callee, ExprOrSpread, VarDecl, VarDeclKind, VarDeclarator};
 
 use swc_ecma_utils::private_ident;
 use swc_ecma_utils::ExprFactory;
@@ -53,9 +49,6 @@ use swc_ecmascript::{
     visit::{as_folder, Fold},
 };
 use tracing::{event, Level};
-
-use crate::helpers::HELPERS;
-use crate::utils::ast_to_hash;
 
 use super::utils::is_use_strict;
 

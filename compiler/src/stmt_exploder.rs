@@ -1,21 +1,12 @@
 use swc_common::util::take::Take;
-use swc_common::BytePos;
-use swc_common::Span;
+use swc_common::{BytePos, Span};
 use swc_common::SyntaxContext;
 
-use swc_ecma_ast::BlockStmt;
-
-use swc_ecma_ast::Decl;
-use swc_ecma_ast::Expr;
-use swc_ecma_ast::ExprStmt;
-use swc_ecma_ast::Function;
-use swc_ecma_ast::Ident;
-use swc_ecma_ast::Stmt;
+use swc_ecma_ast::{BlockStmt, Decl, Expr, Function, Ident, Stmt};
 
 use super::utils::is_use_strict;
 use swc_common::Spanned;
-use swc_ecma_ast::VarDecl;
-use swc_ecma_ast::VarDeclarator;
+use swc_ecma_ast::{VarDecl, VarDeclarator};
 use swc_ecmascript::visit::{as_folder, Fold};
 use swc_ecmascript::visit::{VisitMut, VisitMutWith};
 
@@ -92,19 +83,19 @@ impl VisitMut for CallExprExploder {
                         .into(),
                     )));
 
-                    // push delete statement
-                    self.post_stmts.push(
-                        ExprStmt {
-                            span: orig_span,
-                            expr: swc_ecma_ast::UnaryExpr {
-                                span: orig_span,
-                                op: swc_ecma_ast::UnaryOp::Delete,
-                                arg: Box::new(Expr::Ident(ident.clone())),
-                            }
-                            .into(),
-                        }
-                        .into(),
-                    );
+                    // // push delete statement
+                    // self.post_stmts.push(
+                    //     ExprStmt {
+                    //         span: orig_span,
+                    //         expr: swc_ecma_ast::UnaryExpr {
+                    //             span: orig_span,
+                    //             op: swc_ecma_ast::UnaryOp::Delete,
+                    //             arg: Box::new(Expr::Ident(ident.clone())),
+                    //         }
+                    //         .into(),
+                    //     }
+                    //     .into(),
+                    // );
 
                     *n = Expr::Ident(ident)
                 }

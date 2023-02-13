@@ -1,29 +1,55 @@
+///
+/// The standard pipeline is
+/// 0. prepare & simplify
+///     a. ES5 helpers
+///     b. for_stmt_to_while_stmt
+///     c. decl_to_expr
+/// 2. stmt_exploder
+/// 3. capture_scopes
+/// 4. capture_frames
+/// 5. hide_internal_arguments
+///
 #[cfg(test)]
 mod tests;
 
 #[allow(dead_code)]
 pub mod helpers;
 
-mod capture_scopes;
-mod compile_phase;
-mod either_param_to_closure;
 mod decl_to_expr;
-mod fn_instrument;
-#[allow(dead_code)]
-mod generator;
-mod stmt_exploder;
-mod utils;
 mod for_stmt_to_while_stmt;
-mod block_analysis;
+
+mod capture_frames;
+mod capture_scopes;
+mod hide_internal_arguments;
+mod stmt_exploder;
+
+mod utils;
+
+mod compile_phase;
 
 pub use compile_phase::custom_apeiro_compile;
 use compile_phase::ApeiroCompiler;
 
-use swc_common::chain;
+use swc_common::{chain, Spanned};
 use swc_ecma_ast::EsVersion;
 
 use anyhow::Result;
 use swc_ecma_transforms::pass::noop;
+
+const APEIRO_INTERNAL_SYNTAX_CONTEXT: u32 = 0xA931120;
+
+pub trait ApeiroInternalSyntaxContext {
+    fn is_apeiro_internal_syntax_context(&self) -> bool;
+}
+
+impl<T> ApeiroInternalSyntaxContext for T
+where
+    T: Spanned,
+{
+    fn is_apeiro_internal_syntax_context(&self) -> bool {
+        self.span().ctxt.as_u32() == APEIRO_INTERNAL_SYNTAX_CONTEXT
+    }
+}
 
 pub fn engine_runtime_compile(input: String) -> Result<String> {
     Ok(custom_apeiro_compile(input, |_| noop(), false, false, false)?.compiled_src)
@@ -103,10 +129,14 @@ pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
         input,
         |_| {
             chain!(
-                either_param_to_closure::folder(),
+                // either_param_to_closure::folder(),
                 decl_to_expr::folder(),
+                for_stmt_to_while_stmt::folder(),
                 stmt_exploder::folder(),
-                fn_instrument::folder(),
+                capture_scopes::folder(),
+                capture_frames::folder(),
+                hide_internal_arguments::folder(),
+                // fn_instrument::folder(),
             )
         },
         true,

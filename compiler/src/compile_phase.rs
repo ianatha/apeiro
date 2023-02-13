@@ -32,8 +32,8 @@ use tracing::{event, instrument, Level};
 
 use crate::helpers::{Helpers, HELPERS};
 use crate::{
-    either_param_to_closure, decl_to_expr, fn_instrument, helpers, now_as_millis,
-    stmt_exploder, CompilationResult, BASELINE_ES_VERSION, for_stmt_to_while_stmt,
+    decl_to_expr, for_stmt_to_while_stmt, helpers, now_as_millis, stmt_exploder, CompilationResult,
+    BASELINE_ES_VERSION,
 };
 
 pub struct ApeiroCompiler {
@@ -382,10 +382,10 @@ impl ApeiroCompiler {
                 contents,
                 |_| {
                     chain!(
-                        either_param_to_closure::folder(),
+                        // either_param_to_closure::folder(),
                         decl_to_expr::folder(),
                         stmt_exploder::folder(),
-                        fn_instrument::folder(),
+                        // fn_instrument::folder(),
                     )
                 },
                 true,
@@ -456,22 +456,24 @@ impl ApeiroCompiler {
                 },
                 SingleThreadedComments::default(),
                 |_| noop(),
-                |p| chain!(
-                    swc_ecma_transforms_compat::es2015::arrow(swc_common::Mark::new()),
-                    swc_ecma_transforms_compat::es2015::destructuring::destructuring(Default::default()),
-                    for_stmt_to_while_stmt::folder(),
-                    swc_ecma_transforms_base::resolver(
-                        unresolved_mark,
-                        top_level_mark,
-                        false
-                    ),
-                    folder_chain(p),
-                    swc_ecma_transforms_base::hygiene::hygiene_with_config(swc_ecma_transforms_base::hygiene::Config {
-                        top_level_mark: top_level_mark,
-                        ..Default::default()
-                    }),
-                    helpers::inject_helpers(),
-                ),
+                |p| {
+                    chain!(
+                        swc_ecma_transforms_compat::es2015::arrow(swc_common::Mark::new()),
+                        swc_ecma_transforms_compat::es2015::destructuring::destructuring(
+                            Default::default()
+                        ),
+                        for_stmt_to_while_stmt::folder(),
+                        swc_ecma_transforms_base::resolver(unresolved_mark, top_level_mark, false),
+                        folder_chain(p),
+                        swc_ecma_transforms_base::hygiene::hygiene_with_config(
+                            swc_ecma_transforms_base::hygiene::Config {
+                                top_level_mark: top_level_mark,
+                                ..Default::default()
+                            }
+                        ),
+                        helpers::inject_helpers(),
+                    )
+                },
             )?;
 
             let pc_to_src = HELPERS.with(|helpers| helpers.pc_to_src_get());
