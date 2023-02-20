@@ -86,7 +86,8 @@ impl VisitMut for HideInternalArguments {
                 let args_to_hide = self.args_to_hide(&function.params);
                 if args_to_hide > 0 {
                     let original_arguments_ident = quote_ident!("arguments");
-                    let (new_args_ident, new_args_decl) = self.args_decl(args_to_hide, original_arguments_ident.clone());
+                    let (new_args_ident, new_args_decl) =
+                        self.args_decl(args_to_hide, original_arguments_ident.clone());
 
                     syntax_context_blind_replace_ident(
                         fn_body,

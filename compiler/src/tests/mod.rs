@@ -56,7 +56,6 @@ pub fn compiler_test<P>(
     )
     .unwrap();
 
-
     if out.compiled_src != expected.to_string() {
         println!("\n# Output was:\n<<<<\n{}\n>>>>>\n", out.compiled_src);
         assert_eq!(out.compiled_src.trim(), expected.to_string().trim());
@@ -82,7 +81,6 @@ pub fn js_exec<'s>(scope: &mut v8::HandleScope<'s>, src: &str) -> v8::Local<'s, 
     let script = v8::Script::compile(scope, code, None).unwrap();
     script.run(scope).unwrap()
 }
-
 
 #[test]
 pub fn test_extract_export_name_1() {

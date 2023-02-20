@@ -1,5 +1,5 @@
 use super::{compiler_test, functional_compiler_test};
-use crate::{capture_frames, capture_scopes, decl_to_expr, stmt_exploder, hide_internal_arguments};
+use crate::{capture_frames, capture_scopes, decl_to_expr, hide_internal_arguments, stmt_exploder};
 use swc_common::chain;
 
 macro_rules! folder_chain2 {
@@ -66,9 +66,10 @@ fn functional_expressions_convert_to_temp() {
             };
         }"#,
         folder_chain2!(),
-        vec![
-            ("let a = $scope.return_scope.$val(); a.$serialize.$$parentScope._temp$1.$val", "3"),
-        ],
+        vec![(
+            "let a = $scope.return_scope.$val(); a.$serialize.$$parentScope._temp$1.$val",
+            "3",
+        )],
     )
 }
 
@@ -84,9 +85,7 @@ fn test_fn_wrap_for_loop() {
             return result;
         }"#,
         folder_chain2!(),
-        vec![
-            ("$scope.countUntil.$val(5)", "0,1,2,3,4"),
-        ],
+        vec![("$scope.countUntil.$val(5)", "0,1,2,3,4")],
     );
 }
 
@@ -112,7 +111,10 @@ fn functional_test_expand_args() {
         }"#,
         folder_chain2!(),
         vec![
-            ("let a = $scope.newCounter.$val({ initValue: 10, step: -1 }); a.inc()", "9"),
+            (
+                "let a = $scope.newCounter.$val({ initValue: 10, step: -1 }); a.inc()",
+                "9",
+            ),
             ("a.inc()", "8"),
             ("a.get()", "8"),
         ],
@@ -138,7 +140,7 @@ fn functional_test_arrow_expr() {
             ("let a = $scope.newCounter.$val(10); a.inc()", "11"),
             ("a.inc()", "12"),
             ("a.get()", "12"),
-        ]
+        ],
     );
 }
 
@@ -209,7 +211,7 @@ fn functional_test_fn_if() {
         folder_chain2!(),
         vec![
             ("$scope.test.$val(5)", "5 is odd"),
-            ("$scope.test.$val(2)", "2 is even")
+            ("$scope.test.$val(2)", "2 is even"),
         ],
     )
 }

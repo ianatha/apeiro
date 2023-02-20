@@ -1,6 +1,6 @@
 use swc_common::util::take::Take;
-use swc_common::{BytePos, Span};
 use swc_common::SyntaxContext;
+use swc_common::{BytePos, Span};
 
 use swc_ecma_ast::{BlockStmt, Decl, Expr, Function, Ident, Stmt};
 
