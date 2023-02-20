@@ -6,6 +6,39 @@ mod test_stmt_exploder;
 
 use crate::{self as compiler, extract_export_name};
 
+pub fn functional_compiler_test<P>(
+    js: &str,
+    folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
+    tests_and_excpetations: Vec<(&str, &str)>,
+) where
+    P: swc_ecmascript::visit::Fold,
+{
+    let external_helpers = false;
+    let out = compiler::custom_apeiro_compile(
+        js.to_string(),
+        folder_chain,
+        false,
+        external_helpers,
+        false,
+    )
+    .unwrap();
+
+    v8_do(|| {
+        let mut isolate = v8::Isolate::new(v8::CreateParams::default());
+        let mut top_scope = &mut v8::HandleScope::new(&mut isolate);
+        let context = v8::Context::new(&mut top_scope);
+        let scope = &mut v8::ContextScope::new(top_scope, context);
+
+        js_exec(scope, out.compiled_src.as_str());
+
+        tests_and_excpetations.iter().for_each(|(test, expected)| {
+            let output = js_exec(scope, test);
+            let output = output.to_rust_string_lossy(scope);
+            assert_eq!(output, expected.to_string());
+        });
+    });
+}
+
 pub fn compiler_test<P>(
     input: &str,
     folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
@@ -23,10 +56,6 @@ pub fn compiler_test<P>(
     )
     .unwrap();
 
-    // run_test(format!(
-    //     "{}",
-    //     out.compiled_src
-    // ).as_str());
 
     if out.compiled_src != expected.to_string() {
         println!("\n# Output was:\n<<<<\n{}\n>>>>>\n", out.compiled_src);
@@ -54,17 +83,6 @@ pub fn js_exec<'s>(scope: &mut v8::HandleScope<'s>, src: &str) -> v8::Local<'s, 
     script.run(scope).unwrap()
 }
 
-pub fn run_test(js: &str) {
-    v8_do(|| {
-        let mut isolate = v8::Isolate::new(v8::CreateParams::default());
-        let mut top_scope = &mut v8::HandleScope::new(&mut isolate);
-        let context = v8::Context::new(&mut top_scope);
-        let scope = &mut v8::ContextScope::new(top_scope, context);
-
-        let output = js_exec(scope, js);
-        println!("{:?}", output.to_rust_string_lossy(scope));
-    });
-}
 
 #[test]
 pub fn test_extract_export_name_1() {

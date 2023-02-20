@@ -1,4 +1,4 @@
-use super::compiler_test;
+use super::{compiler_test, functional_compiler_test};
 use crate::{capture_frames, capture_scopes, decl_to_expr, stmt_exploder, hide_internal_arguments};
 use swc_common::chain;
 
@@ -18,15 +18,14 @@ macro_rules! folder_chain2 {
 
 #[test]
 fn test_arguments_hiding() {
-    compiler_test(
+    functional_compiler_test(
         r#"
         function newCounter(initValue) {
             let i = initValue;
             let double_i = i * 2;
-            console.log(arguments);
             return {
-                init: function init(initValue) {
-                    return newCounter(initValue);
+                args: function args(arg1) {
+                    return arguments;
                 },
                 inc: function inc() {
                     i = i + 1;
@@ -38,7 +37,13 @@ fn test_arguments_hiding() {
             };
         }"#,
         folder_chain2!(),
-        r#""#,
+        vec![
+            ("let a = $scope.newCounter.$val(10); a.get()", "10"),
+            ("a.inc(); a.get()", "11"),
+            ("a.inc()", "12"),
+            ("a.get()", "12"),
+            ("JSON.stringify(a.args(\"hello\"))", "{\"0\":\"hello\"}"),
+        ],
     )
 }
 
@@ -109,35 +114,19 @@ let newCounter = _fn_wrap(function newCounter(_$parentScope, initValue) {
 
 #[test]
 fn test_fn_wrap_for_loop() {
-    compiler_test(
+    functional_compiler_test(
         r#"
         function countUntil(until) {
+            var result = [];
             for (var i = 0; i < until; i++) {
-                console.log(i);
+                result.push(i);
             }
+            return result;
         }"#,
         folder_chain2!(),
-        r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
-import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
-const $scope = _new_scope();
-let countUntil = _fn_wrap(function countUntil($parentScope, until) {
-    const $scope = $parentScope;
-    {
-        let $scope = _new_scope($parentScope);
-        $scope.i = {
-            value: 0
-        };
-        while($scope.i.value < until){
-            let $scope = _new_scope($scope);
-            console.log($scope.i.value);
-            $scope.i.value++;
-        }
-    }
-}, $scope, {
-    needs_parent_scope: true,
-    needs_imports_scope: false
-})};
-"#,
+        vec![
+            ("$scope.countUntil.$val(5)", "0,1,2,3,4"),
+        ],
     );
 }
 
