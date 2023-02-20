@@ -17,9 +17,12 @@ macro_rules! folder_chain2 {
 }
 
 #[test]
-fn test_arguments_hiding() {
+fn functional_test() {
     functional_compiler_test(
         r#"
+        function increase_number(x) {
+            return x + 1;
+        }
         function newCounter(initValue) {
             let i = initValue;
             let double_i = i * 2;
@@ -28,7 +31,7 @@ fn test_arguments_hiding() {
                     return arguments;
                 },
                 inc: function inc() {
-                    i = i + 1;
+                    i = increase_number(i);
                     return i;
                 },
                 get: function get() {
@@ -38,78 +41,35 @@ fn test_arguments_hiding() {
         }"#,
         folder_chain2!(),
         vec![
+            // test general functionality
             ("let a = $scope.newCounter.$val(10); a.get()", "10"),
             ("a.inc(); a.get()", "11"),
             ("a.inc()", "12"),
             ("a.get()", "12"),
+            // test arguments
             ("JSON.stringify(a.args(\"hello\"))", "{\"0\":\"hello\"}"),
         ],
     )
 }
 
 #[test]
-fn test_fn_wrap_simple2() {
-    compiler_test(
+fn functional_expressions_convert_to_temp() {
+    functional_compiler_test(
         r#"
-        function func(x) {
-            return x;
+        function increase_number(x) {
+            return x + 1;
         }
-
-        function newCounter(initValue) {
-            let i = initValue;
-            let double_i = func(i * 2) + func(i);
-            return {
-                init: function init(initValue) {
-                    return newCounter(initValue);
-                },
-                inc: function inc() {
-                    i = i + 1;
-                    return i;
-                },
-                get: function get() {
-                    return i;
-                },
+        function return_scope() {
+            let double_i = increase_number(2) + increase_number(2);
+            return function() {
+                return double_i;
             };
         }"#,
         folder_chain2!(),
-        r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
-import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
-const $scope = _new_scope();
-let newCounter = _fn_wrap(function newCounter(_$parentScope, initValue) {
-    let $scope = _new_scope();
-    $scope.i = {
-        value: initValue
-    };
-    return {
-        init: _fn_wrap(function init($parentScope, initValue) {
-            const $scope = $parentScope;
-            return newCounter(initValue);
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        }),
-        inc: _fn_wrap(function inc($parentScope) {
-            const $scope = $parentScope;
-            $scope.i.value = $scope.i.value + 1;
-            return $scope.i.value;
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        }),
-        get: _fn_wrap(function get($parentScope) {
-            const $scope = $parentScope;
-            return $scope.i.value;
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        })
-    };
-}, null, {
-    needs_parent_scope: false,
-    needs_imports_scope: false
-});
-"#,
-    );
+        vec![
+            ("let a = $scope.return_scope.$val(); a.$serialize.$$parentScope._temp$1.$val", "3"),
+        ],
+    )
 }
 
 #[test]
@@ -131,21 +91,18 @@ fn test_fn_wrap_for_loop() {
 }
 
 #[test]
-fn test_fn_wrap_simple2_run() {
-    compiler_test(
+fn functional_test_expand_args() {
+    functional_compiler_test(
         r#"
         function noop(x) {
             return x;
         }
         
-        function newCounter({ initValue, config }) {
+        function newCounter({ initValue, step }) {
             let i = initValue;
             return {
-                init: function init(initValue) {
-                    return newCounter(initValue);
-                },
                 inc: function inc() {
-                    i = i + 1;
+                    i = i + step;
                     return i;
                 },
                 get: function get() {
@@ -154,54 +111,21 @@ fn test_fn_wrap_simple2_run() {
             };
         }"#,
         folder_chain2!(),
-        r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
-import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
-const $scope = _new_scope();
-let newCounter = _fn_wrap(function newCounter(_$parentScope, initValue) {
-    let $scope = _new_scope();
-    $scope.i = {
-        value: initValue
-    };
-    return {
-        init: _fn_wrap(function init($parentScope, initValue) {
-            const $scope = $parentScope;
-            return newCounter(initValue);
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        }),
-        inc: _fn_wrap(function inc($parentScope) {
-            const $scope = $parentScope;
-            $scope.i.value = $scope.i.value + 1;
-            return $scope.i.value;
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        }),
-        get: _fn_wrap(function get($parentScope) {
-            const $scope = $parentScope;
-            return $scope.i.value;
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        })
-    };
-}, null, {
-    needs_parent_scope: false,
-    needs_imports_scope: false
-});
-"#,
-    );
+        vec![
+            ("let a = $scope.newCounter.$val({ initValue: 10, step: -1 }); a.inc()", "9"),
+            ("a.inc()", "8"),
+            ("a.get()", "8"),
+        ],
+    )
 }
 
 #[test]
-fn test_fn_wrap_arrow_expr() {
-    compiler_test(
+fn functional_test_arrow_expr() {
+    functional_compiler_test(
         r#"
         let newCounter = (initValue) => {
             let i = initValue;
             return {
-                init: (initValue) => newCounter(initValue),
                 inc: () => {
                     i = i + 1;
                     return i;
@@ -210,42 +134,11 @@ fn test_fn_wrap_arrow_expr() {
             };
         }"#,
         folder_chain2!(),
-        r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
-import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
-let newCounter = _fn_wrap(function(_$parentScope, initValue) {
-    let $scope = _new_scope();
-    $scope.i = {
-        value: initValue
-    };
-    return {
-        init: _fn_wrap(function($parentScope, initValue) {
-            const $scope = $parentScope;
-            return newCounter(initValue);
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        }),
-        inc: _fn_wrap(function($parentScope) {
-            const $scope = $parentScope;
-            $scope.i.value = $scope.i.value + 1;
-            return $scope.i.value;
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        }),
-        get: _fn_wrap(function($parentScope) {
-            const $scope = $parentScope;
-            return $scope.i.value;
-        }, $scope, {
-            needs_parent_scope: true,
-            needs_imports_scope: false
-        })
-    };
-}, null, {
-    needs_parent_scope: false,
-    needs_imports_scope: false
-});
-"#,
+        vec![
+            ("let a = $scope.newCounter.$val(10); a.inc()", "11"),
+            ("a.inc()", "12"),
+            ("a.get()", "12"),
+        ]
     );
 }
 
@@ -302,41 +195,21 @@ let aqi = _fn_wrap(async function($parentScope) {
 }
 
 #[test]
-fn test_fn_if() {
-    compiler_test(
-        r#"function test() {
-            let value = true;
-            if (value) {
-                console.log(value);
+fn functional_test_fn_if() {
+    functional_compiler_test(
+        r#"function test(input) {
+            let res = "unknown"
+            if (input % 2 == 0) {
+                res = `${input} is even`;
+            } else {
+                res = `${input} is odd`;
             }
+            return res;
         }"#,
         folder_chain2!(),
-        r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
-import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
-let aqi = _fn_wrap(async function($parentScope) {
-    let $scope = _new_scope($parentScope);
-    $scope.pm25 = {
-        value: (await fetchJSON("https://api.openaq.org/v2/latest?" + new URLSearchParams({
-            limit: "10",
-            page: "1",
-            location: "San Francisco",
-            offset: "0",
-            sort: "desc",
-            radius: "100000",
-            order_by: "lastUpdated",
-            dumpRaw: "false"
-        }))).results[1].measurements.find(_fn_wrap(function(_$parentScope, m) {
-            return m.parameter === "pm25";
-        }, null, {
-            needs_parent_scope: false,
-            needs_imports_scope: false
-        })).value
-    };
-    if ($scope.pm25.value > 50) console.email(null, `AQI is ${$scope.pm25.value}, close your windows!`);
-}, $scope, {
-    needs_parent_scope: true,
-    needs_imports_scope: false
-});
-"#,
-    );
+        vec![
+            ("$scope.test.$val(5)", "5 is odd"),
+            ("$scope.test.$val(2)", "2 is even")
+        ],
+    )
 }
