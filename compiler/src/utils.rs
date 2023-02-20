@@ -2,7 +2,6 @@ use swc_common::{sync::Lrc, SourceMap};
 use swc_ecma_ast::{Expr, ExprStmt, Lit, Stmt};
 use swc_ecma_codegen::{text_writer::WriteJs, Emitter};
 
-use swc_common::Spanned;
 use swc_common::SyntaxContext;
 
 use swc_ecma_ast::Function;
@@ -50,9 +49,9 @@ pub fn ast_to_str<T: swc_ecma_codegen::Node>(node: &T) -> Vec<u8> {
 // }
 
 // #[cfg(not(test))]
-pub fn ast_to_hash<T: swc_ecma_codegen::Node>(node: &T) -> u64 {
-    xxhash_rust::xxh3::xxh3_64(&ast_to_str(node))
-}
+// pub fn ast_to_hash<T: swc_ecma_codegen::Node>(node: &T) -> u64 {
+//     xxhash_rust::xxh3::xxh3_64(&ast_to_str(node))
+// }
 
 pub fn is_use_strict(first_stmt: &Stmt) -> bool {
     if let Stmt::Expr(ExprStmt { expr, .. }) = first_stmt {
