@@ -45,7 +45,10 @@ impl CaptureFrames {
             span: DUMMY_SP,
             type_args: None,
             callee: helper!(new_frame, "$$new_frame"),
-            args: vec![previous_frame_ident.clone().as_arg()],
+            args: vec![
+                previous_frame_ident.clone().as_arg(),
+                quote_ident!("$scope").as_arg(),
+            ],
         };
         VarDecl {
             span: DUMMY_SP,
@@ -129,15 +132,17 @@ impl CaptureFrames {
         }
     }
 
-    fn block_statement_to_switch(&mut self, block_stmt: &BlockStmt) -> (Vec<Stmt>, usize) {
+    fn block_statement_to_switch(&mut self, block_stmt: &BlockStmt) -> (Vec<Stmt>, usize, usize) {
         let stmts = &block_stmt.stmts;
         let stmts_length = stmts.len();
         let mut cases = Vec::with_capacity(stmts.len());
+        let mut stmts_outside_switch = 0;
         let mut pc = 0;
         let mut result = vec![];
         for (index, stmt) in stmts.iter().enumerate() {
             if stmt.is_apeiro_internal_syntax_context() {
                 result.push(stmt.clone());
+                stmts_outside_switch += 1;
                 continue;
             }
 
@@ -168,7 +173,7 @@ impl CaptureFrames {
             .into(),
             cases,
         }));
-        (result, cases_length)
+        (result, cases_length, stmts_outside_switch)
     }
 }
 
@@ -180,8 +185,12 @@ impl VisitMut for CaptureFrames {
         let frame_ident = self.new_frame_identifier();
         block_stmt.visit_mut_children_with(self);
 
-        let (mut new_stmts, cases_length) = self.block_statement_to_switch(block_stmt);
-        new_stmts.insert(0, self.frame_decl(&frame_ident, &previous_frame_ident));
+        let (mut new_stmts, cases_length, top_level_stmts) =
+            self.block_statement_to_switch(block_stmt);
+        new_stmts.insert(
+            top_level_stmts,
+            self.frame_decl(&frame_ident, &previous_frame_ident),
+        );
 
         if cases_length > 1 {
             block_stmt.stmts = new_stmts;

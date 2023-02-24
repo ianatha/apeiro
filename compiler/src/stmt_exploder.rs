@@ -24,6 +24,20 @@ struct CallExprExploder {
     post_stmts: Vec<Stmt>,
 }
 
+impl CallExprExploder {
+    fn temporary_ident(&mut self, orig_span: Span) -> Ident {
+        self.count += 1;
+
+        let my_id = self.count;
+
+        Ident {
+            span: orig_span,
+            sym: ("_temp$".to_owned() + &my_id.to_string()).into(),
+            optional: false,
+        }
+    }
+}
+
 impl VisitMut for CallExprExploder {
     fn visit_mut_function(&mut self, _block: &mut Function) {
         // no-op
@@ -49,15 +63,7 @@ impl VisitMut for CallExprExploder {
         let orig_span = n.span();
         match n {
             Expr::Call(call_expr) => {
-                self.count += 1;
-
-                let my_id = self.count;
-
-                let ident = Ident {
-                    span: orig_span,
-                    sym: ("_temp$".to_owned() + &my_id.to_string()).into(),
-                    optional: false,
-                };
+                let ident = self.temporary_ident(orig_span);
 
                 self.depth += 1;
                 call_expr.visit_mut_children_with(self);

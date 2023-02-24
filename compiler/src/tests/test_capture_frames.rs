@@ -16,6 +16,66 @@ macro_rules! folder_chain2 {
     };
 }
 
+macro_rules! folder_chain_for_repl {
+    () => {
+        |_| {
+            chain!(
+                decl_to_expr::folder(),
+                stmt_exploder::folder(),
+                capture_scopes::folder_for_repl(),
+                capture_frames::folder(),
+                hide_internal_arguments::folder()
+            )
+        }
+    };
+}
+
+#[test]
+fn repl_test() {
+    compiler_test(
+        "let a = 3 + 2; console.log(a);",
+        folder_chain_for_repl!(),
+        r#"
+$scope.a = {
+    $val: 3 + 2
+};
+console.log($scope.a.$val);
+"#,
+    );
+
+    compiler_test(
+        "let a = 3 + 2;",
+        folder_chain_for_repl!(),
+        r#"
+$scope.a = {
+    $val: 3 + 2
+};
+"#,
+    );
+
+    compiler_test(
+        "console.log(a);",
+        folder_chain_for_repl!(),
+        r#"console.log($scope.a.$val);
+"#,
+    );
+
+    //     compiler_test(
+    //         "function test(x) { return x == 1; }",
+    //         folder_chain2!(),
+    //         r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
+    // import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
+    // import _new_frame from "@apeiro/helpers/src/_new_frame.mjs";
+    // $scope.test = {
+    //     $val: _fn_wrap(function test($parentScope, x) {
+    //         let $scope1 = _new_scope($parentScope);
+    //         return x == 1;
+    //     }, $scope)
+    // };
+    // "#
+    //     )
+}
+
 #[test]
 fn functional_test() {
     functional_compiler_test(
@@ -112,6 +172,7 @@ fn functional_test_expand_args() {
         folder_chain2!(),
         vec![
             (
+                // "let a = newCounter({ initValue: 10, step: -1 }); a.inc()"
                 "let a = $scope.newCounter.$val({ initValue: 10, step: -1 }); a.inc()",
                 "9",
             ),
@@ -168,30 +229,45 @@ fn test_fn_wrap_example() {
         folder_chain2!(),
         r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
 import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
-let aqi = _fn_wrap(async function($parentScope) {
-    let $scope = _new_scope($parentScope);
-    $scope.pm25 = {
-        value: (await fetchJSON("https://api.openaq.org/v2/latest?" + new URLSearchParams({
-            limit: "10",
-            page: "1",
-            location: "San Francisco",
-            offset: "0",
-            sort: "desc",
-            radius: "100000",
-            order_by: "lastUpdated",
-            dumpRaw: "false"
-        }))).results[1].measurements.find(_fn_wrap(function(_$parentScope, m) {
-            return m.parameter === "pm25";
-        }, null, {
-            needs_parent_scope: false,
-            needs_imports_scope: false
-        })).value
-    };
-    if ($scope.pm25.value > 50) console.email(null, `AQI is ${$scope.pm25.value}, close your windows!`);
-}, $scope, {
-    needs_parent_scope: true,
-    needs_imports_scope: false
-});
+import _new_frame from "@apeiro/helpers/src/_new_frame.mjs";
+let $scope = _new_scope(undefined);
+$scope.aqi = {
+    $val: _fn_wrap(async function($parentScope) {
+        let $scope = _new_scope($parentScope);
+        let $frame = _new_frame(undefined, $scope);
+        switch($frame.$pc){
+            case 0:
+                $scope._temp$2 = {
+                    $val: fetchJSON("https://api.openaq.org/v2/latest?" + new URLSearchParams({
+                        limit: "10",
+                        page: "1",
+                        location: "San Francisco",
+                        offset: "0",
+                        sort: "desc",
+                        radius: "100000",
+                        order_by: "lastUpdated",
+                        dumpRaw: "false"
+                    }))
+                };
+                $frame.$pc = 1;
+            case 1:
+                $scope._temp$1 = {
+                    $val: (await $scope._temp$2.$val).results[1].measurements.find(_fn_wrap(function($parentScope, m) {
+                        let $scope = _new_scope($parentScope);
+                        return m.parameter === "pm25";
+                    }, $scope))
+                };
+                $frame.$pc = 2;
+            case 2:
+                $scope.pm25 = {
+                    $val: $scope._temp$1.$val.value
+                };
+                $frame.$pc = 3;
+            case 3:
+                if ($scope.pm25.$val > 50) console.email(null, `AQI is ${$scope.pm25.$val}, close your windows!`);
+        }
+    }, $scope)
+};
 "#,
     );
 }

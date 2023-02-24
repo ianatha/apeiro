@@ -19,31 +19,30 @@ fn test_simple_explosion() {
     }
     return g(f(y));
 }
-console.log(g(f(1)));
 "#,
         folder_chain!(),
         r#"function gof(x) {
     const _temp$1 = g(x);
     const _temp$2 = f(x);
     let y = _temp$1 + _temp$2;
-    delete _temp$1;
-    delete _temp$2;
     {
         const _temp$5 = Random.number();
         let y = _temp$5;
-        delete _temp$5;
         console.log(y);
     }
     const _temp$4 = f(y);
     const _temp$3 = g(_temp$4);
     return _temp$3;
-    delete _temp$4;
-    delete _temp$3;
 }
-console.log(g(f(1)));
 "#,
     );
 }
+
+// console.log(g(f(1)));
+// -->
+// const _temp$5 = f(1);
+// const _temp$6 = g(_temp$5);
+// console.log(_temp$6);
 
 #[test]
 fn test_while() {
@@ -56,28 +55,21 @@ fn test_while() {
     }
     return g(f(y));
 }
-console.log(g(f(1)));
 "#,
         folder_chain!(),
         r#"function gof(x) {
     const _temp$1 = g(x);
     const _temp$2 = f(x);
     let y = _temp$1 + _temp$2;
-    delete _temp$1;
-    delete _temp$2;
     while(true){
         const _temp$5 = Random.number();
         let y = _temp$5;
-        delete _temp$5;
         console.log(y);
     }
     const _temp$4 = f(y);
     const _temp$3 = g(_temp$4);
     return _temp$3;
-    delete _temp$4;
-    delete _temp$3;
 }
-console.log(g(f(1)));
 "#,
     );
 }
@@ -108,7 +100,6 @@ fn test_console_log_with_expr() {
         r#"function gof(x) {
     const _temp$2 = f(x);
     console.log(_temp$2);
-    delete _temp$2;
 }
 "#,
     );

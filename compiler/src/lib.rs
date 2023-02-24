@@ -121,7 +121,7 @@ pub fn extract_export_name(input: String) -> String {
 
 pub fn apeiro_bundle_and_compile(src: String) -> Result<CompilationResult, anyhow::Error> {
     let compiler = crate::compile_phase::ApeiroCompiler::new();
-    compiler.bundle_main(src, false)
+    compiler.bundle(src, false)
 }
 
 pub fn apeiro_compile(input: String) -> Result<CompilationResult> {

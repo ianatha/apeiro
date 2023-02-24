@@ -204,10 +204,10 @@ impl ApeiroCompiler {
         }
     }
 
-    pub fn bundle_main(&self, src: String, minify: bool) -> Result<CompilationResult, Error> {
+    pub fn bundle(&self, src: String, minify: bool) -> Result<CompilationResult, Error> {
         let mut entries = HashMap::default();
         entries.insert("main".to_string(), FileName::Custom(src));
-        self.bundle(entries, minify)
+        self.internal_bundle(entries, minify)
     }
 
     fn get_bundle(&self, modules: Vec<Bundle>, minify: bool) -> CompilationResult {
@@ -276,77 +276,79 @@ impl ApeiroCompiler {
         }
     }
 
-    pub fn bundle(
+    fn internal_bundle(
         &self,
         entries: HashMap<String, FileName>,
         minify: bool,
     ) -> Result<CompilationResult, Error> {
         let globals = Box::leak(Box::new(Globals::default()));
-        let resolver = ApeiroResolver {};
-        let mut bundler = Bundler::new(
-            globals,
-            self.cm.clone(),
-            Loader { compiler: self },
-            CachingResolver::new(
-                4096,
-                resolver, // NodeModulesResolver::new(TargetEnv::Node, Default::default(), true),
-            ),
-            swc_bundler::Config {
-                require: false,
-                disable_inliner: false,
-                external_modules: Default::default(),
-                disable_fixer: minify,
-                disable_hygiene: minify,
-                disable_dce: false,
-                module: Default::default(),
-            },
-            Box::new(Hook),
-        );
+        GLOBALS.set(globals, || {
+            HELPERS.set(&Helpers::new(false), || {
+                let resolver = ApeiroResolver {};
+                let mut bundler = Bundler::new(
+                    globals,
+                    self.cm.clone(),
+                    Loader { compiler: self },
+                    CachingResolver::new(
+                        4096,
+                        resolver, // NodeModulesResolver::new(TargetEnv::Node, Default::default(), true),
+                    ),
+                    swc_bundler::Config {
+                        require: false,
+                        disable_inliner: false,
+                        external_modules: Default::default(),
+                        disable_fixer: minify,
+                        disable_hygiene: minify,
+                        disable_dce: false,
+                        module: Default::default(),
+                    },
+                    Box::new(Hook),
+                );
 
-        let mut modules = bundler.bundle(entries)?;
+                let mut modules = bundler.bundle(entries)?;
 
-        event!(Level::INFO, "Bundled as {} modules", modules.len());
+                event!(Level::INFO, "Bundled as {} modules", modules.len());
 
-        #[cfg(feature = "concurrent")]
-        rayon::spawn(move || {
-            drop(bundler);
-        });
+                #[cfg(feature = "concurrent")]
+                rayon::spawn(move || {
+                    drop(bundler);
+                });
 
-        if minify {
-            modules = modules
-                .into_iter()
-                .map(|mut b| {
-                    GLOBALS.set(globals, || {
-                        b.module = swc_ecma_minifier::optimize(
-                            b.module.into(),
-                            self.cm.clone(),
-                            None,
-                            None,
-                            &MinifyOptions {
-                                compress: Some(CompressOptions {
-                                    top_level: Some(TopLevelOptions { functions: true }),
+                if minify {
+                    modules = modules
+                        .into_iter()
+                        .map(|mut b| {
+                            b.module = swc_ecma_minifier::optimize(
+                                b.module.into(),
+                                self.cm.clone(),
+                                None,
+                                None,
+                                &MinifyOptions {
+                                    compress: Some(CompressOptions {
+                                        top_level: Some(TopLevelOptions { functions: true }),
+                                        ..Default::default()
+                                    }),
+                                    mangle: Some(MangleOptions {
+                                        top_level: Some(true),
+                                        ..Default::default()
+                                    }),
                                     ..Default::default()
-                                }),
-                                mangle: Some(MangleOptions {
-                                    top_level: Some(true),
-                                    ..Default::default()
-                                }),
-                                ..Default::default()
-                            },
-                            &ExtraOptions {
-                                unresolved_mark: Mark::new(),
-                                top_level_mark: Mark::new(),
-                            },
-                        )
-                        .expect_module();
-                        b.module.visit_mut_with(&mut fixer(None));
-                        b
-                    })
-                })
-                .collect();
-        }
+                                },
+                                &ExtraOptions {
+                                    unresolved_mark: Mark::new(),
+                                    top_level_mark: Mark::new(),
+                                },
+                            )
+                            .expect_module();
+                            b.module.visit_mut_with(&mut fixer(None));
+                            b
+                        })
+                        .collect();
+                }
 
-        Ok(self.get_bundle(modules, minify))
+                Ok(self.get_bundle(modules, minify))
+            })
+        })
     }
 
     #[instrument]
@@ -361,12 +363,7 @@ impl ApeiroCompiler {
         let contents = match f {
             FileName::Custom(src) => src.clone(),
             FileName::Real(path) => fs::read_to_string(path)?,
-            FileName::Url(url) => {
-                let res = futures::executor::block_on(reqwest::get(url.clone())).unwrap();
-                let t = futures::executor::block_on(res.text()).unwrap();
-                println!("fecthed url {:?}", url);
-                t
-            }
+            FileName::Url(url) => fetch_url(url),
             _ => unreachable!(),
         };
 
@@ -535,4 +532,11 @@ impl ApeiroCompiler {
             minify,
         )
     }
+}
+
+fn fetch_url(url: &reqwest::Url) -> String {
+    let res = futures::executor::block_on(reqwest::get(url.clone())).unwrap();
+    let t = futures::executor::block_on(res.text()).unwrap();
+    println!("fecthed url {:?}", url);
+    t
 }

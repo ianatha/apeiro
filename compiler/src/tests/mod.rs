@@ -23,6 +23,8 @@ pub fn functional_compiler_test<P>(
     )
     .unwrap();
 
+    println!("{}", out.compiled_src);
+
     v8_do(|| {
         let mut isolate = v8::Isolate::new(v8::CreateParams::default());
         let mut top_scope = &mut v8::HandleScope::new(&mut isolate);
@@ -32,7 +34,7 @@ pub fn functional_compiler_test<P>(
         js_exec(scope, out.compiled_src.as_str());
 
         tests_and_excpetations.iter().for_each(|(test, expected)| {
-            let output = js_exec(scope, test);
+            let output = js_exec(scope, test).unwrap();
             let output = output.to_rust_string_lossy(scope);
             assert_eq!(output, expected.to_string());
         });
@@ -46,7 +48,7 @@ pub fn compiler_test<P>(
 ) where
     P: swc_ecmascript::visit::Fold,
 {
-    let external_helpers = false;
+    let external_helpers = true;
     let out = compiler::custom_apeiro_compile(
         input.to_string(),
         folder_chain,
@@ -76,10 +78,10 @@ pub fn v8_do<R>(f: impl FnOnce() -> R) -> R {
     f()
 }
 
-pub fn js_exec<'s>(scope: &mut v8::HandleScope<'s>, src: &str) -> v8::Local<'s, v8::Value> {
+pub fn js_exec<'s>(scope: &mut v8::HandleScope<'s>, src: &str) -> Option<v8::Local<'s, v8::Value>> {
     let code = v8::String::new(scope, src).unwrap();
     let script = v8::Script::compile(scope, code, None).unwrap();
-    script.run(scope).unwrap()
+    script.run(scope)
 }
 
 #[test]

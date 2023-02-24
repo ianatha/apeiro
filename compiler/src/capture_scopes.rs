@@ -5,7 +5,7 @@ use swc_common::util::take::Take;
 use swc_common::{Spanned, SyntaxContext, DUMMY_SP};
 use swc_ecma_ast::{
     AssignExpr, AssignOp, BlockStmt, CallExpr, ExprStmt, FnDecl, Id, Ident, KeyValueProp,
-    MemberExpr, MemberProp, Module, ObjectLit, PatOrExpr, Prop, SeqExpr, Stmt, VarDecl,
+    MemberExpr, MemberProp, Module, ObjectLit, Pat, PatOrExpr, Prop, SeqExpr, Stmt, VarDecl,
     VarDeclKind, VarDeclarator,
 };
 
@@ -20,18 +20,31 @@ use swc_ecmascript::{
 use crate::helper;
 
 pub fn folder() -> impl Fold {
-    as_folder(CaptureScopes {
-        ..Default::default()
-    })
+    as_folder(CaptureScopes::new(false))
+}
+
+pub fn folder_for_repl() -> impl Fold {
+    as_folder(CaptureScopes::new(true))
 }
 
 #[derive(Default)]
 struct CaptureScopes {
+    repl_mode: bool,
+    uncaptured_idents: Vec<Id>,
     captured_vars: Vec<Id>,
     scope_identifiers: Vec<Ident>,
 }
 
 impl CaptureScopes {
+    fn new(repl_mode: bool) -> Self {
+        let result = CaptureScopes {
+            repl_mode,
+            ..Default::default()
+        };
+
+        result
+    }
+
     fn new_scope_identifier(&mut self) -> Ident {
         let ident = private_ident!(format!("$scope"));
         self.scope_identifiers.push(ident.clone());
@@ -75,6 +88,15 @@ impl CaptureScopes {
 
         result.into()
     }
+
+    fn should_move_to_scope(&self, ident: &Id) -> bool {
+        if self.repl_mode {
+            let str = ident.0.to_string();
+            str != "console" && !self.uncaptured_idents.contains(&ident)
+        } else {
+            self.captured_vars.contains(&ident)
+        }
+    }
 }
 
 impl VisitMut for CaptureScopes {
@@ -97,11 +119,13 @@ impl VisitMut for CaptureScopes {
             .unwrap_or(private_ident!("undefined"));
         let scope_ident = self.new_scope_identifier();
         module.body.visit_mut_children_with(self);
-        module.body.insert(
-            0,
-            self.scope_decl(&scope_ident, &previous_scope_ident, true, false)
-                .into(),
-        );
+        if !self.repl_mode {
+            module.body.insert(
+                0,
+                self.scope_decl(&scope_ident, &previous_scope_ident, true, false)
+                    .into(),
+            );
+        }
         self.scope_identifiers.pop();
     }
 
@@ -115,7 +139,7 @@ impl VisitMut for CaptureScopes {
             expr.visit_mut_children_with(self);
 
             let ident = expr.as_mut_ident().unwrap();
-            if self.captured_vars.contains(&ident.to_id()) {
+            if self.should_move_to_scope(&ident.to_id()) {
                 let current_scope = self.current_scope_identifier().unwrap();
                 *expr = MemberExpr {
                     span,
@@ -139,6 +163,12 @@ impl VisitMut for CaptureScopes {
 
             let fn_expr = expr.as_mut_fn_expr().unwrap();
 
+            fn_expr.function.params.iter().for_each(|param| {
+                if let Pat::Ident(param_ident) = &param.pat {
+                    self.uncaptured_idents.push(param_ident.id.to_id());
+                }
+            });
+
             // insert $parentScope
             fn_expr.function.params.insert(0, parent_scope_ident.into());
 
@@ -161,7 +191,7 @@ impl VisitMut for CaptureScopes {
 
         let span = pat.span();
         if let Some(ident) = pat.as_ident_mut() {
-            if self.captured_vars.contains(&ident.to_id()) {
+            if self.should_move_to_scope(&ident.to_id()) {
                 let current_scope = self.current_scope_identifier().unwrap();
                 *pat = MemberExpr {
                     span,
