@@ -23,6 +23,7 @@ use crate::StringOrBuffer;
 use crate::U16String;
 use crate::ZeroCopyBuf;
 use crate::ramson::RAMSON_DEFINITION_TAG;
+use crate::ramson::RAMSON_PROTOTYPE_TAG;
 use crate::ramson::RAMSON_REFERENCE_TAG;
 
 type RamsonType = Option<Arc<AtomicU32>>;
@@ -338,7 +339,6 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
       .map_err(|_| Error::ExpectedObject)?;
 
     let ramson_include_index = if let Some(ramson) = self.ramson.clone() {
-      // let key = v8::String::new(self.scope, "ramson").unwrap();
       let existing_index = obj.get_private(self.scope, self.ramson_id_key).unwrap();
       if existing_index.is_undefined() {
         let index = (*ramson).fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -564,6 +564,10 @@ impl<'de> de::MapAccess<'de> for MapObjectAccess<'_, '_> {
       let deserializer = IntoDeserializer::into_deserializer(RAMSON_DEFINITION_TAG);
       return seed.deserialize(deserializer).map(Some);
     }
+    if self.ramson.is_some() {
+      let deserializer = IntoDeserializer::into_deserializer(RAMSON_PROTOTYPE_TAG);
+      return seed.deserialize(deserializer).map(Some);
+    }
     Ok(None)
   }
 
@@ -582,6 +586,21 @@ impl<'de> de::MapAccess<'de> for MapObjectAccess<'_, '_> {
       let deserializer = IntoDeserializer::into_deserializer(include_index);
       self.ramson_include_index = None;
       seed.deserialize(deserializer)
+    } else if self.ramson.is_some() {
+      let mut v8_prototype = self.obj.get_prototype(self.keys.scope).unwrap();
+      let global = self.keys.scope.get_current_context().global(self.keys.scope);
+      let global_str = v8::String::new(self.keys.scope, "Object").unwrap();
+      let object_obj = global.get(self.keys.scope, global_str.into()).unwrap().to_object(self.keys.scope).unwrap();
+      let prototype_str = v8::String::new(self.keys.scope, "prototype").unwrap();
+      let global_prototype = object_obj.get(self.keys.scope, prototype_str.into()).unwrap();
+      
+      if global_prototype == v8_prototype {
+        v8_prototype = v8::undefined(self.keys.scope).into();
+      }
+
+      let mut deserializer = Deserializer::new(self.keys.scope, v8_prototype, None, self.ramson.clone());
+      self.ramson = None;
+      seed.deserialize(&mut deserializer)
     } else {
       Err(Error::ExpectedMap)
     }

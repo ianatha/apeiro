@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
 
 use crate::error::Error;
 use crate::error::Result;
@@ -26,6 +25,7 @@ use crate::StringOrBuffer;
 use crate::U16String;
 use crate::ZeroCopyBuf;
 use crate::ramson::RAMSON_DEFINITION_TAG;
+use crate::ramson::RAMSON_PROTOTYPE_TAG;
 use crate::ramson::RAMSON_REFERENCE_TAG;
 
 type JsValue<'s> = v8::Local<'s, v8::Value>;
@@ -340,13 +340,14 @@ impl<'a, 'b, 'c> ser::SerializeStruct for StructSerializers<'a, 'b, 'c> {
 }
 
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum RamsonTagDiscovery {
   None,
   NextIsDef,
   Def(u32),
   NextIsRef,
   Ref(u32),
+  NextIsProto(Box<RamsonTagDiscovery>),
 }
 
 // Serializes to JS Objects, NOT JS Maps ...
@@ -356,6 +357,7 @@ pub struct MapSerializer<'a, 'b, 'c> {
   values: Vec<JsValue<'a>>,
   ramson_pool: RamsonPoolType<'a>,
   ramson_tag: RamsonTagDiscovery,
+  prototype: Option<v8::Local<'a, v8::Value>>,
 }
 
 impl<'a, 'b, 'c> MapSerializer<'a, 'b, 'c> {
@@ -368,6 +370,7 @@ impl<'a, 'b, 'c> MapSerializer<'a, 'b, 'c> {
       values,
       ramson_pool,
       ramson_tag: RamsonTagDiscovery::None,
+      prototype: None,
     }
   }
 }
@@ -379,7 +382,7 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
   fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<()> {
     let key = key.serialize(Serializer::new(self.scope, self.ramson_pool.clone()))?;
 
-    if let Some(ramson_pool) = &self.ramson_pool {
+    if self.ramson_pool.is_some() {
       let mut scope = self.scope.borrow_mut();
       let str = key.to_string(*scope).unwrap().to_rust_string_lossy(*scope);
 
@@ -388,6 +391,9 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
         return Ok(())
       } else if str == RAMSON_REFERENCE_TAG {
         self.ramson_tag = RamsonTagDiscovery::NextIsRef;
+        return Ok(())
+      } else if str == RAMSON_PROTOTYPE_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsProto(Box::new(self.ramson_tag.clone()));
         return Ok(())
       }
     }
@@ -409,6 +415,9 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
     } else if self.ramson_tag == RamsonTagDiscovery::NextIsRef {
       let mut scope = self.scope.borrow_mut();
       self.ramson_tag = RamsonTagDiscovery::Ref(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
+    } else if let RamsonTagDiscovery::NextIsProto(previous_tag) = &self.ramson_tag {
+      self.prototype = Some(v8_value);
+      self.ramson_tag = (**previous_tag).clone();
     } else {
       self.values.push(v8_value);  
     }
@@ -421,7 +430,7 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
     let null = v8::null(scope).into();
     let obj = v8::Object::with_prototype_and_properties(
       scope,
-      null,
+      self.prototype.unwrap_or(null),
       &self.keys[..],
       &self.values[..],
     );
