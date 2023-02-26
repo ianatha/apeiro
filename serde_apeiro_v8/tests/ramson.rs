@@ -22,7 +22,6 @@ fn dedo(
 fn de_ramson_map() {
   dedo("let data = { one: 1 }; let foo = { a: data, b: data }; foo", |scope, v| {
     let map: serde_json::Value = serde_v8::ramson_from_v8(scope, v).unwrap();
-    println!("map: {:?}", map);
 
     let rehydrated = serde_v8::ramson_to_v8(scope, map).unwrap();
     let global = scope.get_current_context().global(scope);
@@ -62,7 +61,6 @@ fn de_ramson_map() {
 fn de_ramson_prototype() {
   dedo("let parent = { one: 1 }; let data = { two: 2 }; Object.setPrototypeOf(data, parent); data", |scope, v| {
     let map: serde_json::Value = serde_v8::ramson_from_v8(scope, v).unwrap();
-    println!("map: {:?}", map);
 
     let rehydrated = serde_v8::ramson_to_v8(scope, map).unwrap();
     let global = scope.get_current_context().global(scope);
@@ -87,5 +85,45 @@ fn de_ramson_prototype() {
 
     assert_eq!(data_in_child.to_number(scope).unwrap().value(), 2.0);
     assert_eq!(data_in_prototype.to_number(scope).unwrap().value(), 1.0);
+  })
+}
+
+#[test]
+fn de_ramson_array() {
+  dedo("let arr = [ 1, 2, 3 ]; let foo = { a: arr, b: arr }; foo", |scope, v| {
+    let map: serde_json::Value = serde_v8::ramson_from_v8(scope, v).unwrap();
+    println!("{:?}", map);
+
+    let rehydrated = serde_v8::ramson_to_v8(scope, map).unwrap();
+    let global = scope.get_current_context().global(scope);
+    let key = v8::String::new(scope, "foo_rehydrated").unwrap();
+    global.set(scope, key.into(), rehydrated).unwrap();
+
+    let script = v8::String::new(scope, "foo_rehydrated.a.push(4)").unwrap();
+    let script = v8::Script::compile(
+      scope,
+      script.into(),
+      None,
+    ).unwrap();
+    script.run(scope).unwrap();
+    
+    let script = v8::String::new(scope, "foo_rehydrated.a.length").unwrap();
+    let script = v8::Script::compile(
+      scope,
+      script.into(),
+      None,
+    ).unwrap();
+    let length_of_a = script.run(scope).unwrap();
+
+    let script = v8::String::new(scope, "foo_rehydrated.b.length").unwrap();
+    let script = v8::Script::compile(
+      scope,
+      script.into(),
+      None,
+    ).unwrap();
+    let length_of_b = script.run(scope).unwrap();
+
+    assert_eq!(length_of_a.to_number(scope).unwrap().value(), 4.0);
+    assert_eq!(length_of_b.to_number(scope).unwrap().value(), 4.0);
   })
 }
