@@ -415,7 +415,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "v8",
+ "v8 0.60.0",
  "xxhash-rust",
 ]
 
@@ -441,7 +441,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_json_matcher",
- "serde_v8",
+ "serde_v8 0.75.0",
  "sha256",
  "sourcemap",
  "tokio",
@@ -449,7 +449,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "typetag",
- "v8",
+ "v8 0.60.0",
 ]
 
 [[package]]
@@ -503,9 +503,9 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "serde_v8",
+ "serde_v8 0.75.0",
  "smallvec",
- "v8",
+ "v8 0.60.0",
 ]
 
 [[package]]
@@ -5777,7 +5777,21 @@ dependencies = [
  "serde",
  "serde_bytes",
  "smallvec",
- "v8",
+ "v8 0.60.0",
+]
+
+[[package]]
+name = "serde_v8"
+version = "0.84.0"
+dependencies = [
+ "bencher",
+ "bytes 1.2.1",
+ "derive_more",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "smallvec",
+ "v8 0.63.0",
 ]
 
 [[package]]
@@ -7732,6 +7746,18 @@ name = "v8"
 version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5867543c19b87c45ed3f2bc49eb6135474ed6a1803cac40c278620b53e9865ef"
+dependencies = [
+ "bitflags",
+ "fslock",
+ "lazy_static",
+ "which",
+]
+
+[[package]]
+name = "v8"
+version = "0.63.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "547e58962ac268fe0b1fbfb653ed341a08e3953994f7f7c978e46ec30afdf8f0"
 dependencies = [
  "bitflags",
  "fslock",

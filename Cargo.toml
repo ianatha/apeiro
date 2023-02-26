@@ -8,5 +8,6 @@ members = [
 	"apeiro_port_syslog",
 	"internal_api",
 	"cli",
+	"serde_apeiro_v8",
 	"serde"
 ]
