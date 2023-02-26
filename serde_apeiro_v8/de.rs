@@ -22,6 +22,8 @@ use crate::DetachedBuffer;
 use crate::StringOrBuffer;
 use crate::U16String;
 use crate::ZeroCopyBuf;
+use crate::ramson::RAMSON_DEFINITION_TAG;
+use crate::ramson::RAMSON_REFERENCE_TAG;
 
 type RamsonType = Option<Arc<AtomicU32>>;
 
@@ -598,9 +600,6 @@ struct MapPairsAccess<'a, 's> {
   ramson: RamsonType,
   ramson_include_index: Option<u32>
 }
-
-const RAMSON_DEFINITION_TAG: &str = "🐏$def";
-const RAMSON_REFERENCE_TAG: &str = "🐏$ref";
 
 impl<'de> de::MapAccess<'de> for MapPairsAccess<'_, '_> {
   type Error = Error;

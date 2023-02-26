@@ -2,8 +2,13 @@
 use serde::ser;
 use serde::ser::Serialize;
 
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::DerefMut;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
 use crate::error::Error;
 use crate::error::Result;
@@ -20,9 +25,13 @@ use crate::ExternalPointer;
 use crate::StringOrBuffer;
 use crate::U16String;
 use crate::ZeroCopyBuf;
+use crate::ramson::RAMSON_DEFINITION_TAG;
+use crate::ramson::RAMSON_REFERENCE_TAG;
 
 type JsValue<'s> = v8::Local<'s, v8::Value>;
 type JsResult<'s> = Result<JsValue<'s>>;
+
+type RamsonPoolType<'s> = Option<Arc<Mutex<HashMap<u32, JsValue<'s>>>>>;
 
 type ScopePtr<'a, 'b, 'c> = &'c RefCell<&'b mut v8::HandleScope<'a>>;
 
@@ -31,7 +40,17 @@ where
   T: Serialize,
 {
   let scopeptr = RefCell::new(scope);
-  let serializer = Serializer::new(&scopeptr);
+  let serializer = Serializer::new(&scopeptr, None);
+
+  input.serialize(serializer)
+}
+
+pub fn ramson_to_v8<'a, T>(scope: &mut v8::HandleScope<'a>, input: T) -> JsResult<'a>
+where
+  T: Serialize,
+{
+  let scopeptr = RefCell::new(scope);
+  let serializer = Serializer::new(&scopeptr, Some(Arc::new(Mutex::new(HashMap::new()))));
 
   input.serialize(serializer)
 }
@@ -112,15 +131,16 @@ where
 pub struct ArraySerializer<'a, 'b, 'c> {
   pending: Vec<JsValue<'a>>,
   scope: ScopePtr<'a, 'b, 'c>,
+  ramson_pool: RamsonPoolType<'a>,
 }
 
 impl<'a, 'b, 'c> ArraySerializer<'a, 'b, 'c> {
-  pub fn new(scope: ScopePtr<'a, 'b, 'c>, len: Option<usize>) -> Self {
+  pub fn new(scope: ScopePtr<'a, 'b, 'c>, len: Option<usize>, ramson_pool: RamsonPoolType<'a>) -> Self {
     let pending = match len {
       Some(len) => Vec::with_capacity(len),
       None => vec![],
     };
-    Self { pending, scope }
+    Self { pending, scope, ramson_pool }
   }
 }
 
@@ -132,7 +152,7 @@ impl<'a, 'b, 'c> ser::SerializeSeq for ArraySerializer<'a, 'b, 'c> {
     &mut self,
     value: &T,
   ) -> Result<()> {
-    let x = value.serialize(Serializer::new(self.scope))?;
+    let x = value.serialize(Serializer::new(self.scope, self.ramson_pool.clone()))?;
     self.pending.push(x);
     Ok(())
   }
@@ -181,16 +201,18 @@ pub struct ObjectSerializer<'a, 'b, 'c> {
   scope: ScopePtr<'a, 'b, 'c>,
   keys: Vec<v8::Local<'a, v8::Name>>,
   values: Vec<JsValue<'a>>,
+  ramson_pool: RamsonPoolType<'a>,
 }
 
 impl<'a, 'b, 'c> ObjectSerializer<'a, 'b, 'c> {
-  pub fn new(scope: ScopePtr<'a, 'b, 'c>, len: usize) -> Self {
+  pub fn new(scope: ScopePtr<'a, 'b, 'c>, len: usize, ramson_pool: RamsonPoolType<'a>) -> Self {
     let keys = Vec::with_capacity(len);
     let values = Vec::with_capacity(len);
     Self {
       scope,
       keys,
       values,
+      ramson_pool,
     }
   }
 }
@@ -204,7 +226,7 @@ impl<'a, 'b, 'c> ser::SerializeStruct for ObjectSerializer<'a, 'b, 'c> {
     key: &'static str,
     value: &T,
   ) -> Result<()> {
-    let value = value.serialize(Serializer::new(self.scope))?;
+    let value = value.serialize(Serializer::new(self.scope, self.ramson_pool.clone()))?;
     let scope = &mut *self.scope.borrow_mut();
     let key = v8_struct_key(scope, key).into();
     self.keys.push(key);
@@ -317,21 +339,35 @@ impl<'a, 'b, 'c> ser::SerializeStruct for StructSerializers<'a, 'b, 'c> {
   }
 }
 
+
+#[derive(PartialEq)]
+enum RamsonTagDiscovery {
+  None,
+  NextIsDef,
+  Def(u32),
+  NextIsRef,
+  Ref(u32),
+}
+
 // Serializes to JS Objects, NOT JS Maps ...
 pub struct MapSerializer<'a, 'b, 'c> {
   scope: ScopePtr<'a, 'b, 'c>,
   keys: Vec<v8::Local<'a, v8::Name>>,
   values: Vec<JsValue<'a>>,
+  ramson_pool: RamsonPoolType<'a>,
+  ramson_tag: RamsonTagDiscovery,
 }
 
 impl<'a, 'b, 'c> MapSerializer<'a, 'b, 'c> {
-  pub fn new(scope: ScopePtr<'a, 'b, 'c>, len: Option<usize>) -> Self {
+  pub fn new(scope: ScopePtr<'a, 'b, 'c>, len: Option<usize>, ramson_pool: RamsonPoolType<'a>) -> Self {
     let keys = Vec::with_capacity(len.unwrap_or_default());
     let values = Vec::with_capacity(len.unwrap_or_default());
     Self {
       scope,
       keys,
       values,
+      ramson_pool,
+      ramson_tag: RamsonTagDiscovery::None,
     }
   }
 }
@@ -341,7 +377,21 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
   type Error = Error;
 
   fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<()> {
-    let key = key.serialize(Serializer::new(self.scope))?;
+    let key = key.serialize(Serializer::new(self.scope, self.ramson_pool.clone()))?;
+
+    if let Some(ramson_pool) = &self.ramson_pool {
+      let mut scope = self.scope.borrow_mut();
+      let str = key.to_string(*scope).unwrap().to_rust_string_lossy(*scope);
+
+      if str == RAMSON_DEFINITION_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsDef;
+        return Ok(())
+      } else if str == RAMSON_REFERENCE_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsRef;
+        return Ok(())
+      }
+    }
+
     self.keys.push(key.try_into().map_err(|_| {
       Error::Message("Serialized Maps expect String keys".into())
     })?);
@@ -352,12 +402,20 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
     &mut self,
     value: &T,
   ) -> Result<()> {
-    let v8_value = value.serialize(Serializer::new(self.scope))?;
-    self.values.push(v8_value);
+    let v8_value = value.serialize(Serializer::new(self.scope, self.ramson_pool.clone()))?;
+    if self.ramson_tag == RamsonTagDiscovery::NextIsDef {
+      let mut scope = self.scope.borrow_mut();
+      self.ramson_tag = RamsonTagDiscovery::Def(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
+    } else if self.ramson_tag == RamsonTagDiscovery::NextIsRef {
+      let mut scope = self.scope.borrow_mut();
+      self.ramson_tag = RamsonTagDiscovery::Ref(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
+    } else {
+      self.values.push(v8_value);  
+    }
     Ok(())
   }
 
-  fn end(self) -> JsResult<'a> {
+  fn end(mut self) -> JsResult<'a> {
     debug_assert!(self.keys.len() == self.values.len());
     let scope = &mut *self.scope.borrow_mut();
     let null = v8::null(scope).into();
@@ -367,17 +425,34 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
       &self.keys[..],
       &self.values[..],
     );
+    if let Some(ramson_pool) = &mut self.ramson_pool {
+      if let RamsonTagDiscovery::Def(deftag) = self.ramson_tag {
+        let pool = ramson_pool.borrow_mut();
+        pool.lock().unwrap().insert(deftag, obj.into());
+      } else if let RamsonTagDiscovery::Ref(reftag) = self.ramson_tag {
+        let pool = ramson_pool.borrow_mut();
+        let pool = pool.lock().unwrap();
+        // TODO: this will panic if the reference is not found
+        let obj = pool.get(&reftag).unwrap().clone();
+        return Ok(obj);
+      }
+    }
+
     Ok(obj.into())
   }
 }
 
 pub struct Serializer<'a, 'b, 'c> {
   scope: ScopePtr<'a, 'b, 'c>,
+  ramson_pool: RamsonPoolType<'a>,
 }
 
 impl<'a, 'b, 'c> Serializer<'a, 'b, 'c> {
-  pub fn new(scope: ScopePtr<'a, 'b, 'c>) -> Self {
-    Serializer { scope }
+  pub fn new(scope: ScopePtr<'a, 'b, 'c>, ramson_pool: RamsonPoolType<'a>) -> Self {
+    Serializer {
+      scope,
+      ramson_pool,
+    }
   }
 }
 
@@ -524,7 +599,7 @@ impl<'a, 'b, 'c> ser::Serializer for Serializer<'a, 'b, 'c> {
 
   /// Serialises any Rust iterable into a JS Array
   fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
-    Ok(ArraySerializer::new(self.scope, len))
+    Ok(ArraySerializer::new(self.scope, len, self.ramson_pool.clone()))
   }
 
   fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
@@ -558,7 +633,7 @@ impl<'a, 'b, 'c> ser::Serializer for Serializer<'a, 'b, 'c> {
     // TODO: consider allowing serializing to v8 Maps (e.g: via a magic type)
     // since they're lighter and better suited for K/V data
     // and maybe restrict keys (e.g: strings and numbers)
-    Ok(MapSerializer::new(self.scope, len))
+    Ok(MapSerializer::new(self.scope, len, self.ramson_pool.clone()))
   }
 
   /// Serialises Rust typed structs into plain JS objects.
@@ -598,7 +673,7 @@ impl<'a, 'b, 'c> ser::Serializer for Serializer<'a, 'b, 'c> {
       }
       _ => {
         // Regular structs
-        let o = ObjectSerializer::new(self.scope, len);
+        let o = ObjectSerializer::new(self.scope, len, self.ramson_pool.clone());
         Ok(StructSerializers::Regular(o))
       }
     }

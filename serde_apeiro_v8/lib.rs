@@ -4,6 +4,7 @@ mod error;
 mod keys;
 mod magic;
 mod payload;
+mod ramson;
 mod ser;
 mod serializable;
 pub mod utils;
@@ -29,3 +30,4 @@ pub use serializable::Serializable;
 pub use serializable::SerializablePkg;
 
 pub use de::ramson_from_v8;
+pub use ser::ramson_to_v8;
