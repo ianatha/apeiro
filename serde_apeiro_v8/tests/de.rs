@@ -304,7 +304,7 @@ detest!(de_unit_struct, StructUnit, "'StructUnit'", StructUnit);
 #[test]
 fn de_struct() {
   dedo("({ a: 1, b: 2 })", |scope, v| {
-    let mut de = serde_v8::Deserializer::new(scope, v, None);
+    let mut de = serde_v8::Deserializer::new(scope, v, None, None);
     let payload = de
       .deserialize_struct("StructPayload", &[], StructVisitor)
       .unwrap();
@@ -315,7 +315,7 @@ fn de_struct() {
 #[test]
 fn de_struct_hint() {
   dedo("({ a: 1, b: 2 })", |scope, v| {
-    let mut de = serde_v8::Deserializer::new(scope, v, None);
+    let mut de = serde_v8::Deserializer::new(scope, v, None, None);
     let payload = de
       .deserialize_struct("StructPayload", &["a", "b"], StructVisitor)
       .unwrap();

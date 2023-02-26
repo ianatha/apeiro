@@ -27,3 +27,5 @@ pub use ser::to_v8;
 pub use ser::Serializer;
 pub use serializable::Serializable;
 pub use serializable::SerializablePkg;
+
+pub use de::ramson_from_v8;
