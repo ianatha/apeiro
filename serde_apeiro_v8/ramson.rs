@@ -1,11 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 
-use serde::de::{SeqAccess};
 use serde::de::{self};
 
 use crate::Deserializer;
-use crate::error::Error;
 use crate::error::Result;
 
 pub const RAMSON_DEFINITION_TAG: &str = "🐏$def";
