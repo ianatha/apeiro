@@ -1,20 +1,20 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use serde_v8::utils::js_exec;
-use serde_v8::utils::v8_do;
+use serde_v8::utils::v8_do_with_return;
 
-fn dedo(
+fn dedo<T>(
   code: &str,
-  f: impl FnOnce(&mut v8::HandleScope, v8::Local<v8::Value>),
-) {
-  v8_do(|| {
+  f: impl FnOnce(&mut v8::HandleScope, v8::Local<v8::Value>) -> T,
+) -> T {
+  v8_do_with_return(|| {
     let isolate = &mut v8::Isolate::new(v8::CreateParams::default());
     let handle_scope = &mut v8::HandleScope::new(isolate);
     let context = v8::Context::new(handle_scope);
     let scope = &mut v8::ContextScope::new(handle_scope, context);
     let v = js_exec(scope, code);
 
-    f(scope, v);
+    f(scope, v)
   })
 }
 
@@ -133,5 +133,62 @@ fn de_ramson_array() {
     assert_eq!(length_of_a.to_number(scope).unwrap().value(), 5.0);
     assert_eq!(length_of_b.to_number(scope).unwrap().value(), 5.0);
     assert_eq!(obj_in_a_is_obj_in_b.to_boolean(scope).boolean_value(scope), true);
+  })
+}
+
+#[test]
+fn de_ramson_scopeless_function() {
+  let serialized: serde_json::Value = dedo("let func = function addOne(x) { return x + 1 }; let foo = { func }; foo", |scope, v| {
+   serde_v8::ramson_from_v8(scope, v).unwrap()
+  });
+  dedo("", |scope, _| {
+    let rehydrated = serde_v8::ramson_to_v8(scope, serialized).unwrap();
+    let global = scope.get_current_context().global(scope);
+    let key = v8::String::new(scope, "foo_rehydrated").unwrap();
+    global.set(scope, key.into(), rehydrated).unwrap();
+
+    let script = v8::String::new(scope, "foo_rehydrated.func(10)").unwrap();
+    let script = v8::Script::compile(
+      scope,
+      script.into(),
+      None,
+    ).unwrap();
+    let eleven = script.run(scope).unwrap();
+
+    assert_eq!(eleven.to_number(scope).unwrap().value(), 11.0);
+  })
+}
+
+#[test]
+fn de_ramson_scopeful_function() {
+  let _src = "let counter = 0; let next = function next() { counter++; return counter }; next";
+  // which will get compiled to something like...
+  let src = r#"
+  let $scope = { counter: 0 };
+  let next = (($scope) => {
+    let result = function next() { $scope.counter++; return $scope.counter; };
+    result.$$scope = $scope;
+    return result;
+  })($scope);
+  next();
+  next"#;
+  let serialized: serde_json::Value = dedo(src, |scope, v| {
+    serde_v8::ramson_from_v8(scope, v).unwrap()
+  });
+  dedo("", |scope, _| {
+    let rehydrated = serde_v8::ramson_to_v8(scope, serialized).unwrap();
+    let global = scope.get_current_context().global(scope);
+    let key = v8::String::new(scope, "foo_rehydrated").unwrap();
+    global.set(scope, key.into(), rehydrated).unwrap();
+
+    let script = v8::String::new(scope, "foo_rehydrated()").unwrap();
+    let script = v8::Script::compile(
+      scope,
+      script.into(),
+      None,
+    ).unwrap();
+    let eleven = script.run(scope).unwrap();
+
+    assert_eq!(eleven.to_number(scope).unwrap().value(), 2.0);
   })
 }

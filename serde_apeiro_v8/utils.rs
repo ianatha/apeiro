@@ -32,3 +32,12 @@ pub fn v8_do(f: impl FnOnce()) {
   f();
   // v8_shutdown();
 }
+
+pub fn v8_do_with_return<T>(f: impl FnOnce() -> T) -> T {
+  static V8_INIT: Once = Once::new();
+  V8_INIT.call_once(|| {
+    v8_init();
+  });
+  f()
+  // v8_shutdown();
+}

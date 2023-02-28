@@ -25,9 +25,11 @@ use crate::StringOrBuffer;
 use crate::U16String;
 use crate::ZeroCopyBuf;
 use crate::ramson::RAMSON_DEFINITION_TAG;
+use crate::ramson::RAMSON_FUNCTION_SCOPE_TAG;
+use crate::ramson::RAMSON_FUNCTION_SRC_TAG;
 use crate::ramson::RAMSON_PROTOTYPE_TAG;
 use crate::ramson::RAMSON_REFERENCE_TAG;
-use crate::ramson::RAMSON_VALUE_TAG;
+use crate::ramson::RAMSON_ARRAY_VALUE_TAG;
 
 type JsValue<'s> = v8::Local<'s, v8::Value>;
 type JsResult<'s> = Result<JsValue<'s>>;
@@ -345,11 +347,11 @@ impl<'a, 'b, 'c> ser::SerializeStruct for StructSerializers<'a, 'b, 'c> {
 enum RamsonTagDiscovery {
   None,
   NextIsDef,
-  Def(u32),
   NextIsRef,
-  Ref(u32),
-  NextIsProto(Box<RamsonTagDiscovery>),
-  NextIsValue(Box<RamsonTagDiscovery>), 
+  NextIsProto,
+  NextIsValue,
+  NextIsSrc,
+  NextIsScope,
 }
 
 // Serializes to JS Objects, NOT JS Maps ...
@@ -359,6 +361,10 @@ pub struct MapSerializer<'a, 'b, 'c> {
   values: Vec<JsValue<'a>>,
   ramson_pool: RamsonPoolType<'a>,
   ramson_tag: RamsonTagDiscovery,
+
+  reftag: Option<u32>,
+  deftag: Option<u32>,
+  func_scope: Option<JsValue<'a>>,
   prototype: Option<v8::Local<'a, v8::Value>>,
   single_value: Option<JsValue<'a>>,
 }
@@ -373,6 +379,10 @@ impl<'a, 'b, 'c> MapSerializer<'a, 'b, 'c> {
       values,
       ramson_pool,
       ramson_tag: RamsonTagDiscovery::None,
+
+      reftag: None,
+      deftag: None,
+      func_scope: None,
       prototype: None,
       single_value: None,
     }
@@ -397,10 +407,14 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
         self.ramson_tag = RamsonTagDiscovery::NextIsRef;
         return Ok(())
       } else if str == RAMSON_PROTOTYPE_TAG {
-        self.ramson_tag = RamsonTagDiscovery::NextIsProto(Box::new(self.ramson_tag.clone()));
+        self.ramson_tag = RamsonTagDiscovery::NextIsProto;
         return Ok(())
-      } else if str == RAMSON_VALUE_TAG {
-        self.ramson_tag = RamsonTagDiscovery::NextIsValue(Box::new(self.ramson_tag.clone()));
+      } else if str == RAMSON_ARRAY_VALUE_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsValue;
+      } else if str == RAMSON_FUNCTION_SRC_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsSrc;
+      } else if str == RAMSON_FUNCTION_SCOPE_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsScope;
       }
     }
 
@@ -417,16 +431,40 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
     let v8_value = value.serialize(Serializer::new(self.scope, self.ramson_pool.clone()))?;
     if self.ramson_tag == RamsonTagDiscovery::NextIsDef {
       let mut scope = self.scope.borrow_mut();
-      self.ramson_tag = RamsonTagDiscovery::Def(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
+      self.deftag = Some(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
+      self.ramson_tag = RamsonTagDiscovery::None;
     } else if self.ramson_tag == RamsonTagDiscovery::NextIsRef {
       let mut scope = self.scope.borrow_mut();
-      self.ramson_tag = RamsonTagDiscovery::Ref(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
-    } else if let RamsonTagDiscovery::NextIsProto(previous_tag) = &self.ramson_tag {
+      self.reftag = Some(v8_value.to_uint32(*scope).unwrap().uint32_value(*scope).unwrap());
+      self.ramson_tag = RamsonTagDiscovery::None;
+    } else if self.ramson_tag == RamsonTagDiscovery::NextIsProto {
       self.prototype = Some(v8_value);
-      self.ramson_tag = (**previous_tag).clone();
-    }  else if let RamsonTagDiscovery::NextIsValue(previous_tag) = &self.ramson_tag {
+      self.ramson_tag = RamsonTagDiscovery::None;
+    } else if self.ramson_tag == RamsonTagDiscovery::NextIsValue {
       self.single_value = Some(v8_value);
-      self.ramson_tag = (**previous_tag).clone();
+      self.ramson_tag = RamsonTagDiscovery::None;
+    } else if self.ramson_tag == RamsonTagDiscovery::NextIsScope {
+      self.func_scope = Some(v8_value);
+      self.ramson_tag = RamsonTagDiscovery::None;
+    } else if self.ramson_tag == RamsonTagDiscovery::NextIsSrc {
+      let mut scope = self.scope.borrow_mut();
+      let v8_value_string = v8_value.to_string(*scope).unwrap();
+      let str = v8_value_string.to_rust_string_lossy(*scope);
+      let str = format!("(function($scope) {{ var x = {}; return x; }})", str);
+      let str = v8::String::new(*scope, &str).unwrap();
+
+      let script = v8::Script::compile(
+        *scope,
+        str,
+        None,
+      ).unwrap();
+      let wrapper_function = script.run(*scope).unwrap();
+      let wrapper_function = v8::Local::<v8::Function>::try_from(wrapper_function).unwrap();
+      let undefined = v8::undefined(*scope);
+      let v8_value = wrapper_function.call(*scope, undefined.into(), &[self.func_scope.unwrap_or(undefined.into())]).unwrap();
+
+      self.single_value = Some(v8_value);
+      self.ramson_tag = RamsonTagDiscovery::None;
     } else {
       self.values.push(v8_value);  
     }
@@ -449,10 +487,10 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
       obj.into()
     };
     if let Some(ramson_pool) = &mut self.ramson_pool {
-      if let RamsonTagDiscovery::Def(deftag) = self.ramson_tag {
+      if let Some(deftag) = self.deftag {
         let pool = ramson_pool.borrow_mut();
         pool.lock().unwrap().insert(deftag, result);
-      } else if let RamsonTagDiscovery::Ref(reftag) = self.ramson_tag {
+      } else if let Some(reftag) = self.reftag {
         let pool = ramson_pool.borrow_mut();
         let pool = pool.lock().unwrap();
         // TODO: this will panic if the reference is not found

@@ -9,7 +9,9 @@ use crate::error::Result;
 pub const RAMSON_DEFINITION_TAG: &str = "🐏$def";
 pub const RAMSON_REFERENCE_TAG: &str = "🐏$ref";
 pub const RAMSON_PROTOTYPE_TAG: &str = "🐏$proto";
-pub const RAMSON_VALUE_TAG: &str = "🐏$val";
+pub const RAMSON_ARRAY_VALUE_TAG: &str = "🐏$array";
+pub const RAMSON_FUNCTION_SRC_TAG: &str = "🐏$src";
+pub const RAMSON_FUNCTION_SCOPE_TAG: &str = "🐏$scope";
 
 #[derive(Clone)]
 pub struct RamsonType<'s> {
@@ -64,6 +66,67 @@ impl<'s> RamsonType<'s> {
 	}
 }
 
+pub struct FunctionContainer<'a, 'b, 's> {
+	pub pos: u32,
+	pub obj_id_ref: u32,
+	pub scope: &'b mut v8::HandleScope<'s>,
+	pub input: v8::Local<'a, v8::Function>,
+	pub ramson: RamsonType<'a>,
+}
+
+
+impl<'de, 'a, 'b, 's> de::MapAccess<'de> for FunctionContainer<'a, 'b, 's>
+where
+	's: 'a
+{
+	type Error = crate::Error;
+
+	fn next_key_seed<K: de::DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>> {
+		if self.pos == 0 {
+			let deserializer = de::IntoDeserializer::into_deserializer(RAMSON_DEFINITION_TAG);
+			seed.deserialize(deserializer).map(Some)
+		} else if self.pos == 1 {
+			let deserializer = de::IntoDeserializer::into_deserializer(RAMSON_FUNCTION_SCOPE_TAG);
+			seed.deserialize(deserializer).map(Some)
+		} else if self.pos == 2 {
+			let deserializer = de::IntoDeserializer::into_deserializer(RAMSON_FUNCTION_SRC_TAG);
+			seed.deserialize(deserializer).map(Some)
+		} else {
+			Ok(None)
+		}
+	}
+
+	fn next_value_seed<V: de::DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value> {
+		if self.pos == 0 {
+			self.pos += 1;
+			let deserializer = de::IntoDeserializer::into_deserializer(self.obj_id_ref);
+			seed.deserialize(deserializer)
+		} else if self.pos == 1 {
+			self.pos += 1;
+
+			let key = v8::String::new(self.scope, "$$scope").unwrap();
+			let fn_scope = self.input.get(self.scope, key.into()).unwrap();
+			let mut deserializer = Deserializer::new(self.scope, fn_scope, None, self.ramson.clone());
+			seed.deserialize(&mut deserializer)
+		} else if self.pos == 2 {
+			self.pos += 1;
+
+			let src = self.input.to_string(self.scope).unwrap();
+			let mut deserializer = Deserializer::new(self.scope, src.into(), None, self.ramson.clone());
+			seed.deserialize(&mut deserializer)
+		} else {
+			return Result::Err(crate::Error::Message(
+				"Call next_key_seed before next_value_seed".to_string(),
+			));
+		}
+	}
+
+	fn size_hint(&self) -> Option<usize> {
+		None
+	}
+}
+
+
 pub struct ArrayContainer<'a, 'b, 's> {
 	pub pos: u32,
 	pub scope: &'b mut v8::HandleScope<'s>,
@@ -83,7 +146,7 @@ where
 			let deserializer = de::IntoDeserializer::into_deserializer(RAMSON_DEFINITION_TAG);
 			seed.deserialize(deserializer).map(Some)
 		} else if self.pos == 1 {
-			let deserializer = de::IntoDeserializer::into_deserializer(RAMSON_VALUE_TAG);
+			let deserializer = de::IntoDeserializer::into_deserializer(RAMSON_ARRAY_VALUE_TAG);
 			seed.deserialize(deserializer).map(Some)
 		} else {
 			Ok(None)
@@ -150,4 +213,3 @@ impl<'de> de::MapAccess<'de> for ObjectReference {
 		None
 	}
 }
-

@@ -19,6 +19,7 @@ use crate::DetachedBuffer;
 use crate::StringOrBuffer;
 use crate::U16String;
 use crate::ZeroCopyBuf;
+use crate::ramson::FunctionContainer;
 use crate::ramson::ObjectReference;
 use crate::ramson::RAMSON_DEFINITION_TAG;
 use crate::ramson::RAMSON_PROTOTYPE_TAG;
@@ -141,6 +142,39 @@ macro_rules! deserialize_unsigned {
   };
 }
 
+impl<'de, 'a, 'b, 's> Deserializer<'a, 'b, 's> {
+  fn deserialize_function<V>(&mut self, visitor: V) -> Result<V::Value>
+  where
+    V: Visitor<'de>,
+  {
+    if !self.ramson.is_active() {
+      use serde::Deserializer;
+      return self.deserialize_map(visitor);
+    }
+    
+    let func = v8::Local::<v8::Function>::try_from(self.input)
+    .map_err(|_| Error::ExpectedObject)?;
+
+      let existing_index = func.get_private(self.scope, self.ramson_id_key).unwrap();
+      let existing_index = if existing_index.is_undefined() {
+        let index = self.ramson.next_id();
+        let value = v8::Number::new(self.scope, index as f64);
+        let _ = func.set_private(self.scope, self.ramson_id_key.into(), value.into()).unwrap();
+        index
+      } else {
+        existing_index.to_uint32(self.scope).unwrap().value()
+      };
+      
+      return visitor.visit_map(FunctionContainer {
+        pos: 0,
+        scope: self.scope,
+        obj_id_ref: existing_index,
+        ramson: self.ramson.clone(),
+        input: func,
+      });
+  }
+}
+
 impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
   for &'x mut Deserializer<'a, 'b, 's>
 {
@@ -166,6 +200,7 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
       ValueType::String => self.deserialize_string(visitor),
       ValueType::Array => self.deserialize_seq(visitor),
       ValueType::Object => self.deserialize_map(visitor),
+      ValueType::Function => self.deserialize_function(visitor),
       // Map to Vec<u8> when deserialized via deserialize_any
       // e.g: for untagged enums or StringOrBuffer
       ValueType::ArrayBufferView | ValueType::ArrayBuffer => {

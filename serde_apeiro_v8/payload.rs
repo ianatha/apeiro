@@ -14,6 +14,7 @@ pub enum ValueType {
   ArrayBuffer,
   ArrayBufferView,
   Object,
+  Function,
 }
 
 impl ValueType {
@@ -30,6 +31,8 @@ impl ValueType {
       return Self::ArrayBuffer;
     } else if v.is_array_buffer_view() {
       return Self::ArrayBufferView;
+    } else if v.is_function() {
+      return Self::Function;
     } else if v.is_object() {
       return Self::Object;
     } else if v.is_null_or_undefined() {
