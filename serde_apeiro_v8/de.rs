@@ -27,14 +27,15 @@ use crate::ramson::RAMSON_DEFINITION_TAG;
 use crate::ramson::RAMSON_PROTOTYPE_TAG;
 use crate::ramson::RAMSON_REFERENCE_TAG;
 use crate::ramson::RAMSON_VALUE_TAG;
+use crate::ramson::RamsonType;
 
-type RamsonType = Option<Arc<AtomicU32>>;
+
 
 pub struct Deserializer<'a, 'b, 's> {
   input: v8::Local<'a, v8::Value>,
   scope: &'b mut v8::HandleScope<'s>,
   _key_cache: Option<&'b mut KeyCache>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
   ramson_id_key: v8::Local<'a, v8::Private>,
 }
 
@@ -46,7 +47,7 @@ where
     scope: &'b mut v8::HandleScope<'s>,
     input: v8::Local<'a, v8::Value>,
     key_cache: Option<&'b mut KeyCache>,
-    ramson: RamsonType,
+    ramson: RamsonType<'a>,
   ) -> Self {
     let ramson_id_key = v8::String::new(scope, "Ramson#ref").unwrap();
     let ramson_id_key = v8::Private::for_api(scope, Some(ramson_id_key));
@@ -67,7 +68,7 @@ pub fn ramson_from_v8<'de, 'a, 'b, 's, T>(
 where
   T: Deserialize<'de>,
 {
-  let mut deserializer = Deserializer::new(scope, input, None, Some(Arc::new(AtomicU32::new(0))));
+  let mut deserializer = Deserializer::new(scope, input, None, RamsonType::on());
   let t = T::deserialize(&mut deserializer)?;
   Ok(t)
 }
@@ -80,7 +81,7 @@ pub fn from_v8<'de, 'a, 'b, 's, T>(
 where
   T: Deserialize<'de>,
 {
-  let mut deserializer = Deserializer::new(scope, input, None, None);
+  let mut deserializer = Deserializer::new(scope, input, None, RamsonType::off());
   let t = T::deserialize(&mut deserializer)?;
   Ok(t)
 }
@@ -94,7 +95,7 @@ pub fn from_v8_cached<'de, 'a, 'b, 's, T>(
 where
   T: Deserialize<'de>,
 {
-  let mut deserializer = Deserializer::new(scope, input, Some(key_cache), None);
+  let mut deserializer = Deserializer::new(scope, input, Some(key_cache), RamsonType::off());
   let t = T::deserialize(&mut deserializer)?;
   Ok(t)
 }
@@ -300,7 +301,33 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
   {
     let arr = v8::Local::<v8::Array>::try_from(self.input)
       .map_err(|_| Error::ExpectedArray)?;
-    visitor.visit_seq(SeqAccess::new(arr.into(), self.scope, 0..arr.length(), self.ramson.clone()))
+
+    if self.ramson.is_active_for(&self.input) {
+      let existing_index = arr.get_private(self.scope, self.ramson_id_key).unwrap();
+      if existing_index.is_undefined() {
+        let index = self.ramson.next_id();
+        let value = v8::Number::new(self.scope, index as f64);
+        let _ = arr.set_private(self.scope, self.ramson_id_key.into(), value.into()).unwrap();
+
+        self.ramson.exclude_once(&self.input);
+
+        return visitor.visit_map(crate::ramson::ArrayContainer {
+          scope: self.scope,
+          input: arr,
+          pos: 0,
+          obj_id_ref: index,
+          ramson: self.ramson.clone(),
+        });
+        // return visitor.visit_newtype_struct(crate::ramson::ArrayContainer {
+          // pos: 0,
+        // });
+        // return visitor.visit_seq(SeqAccess::new(arr.into(), self.scope, 0..arr.length(), self.ramson.clone()))
+      } else {
+        return visitor.visit_map(ObjectReference::new(existing_index.uint32_value(self.scope).unwrap()));
+      }
+    } else {
+      return visitor.visit_seq(SeqAccess::new(arr.into(), self.scope, 0..arr.length(), self.ramson.clone()))
+    };
   }
 
   // Like deserialize_seq except it prefers tuple's length over input array's length
@@ -340,10 +367,10 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
     let obj = v8::Local::<v8::Object>::try_from(self.input)
       .map_err(|_| Error::ExpectedObject)?;
 
-    let ramson_include_index = if let Some(ramson) = self.ramson.clone() {
+    let ramson_include_index = if self.ramson.is_active() {
       let existing_index = obj.get_private(self.scope, self.ramson_id_key).unwrap();
       if existing_index.is_undefined() {
-        let index = (*ramson).fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let index = self.ramson.next_id();
         let value = v8::Number::new(self.scope, index as f64);
         let _ = obj.set_private(self.scope, self.ramson_id_key.into(), value.into()).unwrap();
         Some(index)
@@ -510,7 +537,7 @@ struct MapObjectAccess<'a, 's> {
   obj: v8::Local<'a, v8::Object>,
   keys: SeqAccess<'a, 's>,
   next_value: Option<v8::Local<'s, v8::Value>>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
   ramson_include_index: Option<u32>,
 }
 
@@ -518,7 +545,7 @@ impl<'a, 's> MapObjectAccess<'a, 's> {
   pub fn new(
     obj: v8::Local<'a, v8::Object>,
     scope: &'a mut v8::HandleScope<'s>,
-    ramson: RamsonType,
+    ramson: RamsonType<'a>,
     ramson_include_index: Option<u32>,
   ) -> Self {
     let keys = match obj.get_own_property_names(
@@ -563,7 +590,7 @@ impl<'de> de::MapAccess<'de> for MapObjectAccess<'_, '_> {
       let deserializer = IntoDeserializer::into_deserializer(RAMSON_DEFINITION_TAG);
       return seed.deserialize(deserializer).map(Some);
     }
-    if self.ramson.is_some() {
+    if self.ramson.is_active() {
       let deserializer = IntoDeserializer::into_deserializer(RAMSON_PROTOTYPE_TAG);
       return seed.deserialize(deserializer).map(Some);
     }
@@ -585,7 +612,7 @@ impl<'de> de::MapAccess<'de> for MapObjectAccess<'_, '_> {
       let deserializer = IntoDeserializer::into_deserializer(include_index);
       self.ramson_include_index = None;
       seed.deserialize(deserializer)
-    } else if self.ramson.is_some() {
+    } else if self.ramson.is_active() {
       let mut v8_prototype = self.obj.get_prototype(self.keys.scope).unwrap();
       let global = self.keys.scope.get_current_context().global(self.keys.scope);
       let global_str = v8::String::new(self.keys.scope, "Object").unwrap();
@@ -598,7 +625,7 @@ impl<'de> de::MapAccess<'de> for MapObjectAccess<'_, '_> {
       }
 
       let mut deserializer = Deserializer::new(self.keys.scope, v8_prototype, None, self.ramson.clone());
-      self.ramson = None;
+      self.ramson = RamsonType::off();
       seed.deserialize(&mut deserializer)
     } else {
       Err(Error::ExpectedMap)
@@ -615,7 +642,7 @@ struct MapPairsAccess<'a, 's> {
   pos: u32,
   len: u32,
   scope: &'a mut v8::HandleScope<'s>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
   ramson_include_index: Option<u32>
 }
 
@@ -671,7 +698,7 @@ struct StructAccess<'a, 's> {
   scope: &'a mut v8::HandleScope<'s>,
   keys: std::slice::Iter<'static, &'static str>,
   next_value: Option<v8::Local<'s, v8::Value>>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
 }
 
 impl<'de> de::MapAccess<'de> for StructAccess<'_, '_> {
@@ -712,7 +739,7 @@ struct SeqAccess<'a, 's> {
   obj: v8::Local<'a, v8::Object>,
   scope: &'a mut v8::HandleScope<'s>,
   range: std::ops::Range<u32>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
 }
 
 impl<'a, 's> SeqAccess<'a, 's> {
@@ -720,7 +747,7 @@ impl<'a, 's> SeqAccess<'a, 's> {
     obj: v8::Local<'a, v8::Object>,
     scope: &'a mut v8::HandleScope<'s>,
     range: std::ops::Range<u32>,
-    ramson: RamsonType,
+    ramson: RamsonType<'a>,
   ) -> Self {
     Self { obj, scope, range, ramson }
   }
@@ -751,7 +778,7 @@ struct EnumAccess<'a, 'b, 's> {
   tag: v8::Local<'a, v8::Value>,
   payload: v8::Local<'a, v8::Value>,
   scope: &'b mut v8::HandleScope<'s>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
   // p1: std::marker::PhantomData<&'x ()>,
 }
 
@@ -780,7 +807,7 @@ impl<'de, 'a, 'b, 's> de::EnumAccess<'de> for EnumAccess<'a, 'b, 's> {
 struct VariantDeserializer<'a, 'b, 's> {
   value: v8::Local<'a, v8::Value>,
   scope: &'b mut v8::HandleScope<'s>,
-  ramson: RamsonType,
+  ramson: RamsonType<'a>,
 }
 
 impl<'de, 'a, 'b, 's> de::VariantAccess<'de>

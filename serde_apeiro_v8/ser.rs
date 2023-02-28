@@ -27,6 +27,7 @@ use crate::ZeroCopyBuf;
 use crate::ramson::RAMSON_DEFINITION_TAG;
 use crate::ramson::RAMSON_PROTOTYPE_TAG;
 use crate::ramson::RAMSON_REFERENCE_TAG;
+use crate::ramson::RAMSON_VALUE_TAG;
 
 type JsValue<'s> = v8::Local<'s, v8::Value>;
 type JsResult<'s> = Result<JsValue<'s>>;
@@ -348,6 +349,7 @@ enum RamsonTagDiscovery {
   NextIsRef,
   Ref(u32),
   NextIsProto(Box<RamsonTagDiscovery>),
+  NextIsValue(Box<RamsonTagDiscovery>), 
 }
 
 // Serializes to JS Objects, NOT JS Maps ...
@@ -358,6 +360,7 @@ pub struct MapSerializer<'a, 'b, 'c> {
   ramson_pool: RamsonPoolType<'a>,
   ramson_tag: RamsonTagDiscovery,
   prototype: Option<v8::Local<'a, v8::Value>>,
+  single_value: Option<JsValue<'a>>,
 }
 
 impl<'a, 'b, 'c> MapSerializer<'a, 'b, 'c> {
@@ -371,6 +374,7 @@ impl<'a, 'b, 'c> MapSerializer<'a, 'b, 'c> {
       ramson_pool,
       ramson_tag: RamsonTagDiscovery::None,
       prototype: None,
+      single_value: None,
     }
   }
 }
@@ -395,6 +399,8 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
       } else if str == RAMSON_PROTOTYPE_TAG {
         self.ramson_tag = RamsonTagDiscovery::NextIsProto(Box::new(self.ramson_tag.clone()));
         return Ok(())
+      } else if str == RAMSON_VALUE_TAG {
+        self.ramson_tag = RamsonTagDiscovery::NextIsValue(Box::new(self.ramson_tag.clone()));
       }
     }
 
@@ -418,6 +424,9 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
     } else if let RamsonTagDiscovery::NextIsProto(previous_tag) = &self.ramson_tag {
       self.prototype = Some(v8_value);
       self.ramson_tag = (**previous_tag).clone();
+    }  else if let RamsonTagDiscovery::NextIsValue(previous_tag) = &self.ramson_tag {
+      self.single_value = Some(v8_value);
+      self.ramson_tag = (**previous_tag).clone();
     } else {
       self.values.push(v8_value);  
     }
@@ -425,19 +434,24 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
   }
 
   fn end(mut self) -> JsResult<'a> {
-    debug_assert!(self.keys.len() == self.values.len());
-    let scope = &mut *self.scope.borrow_mut();
-    let null = v8::null(scope).into();
-    let obj = v8::Object::with_prototype_and_properties(
-      scope,
-      self.prototype.unwrap_or(null),
-      &self.keys[..],
-      &self.values[..],
-    );
+    let result = if let Some(single_value) = self.single_value {
+      single_value
+    } else {
+      debug_assert!(self.keys.len() == self.values.len());
+      let scope = &mut *self.scope.borrow_mut();
+      let null = v8::null(scope).into();
+      let obj = v8::Object::with_prototype_and_properties(
+        scope,
+        self.prototype.unwrap_or(null),
+        &self.keys[..],
+        &self.values[..],
+      );
+      obj.into()
+    };
     if let Some(ramson_pool) = &mut self.ramson_pool {
       if let RamsonTagDiscovery::Def(deftag) = self.ramson_tag {
         let pool = ramson_pool.borrow_mut();
-        pool.lock().unwrap().insert(deftag, obj.into());
+        pool.lock().unwrap().insert(deftag, result);
       } else if let RamsonTagDiscovery::Ref(reftag) = self.ramson_tag {
         let pool = ramson_pool.borrow_mut();
         let pool = pool.lock().unwrap();
@@ -447,7 +461,7 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
       }
     }
 
-    Ok(obj.into())
+    Ok(result.into())
   }
 }
 

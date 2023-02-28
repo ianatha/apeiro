@@ -90,9 +90,8 @@ fn de_ramson_prototype() {
 
 #[test]
 fn de_ramson_array() {
-  dedo("let arr = [ 1, 2, 3 ]; let foo = { a: arr, b: arr }; foo", |scope, v| {
+  dedo("let obj = { one: 1 }; let arr = [ 1, 2, 3, obj ]; let foo = { a: arr, b: arr, obj }; foo", |scope, v| {
     let map: serde_json::Value = serde_v8::ramson_from_v8(scope, v).unwrap();
-    println!("{:?}", map);
 
     let rehydrated = serde_v8::ramson_to_v8(scope, map).unwrap();
     let global = scope.get_current_context().global(scope);
@@ -123,7 +122,16 @@ fn de_ramson_array() {
     ).unwrap();
     let length_of_b = script.run(scope).unwrap();
 
-    assert_eq!(length_of_a.to_number(scope).unwrap().value(), 4.0);
-    assert_eq!(length_of_b.to_number(scope).unwrap().value(), 4.0);
+    let script = v8::String::new(scope, "foo_rehydrated.a[4].obj === foo_rehydrated.b[4].obj").unwrap();
+    let script = v8::Script::compile(
+      scope,
+      script.into(),
+      None,
+    ).unwrap();
+    let obj_in_a_is_obj_in_b = script.run(scope).unwrap();
+
+    assert_eq!(length_of_a.to_number(scope).unwrap().value(), 5.0);
+    assert_eq!(length_of_b.to_number(scope).unwrap().value(), 5.0);
+    assert_eq!(obj_in_a_is_obj_in_b.to_boolean(scope).boolean_value(scope), true);
   })
 }
