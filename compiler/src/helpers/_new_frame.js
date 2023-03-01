@@ -1,4 +1,4 @@
-let $frames = []
+let $frames = [];
 function _$$new_frame(parentFrame, scope) {
 	let result = {
 		$pc: 0,

@@ -170,14 +170,22 @@ better_scoped_tls::scoped_tls!(
 /// Tracks used helper methods. (e.g. __extends)
 #[derive(Debug, Default)]
 pub struct Helpers {
-    external: bool,
+    external: HelpersSetting,
     mark: HelperMark,
     inner: Inner,
     pc_to_src: RefCell<Vec<ProgramCounterToSourceLocation>>,
 }
 
+#[derive(PartialEq, Eq, Debug, Default)]
+pub enum HelpersSetting {
+    #[default]
+    Inline,
+    External,
+    Nothing,
+}
+
 impl Helpers {
-    pub fn new(external: bool) -> Self {
+    pub fn new(external: HelpersSetting) -> Self {
         Helpers {
             external,
             mark: Default::default(),
@@ -190,8 +198,12 @@ impl Helpers {
         self.mark.0
     }
 
-    pub const fn external(&self) -> bool {
-        self.external
+    pub fn external(&self) -> bool {
+        self.external == HelpersSetting::External
+    }
+
+    pub fn do_not_emit(&self) -> bool {
+        self.external == HelpersSetting::Nothing
     }
 
     pub fn add_pc_to_src(&self, fnhash: u64, pc: i32, start_loc: u32, end_loc: u32) {
@@ -234,7 +246,7 @@ macro_rules! define_helpers {
                 pub fn $name(&self) {
                     self.inner.$name.store(true, Ordering::Relaxed);
 
-                    if !self.external {
+                    if !self.external() {
                         $(
                             self.$dep();
                         )*
@@ -270,7 +282,11 @@ macro_rules! define_helpers {
                 let mut buf = vec![];
 
                 HELPERS.with(|helpers|{
-                    debug_assert!(!helpers.external);
+                    if helpers.do_not_emit() {
+                        return;
+                    }    
+
+                    debug_assert!(!helpers.external());
                     $(
                             add_to!(buf, $name, helpers.inner.$name, helpers.mark.0);
                     )*
@@ -281,9 +297,12 @@ macro_rules! define_helpers {
 
             fn build_imports(&self) -> Vec<ModuleItem> {
                 let mut buf = vec![];
-
+                
                 HELPERS.with(|helpers|{
-                    debug_assert!(helpers.external);
+                    if helpers.do_not_emit() {
+                        return;
+                    }    
+                    debug_assert!(helpers.external());
                     $(
                             add_import_to!(buf, $name, helpers.inner.$name, helpers.mark.0);
                     )*

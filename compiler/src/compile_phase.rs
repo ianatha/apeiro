@@ -30,7 +30,7 @@ use swc_ecma_transforms::pass::noop;
 use swc_ecma_visit::VisitMutWith;
 use tracing::{event, instrument, Level};
 
-use crate::helpers::{Helpers, HELPERS};
+use crate::helpers::{Helpers, HELPERS, HelpersSetting};
 use crate::{
     decl_to_expr, for_stmt_to_while_stmt, helpers, now_as_millis, stmt_exploder, CompilationResult,
     BASELINE_ES_VERSION,
@@ -51,7 +51,7 @@ pub fn custom_apeiro_compile<P>(
     input: String,
     folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
     source_map: bool,
-    external_helpers: bool,
+    external_helpers: HelpersSetting,
     minify: bool,
 ) -> Result<CompilationResult>
 where
@@ -283,7 +283,7 @@ impl ApeiroCompiler {
     ) -> Result<CompilationResult, Error> {
         let globals = Box::leak(Box::new(Globals::default()));
         GLOBALS.set(globals, || {
-            HELPERS.set(&Helpers::new(false), || {
+            HELPERS.set(&Helpers::new(HelpersSetting::External), || {
                 let resolver = ApeiroResolver {};
                 let mut bundler = Bundler::new(
                     globals,
@@ -386,11 +386,11 @@ impl ApeiroCompiler {
                     )
                 },
                 true,
-                false,
+                HelpersSetting::External,
                 false,
             )?
         } else {
-            self.custom_apeiro_compile_string(contents, |_| noop(), true, false, false)?
+            self.custom_apeiro_compile_string(contents, |_| noop(), true, HelpersSetting::External, false)?
         };
 
         let (file, program) = GLOBALS.set(&Globals::new(), || {
@@ -410,7 +410,7 @@ impl ApeiroCompiler {
         program: Program,
         folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
         source_map: bool,
-        external_helpers: bool,
+        external_helpers: HelpersSetting,
         minify: bool,
     ) -> Result<CompilationResult>
     where
@@ -515,7 +515,7 @@ impl ApeiroCompiler {
         input: String,
         folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
         source_map: bool,
-        external_helpers: bool,
+        external_helpers: HelpersSetting,
         minify: bool,
     ) -> Result<CompilationResult>
     where

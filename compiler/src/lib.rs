@@ -52,7 +52,7 @@ where
 }
 
 pub fn engine_runtime_compile(input: String) -> Result<String> {
-    Ok(custom_apeiro_compile(input, |_| noop(), false, false, false)?.compiled_src)
+    Ok(custom_apeiro_compile(input, |_| noop(), false, helpers::HelpersSetting::Inline, false)?.compiled_src)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -124,11 +124,12 @@ pub fn apeiro_bundle_and_compile(src: String) -> Result<CompilationResult, anyho
     compiler.bundle(src, false)
 }
 
-pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
-    custom_apeiro_compile(
-        input,
-        |_| {
-            chain!(
+#[inline]
+fn _apeiro_compile(input: String, for_repl: bool) -> Result<CompilationResult> {
+    if !for_repl {
+        custom_apeiro_compile(
+            input,
+            |_| { chain!(
                 // either_param_to_closure::folder(),
                 decl_to_expr::folder(),
                 for_stmt_to_while_stmt::folder(),
@@ -137,12 +138,37 @@ pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
                 capture_frames::folder(),
                 hide_internal_arguments::folder(),
                 // fn_instrument::folder(),
-            )
-        },
-        true,
-        false,
-        false,
-    )
+            ) },
+            true,
+            helpers::HelpersSetting::Inline,
+            false,
+        )
+    } else {
+        custom_apeiro_compile(
+            input,
+            |_| { chain!(
+                // either_param_to_closure::folder(),
+                decl_to_expr::folder(),
+                for_stmt_to_while_stmt::folder(),
+                stmt_exploder::folder(),
+                capture_scopes::folder_for_repl(),
+                capture_frames::folder(),
+                hide_internal_arguments::folder(),
+                // fn_instrument::folder(),
+            ) },
+            false,
+            helpers::HelpersSetting::Nothing,
+            false,
+        )
+    }
+}
+
+pub fn apeiro_compile(input: String) -> Result<CompilationResult> {
+    _apeiro_compile(input, false)
+}
+
+pub fn apeiro_compile_for_repl(input: String) -> Result<CompilationResult> {
+    _apeiro_compile(input, true)
 }
 
 pub(crate) const BASELINE_ES_VERSION: EsVersion = EsVersion::Es2022;
