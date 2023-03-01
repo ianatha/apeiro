@@ -154,7 +154,13 @@ where
 		} else if self.pos == 2 {
 			self.pos += 1;
 
-			let src = self.input.to_string(self.scope).unwrap();
+			let fnwrap_src_key = v8::String::new(self.scope, "$$src").unwrap();
+			let src = self.input.get(self.scope, fnwrap_src_key.into()).unwrap();
+			let src = if src.is_null_or_undefined() {
+				self.input.to_string(self.scope).unwrap()
+			} else {
+				src.to_string(self.scope).unwrap()
+			};
 			let mut deserializer = Deserializer::new(self.scope, src.into(), None, self.ramson.clone());
 			seed.deserialize(&mut deserializer)
 		} else {

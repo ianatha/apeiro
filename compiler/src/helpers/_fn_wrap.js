@@ -7,6 +7,8 @@ function _$$fn(functionDecl, scope) {
 		get: function(target, property, receiver) {
 			if (property === "name") {
 				return target.name + "_synthetic";
+			} else if (property === "$$src") {
+				return target.toString();
 			} else if (property == "$serialize") {
 				return {
 					"$$parentScope": scope,
