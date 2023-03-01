@@ -9,5 +9,6 @@ members = [
 	"internal_api",
 	"cli",
 	"serde_apeiro_v8",
-	"serde"
+	"serde",
+	"repl_experiment",
 ]
