@@ -13,12 +13,11 @@ pub fn functional_compiler_test<P>(
 ) where
     P: swc_ecmascript::visit::Fold,
 {
-    let external_helpers = false;
     let out = compiler::custom_apeiro_compile(
         js.to_string(),
         folder_chain,
         false,
-        external_helpers,
+        compiler::helpers::HelpersSetting::Inline,
         false,
     )
     .unwrap();
@@ -48,12 +47,11 @@ pub fn compiler_test<P>(
 ) where
     P: swc_ecmascript::visit::Fold,
 {
-    let external_helpers = true;
     let out = compiler::custom_apeiro_compile(
         input.to_string(),
         folder_chain,
         false,
-        external_helpers,
+        compiler::helpers::HelpersSetting::External,
         false,
     )
     .unwrap();
