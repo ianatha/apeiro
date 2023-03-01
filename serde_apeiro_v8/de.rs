@@ -31,7 +31,7 @@ pub struct Deserializer<'a, 'b, 's> {
   input: v8::Local<'a, v8::Value>,
   scope: &'b mut v8::HandleScope<'s>,
   _key_cache: Option<&'b mut KeyCache>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
   ramson_id_key: v8::Local<'a, v8::Private>,
 }
 
@@ -43,7 +43,7 @@ where
     scope: &'b mut v8::HandleScope<'s>,
     input: v8::Local<'a, v8::Value>,
     key_cache: Option<&'b mut KeyCache>,
-    ramson: RamsonType<'a>,
+    ramson: RamsonType,
   ) -> Self {
     let ramson_id_key = v8::String::new(scope, "Ramson#ref").unwrap();
     let ramson_id_key = v8::Private::for_api(scope, Some(ramson_id_key));
@@ -398,14 +398,12 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
       .map_err(|_| Error::ExpectedObject)?;
 
     let ramson_include_index = if self.ramson.is_active() {
-      let existing_index = obj.get_private(self.scope, self.ramson_id_key).unwrap();
-      if existing_index.is_undefined() {
-        let index = self.ramson.next_id();
-        let value = v8::Number::new(self.scope, index as f64);
-        let _ = obj.set_private(self.scope, self.ramson_id_key.into(), value.into()).unwrap();
-        Some(index)
-      } else {
-        return visitor.visit_map(ObjectReference::new(existing_index.uint32_value(self.scope).unwrap()));
+      match self.ramson.cache_id(&self.input) {
+        crate::ramson::RamsonIdAssignment::New(index) => Some(index),
+        crate::ramson::RamsonIdAssignment::Assigned(index) => {
+          return visitor.visit_map(ObjectReference::new(index));
+        },
+        crate::ramson::RamsonIdAssignment::Excluded => None,
       }
     } else {
       None
@@ -567,7 +565,7 @@ struct MapObjectAccess<'a, 's> {
   obj: v8::Local<'a, v8::Object>,
   keys: SeqAccess<'a, 's>,
   next_value: Option<v8::Local<'s, v8::Value>>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
   ramson_include_index: Option<u32>,
 }
 
@@ -575,7 +573,7 @@ impl<'a, 's> MapObjectAccess<'a, 's> {
   pub fn new(
     obj: v8::Local<'a, v8::Object>,
     scope: &'a mut v8::HandleScope<'s>,
-    ramson: RamsonType<'a>,
+    ramson: RamsonType,
     ramson_include_index: Option<u32>,
   ) -> Self {
     let keys = match obj.get_own_property_names(
@@ -672,7 +670,7 @@ struct MapPairsAccess<'a, 's> {
   pos: u32,
   len: u32,
   scope: &'a mut v8::HandleScope<'s>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
   ramson_include_index: Option<u32>
 }
 
@@ -728,7 +726,7 @@ struct StructAccess<'a, 's> {
   scope: &'a mut v8::HandleScope<'s>,
   keys: std::slice::Iter<'static, &'static str>,
   next_value: Option<v8::Local<'s, v8::Value>>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
 }
 
 impl<'de> de::MapAccess<'de> for StructAccess<'_, '_> {
@@ -769,7 +767,7 @@ struct SeqAccess<'a, 's> {
   obj: v8::Local<'a, v8::Object>,
   scope: &'a mut v8::HandleScope<'s>,
   range: std::ops::Range<u32>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
 }
 
 impl<'a, 's> SeqAccess<'a, 's> {
@@ -777,7 +775,7 @@ impl<'a, 's> SeqAccess<'a, 's> {
     obj: v8::Local<'a, v8::Object>,
     scope: &'a mut v8::HandleScope<'s>,
     range: std::ops::Range<u32>,
-    ramson: RamsonType<'a>,
+    ramson: RamsonType,
   ) -> Self {
     Self { obj, scope, range, ramson }
   }
@@ -808,7 +806,7 @@ struct EnumAccess<'a, 'b, 's> {
   tag: v8::Local<'a, v8::Value>,
   payload: v8::Local<'a, v8::Value>,
   scope: &'b mut v8::HandleScope<'s>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
   // p1: std::marker::PhantomData<&'x ()>,
 }
 
@@ -837,7 +835,7 @@ impl<'de, 'a, 'b, 's> de::EnumAccess<'de> for EnumAccess<'a, 'b, 's> {
 struct VariantDeserializer<'a, 'b, 's> {
   value: v8::Local<'a, v8::Value>,
   scope: &'b mut v8::HandleScope<'s>,
-  ramson: RamsonType<'a>,
+  ramson: RamsonType,
 }
 
 impl<'de, 'a, 'b, 's> de::VariantAccess<'de>

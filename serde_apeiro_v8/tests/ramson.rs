@@ -1,5 +1,3 @@
-// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
-
 use serde_v8::utils::js_exec;
 use serde_v8::utils::v8_do_with_return;
 
@@ -22,6 +20,7 @@ fn dedo<T>(
 fn de_ramson_map() {
   dedo("let data = { one: 1 }; let foo = { a: data, b: data }; foo", |scope, v| {
     let map: serde_json::Value = serde_v8::ramson_from_v8(scope, v).unwrap();
+    println!("{:?}", map);
 
     let rehydrated = serde_v8::ramson_to_v8(scope, map).unwrap();
     let global = scope.get_current_context().global(scope);
