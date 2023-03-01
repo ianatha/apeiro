@@ -33,14 +33,21 @@ macro_rules! folder_chain_for_repl {
 #[test]
 fn repl_test() {
     compiler_test(
-        "let a = 3 + 2; console.log(a);",
+        "let a = 3 + 2; console.log(a); function inc(x) { return x + 1; }",
         folder_chain_for_repl!(),
-        r#"
+        r#"import _fn_wrap from "@apeiro/helpers/src/_fn_wrap.mjs";
+import _new_scope from "@apeiro/helpers/src/_new_scope.mjs";
+import _new_frame from "@apeiro/helpers/src/_new_frame.mjs";
 $scope.a = {
     $val: 3 + 2
 };
 console.log($scope.a.$val);
-"#,
+$scope.inc = {
+    $val: _fn_wrap(function inc($parentScope, x) {
+        let $scope1 = _new_scope($parentScope);
+        return x + 1;
+    }, $scope)
+};"#,
     );
 
     compiler_test(

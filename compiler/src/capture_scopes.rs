@@ -157,18 +157,21 @@ impl VisitMut for CaptureScopes {
             let mut parent_scope_ident: Ident = quote_ident!("$parentScope").into();
             parent_scope_ident.span.ctxt = SyntaxContext::from_u32(APEIRO_INTERNAL_SYNTAX_CONTEXT);
 
+            {
+                let fn_expr = expr.as_mut_fn_expr().unwrap();
+                fn_expr.function.params.iter().for_each(|param| {
+                    println!("func param: {:?}", param);
+                    if let Pat::Ident(param_ident) = &param.pat {
+                        self.uncaptured_idents.push(param_ident.id.to_id());
+                    }
+                });
+            }
+
             self.scope_identifiers.push(parent_scope_ident.clone());
             expr.visit_mut_children_with(self);
             self.scope_identifiers.pop();
-
+            
             let fn_expr = expr.as_mut_fn_expr().unwrap();
-
-            fn_expr.function.params.iter().for_each(|param| {
-                if let Pat::Ident(param_ident) = &param.pat {
-                    self.uncaptured_idents.push(param_ident.id.to_id());
-                }
-            });
-
             // insert $parentScope
             fn_expr.function.params.insert(0, parent_scope_ident.into());
 
