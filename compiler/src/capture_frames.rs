@@ -46,7 +46,8 @@ impl CaptureFrames {
             type_args: None,
             callee: helper!(new_frame, "$$new_frame"),
             args: vec![
-                previous_frame_ident.clone().as_arg(),
+                quote_ident!("undefined").as_arg(),
+                // previous_frame_ident.clone().as_arg(),
                 quote_ident!("$scope").as_arg(),
             ],
         };

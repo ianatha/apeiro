@@ -74,7 +74,7 @@ impl CaptureScopes {
 
         let mut result = VarDecl {
             span: DUMMY_SP,
-            kind: VarDeclKind::Let,
+            kind: VarDeclKind::Var,
             declare: false,
             decls: vec![VarDeclarator {
                 span: DUMMY_SP,
