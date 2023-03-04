@@ -32,7 +32,7 @@ pub struct Deserializer<'a, 'b, 's> {
   scope: &'b mut v8::HandleScope<'s>,
   _key_cache: Option<&'b mut KeyCache>,
   ramson: RamsonType,
-  ramson_id_key: v8::Local<'a, v8::Private>,
+  // ramson_id_key: v8::Local<'a, v8::Private>,
 }
 
 impl<'a, 'b, 's> Deserializer<'a, 'b, 's>
@@ -45,14 +45,14 @@ where
     key_cache: Option<&'b mut KeyCache>,
     ramson: RamsonType,
   ) -> Self {
-    let ramson_id_key = v8::String::new(scope, "Ramson#ref").unwrap();
-    let ramson_id_key = v8::Private::for_api(scope, Some(ramson_id_key));
+    // let ramson_id_key = v8::String::new(scope, "Ramson#ref").unwrap();
+    // let ramson_id_key = v8::Private::for_api(scope, Some(ramson_id_key));
     Deserializer {
       input,
       scope,
       _key_cache: key_cache,
       ramson,
-      ramson_id_key,
+      // ramson_id_key,
     }
   }
 }
@@ -155,16 +155,16 @@ impl<'de, 'a, 'b, 's> Deserializer<'a, 'b, 's> {
     let func = v8::Local::<v8::Function>::try_from(self.input)
     .map_err(|_| Error::ExpectedObject)?;
 
-      let existing_index = func.get_private(self.scope, self.ramson_id_key).unwrap();
-      let existing_index = if existing_index.is_undefined() {
-        let index = self.ramson.next_id();
-        let value = v8::Number::new(self.scope, index as f64);
-        let _ = func.set_private(self.scope, self.ramson_id_key.into(), value.into()).unwrap();
-        index
-      } else {
-        existing_index.to_uint32(self.scope).unwrap().value()
+      let existing_index = match self.ramson.cache_id(&self.input) {
+          crate::ramson::RamsonIdAssignment::New(index) => {
+            index
+          },
+          crate::ramson::RamsonIdAssignment::Assigned(index) => {
+            index
+          },
+          crate::ramson::RamsonIdAssignment::Excluded => panic!(),
       };
-      
+
       return visitor.visit_map(FunctionContainer {
         pos: 0,
         scope: self.scope,
@@ -333,27 +333,21 @@ impl<'de, 'a, 'b, 's, 'x> de::Deserializer<'de>
       .map_err(|_| Error::ExpectedArray)?;
 
     if self.ramson.is_active_for(&self.input) {
-      let existing_index = arr.get_private(self.scope, self.ramson_id_key).unwrap();
-      if existing_index.is_undefined() {
-        let index = self.ramson.next_id();
-        let value = v8::Number::new(self.scope, index as f64);
-        let _ = arr.set_private(self.scope, self.ramson_id_key.into(), value.into()).unwrap();
-
-        self.ramson.exclude_once(&self.input);
-
-        return visitor.visit_map(crate::ramson::ArrayContainer {
-          scope: self.scope,
-          input: arr,
-          pos: 0,
-          obj_id_ref: index,
-          ramson: self.ramson.clone(),
-        });
-        // return visitor.visit_newtype_struct(crate::ramson::ArrayContainer {
-          // pos: 0,
-        // });
-        // return visitor.visit_seq(SeqAccess::new(arr.into(), self.scope, 0..arr.length(), self.ramson.clone()))
-      } else {
-        return visitor.visit_map(ObjectReference::new(existing_index.uint32_value(self.scope).unwrap()));
+      match self.ramson.cache_id(&self.input) {
+        crate::ramson::RamsonIdAssignment::Assigned(assigned) => {
+          return visitor.visit_map(ObjectReference::new(assigned));
+        }
+        crate::ramson::RamsonIdAssignment::New(index) => {
+          self.ramson.exclude_once(&self.input);
+          return visitor.visit_map(crate::ramson::ArrayContainer {
+            scope: self.scope,
+            input: arr,
+            pos: 0,
+            obj_id_ref: index,
+            ramson: self.ramson.clone(),
+          });
+        },
+        crate::ramson::RamsonIdAssignment::Excluded => panic!(),
       }
     } else {
       return visitor.visit_seq(SeqAccess::new(arr.into(), self.scope, 0..arr.length(), self.ramson.clone()))
@@ -642,11 +636,13 @@ impl<'de> de::MapAccess<'de> for MapObjectAccess<'_, '_> {
       seed.deserialize(deserializer)
     } else if self.ramson.is_active() {
       let mut v8_prototype = self.obj.get_prototype(self.keys.scope).unwrap();
-      let global = self.keys.scope.get_current_context().global(self.keys.scope);
-      let global_str = v8::String::new(self.keys.scope, "Object").unwrap();
-      let object_obj = global.get(self.keys.scope, global_str.into()).unwrap().to_object(self.keys.scope).unwrap();
-      let prototype_str = v8::String::new(self.keys.scope, "prototype").unwrap();
-      let global_prototype = object_obj.get(self.keys.scope, prototype_str.into()).unwrap();
+      let global_prototype = {
+        let global = self.keys.scope.get_current_context().global(self.keys.scope);
+        let global_str = v8::String::new(self.keys.scope, "Object").unwrap();
+        let object_obj = global.get(self.keys.scope, global_str.into()).unwrap().to_object(self.keys.scope).unwrap();
+        let prototype_str = v8::String::new(self.keys.scope, "prototype").unwrap();  
+        object_obj.get(self.keys.scope, prototype_str.into()).unwrap()
+      };
       
       if global_prototype == v8_prototype {
         v8_prototype = v8::undefined(self.keys.scope).into();

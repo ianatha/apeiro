@@ -34,7 +34,41 @@ use crate::ramson::RAMSON_ARRAY_VALUE_TAG;
 type JsValue<'s> = v8::Local<'s, v8::Value>;
 type JsResult<'s> = Result<JsValue<'s>>;
 
-type RamsonPoolType<'s> = Option<Arc<Mutex<HashMap<u32, JsValue<'s>>>>>;
+pub struct RamsonSerializer<'s> {
+  pool: HashMap<u32, JsValue<'s>>,
+  pool_pending: HashMap<u32, v8::Local<'s, v8::Object>>,
+}
+
+impl<'s> RamsonSerializer<'s> {
+  fn new() -> RamsonPoolType<'s> {
+    Some(Arc::new(Mutex::new(Self {
+      pool: HashMap::new(),
+      pool_pending: HashMap::new(),
+    })))
+  }
+
+  fn remove_pending(&mut self, key: &u32) -> Option<v8::Local<'s, v8::Object>> {
+    self.pool_pending.remove(key)
+  }
+
+  fn get_pending(&self, key: &u32) -> Option<&v8::Local<'s, v8::Object>> {
+    self.pool_pending.get(key)
+  }
+
+  fn get(&self, key: &u32) -> Option<&JsValue<'s>> {
+    self.pool.get(key)
+  }
+
+  fn insert_pending(&mut self, key: u32, value: v8::Local<'s, v8::Object>) -> Option<v8::Local<'s, v8::Object>> {
+    self.pool_pending.insert(key, value)
+  }
+
+  fn insert(&mut self, key: u32, value: JsValue<'s>) -> Option<JsValue<'s>> {
+    self.pool.insert(key, value)
+  }
+}
+
+pub type RamsonPoolType<'s> = Option<Arc<Mutex<RamsonSerializer<'s>>>>;
 
 type ScopePtr<'a, 'b, 'c> = &'c RefCell<&'b mut v8::HandleScope<'a>>;
 
@@ -52,8 +86,9 @@ pub fn ramson_to_v8<'a, T>(scope: &mut v8::HandleScope<'a>, input: T) -> JsResul
 where
   T: Serialize,
 {
+  let ramson_pool = RamsonSerializer::new();
   let scopeptr = RefCell::new(scope);
-  let serializer = Serializer::new(&scopeptr, Some(Arc::new(Mutex::new(HashMap::new()))));
+  let serializer = Serializer::new(&scopeptr, ramson_pool);
 
   input.serialize(serializer)
 }
@@ -448,20 +483,83 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
       self.ramson_tag = RamsonTagDiscovery::None;
     } else if self.ramson_tag == RamsonTagDiscovery::NextIsSrc {
       let mut scope = self.scope.borrow_mut();
-      let v8_value_string = v8_value.to_string(*scope).unwrap();
-      let str = v8_value_string.to_rust_string_lossy(*scope);
-      let str = format!("(function($scope) {{ var x = {}; return x; }})", str);
-      let str = v8::String::new(*scope, &str).unwrap();
 
-      let script = v8::Script::compile(
-        *scope,
-        str,
-        None,
-      ).unwrap();
-      let wrapper_function = script.run(*scope).unwrap();
+      // string to function
+      let orig_func = {
+        let v8_value_string = v8_value.to_string(*scope).unwrap();
+        let str = v8_value_string.to_rust_string_lossy(*scope);  
+        let str = format!("({})", str);
+        let str = v8::String::new(*scope, &str).unwrap();
+
+        let script = v8::Script::compile(
+          *scope,
+          str,
+          None,
+        ).unwrap();
+        script.run(*scope).unwrap()
+      };
+
+      let discover_fn_wrap_function = v8::String::new(*scope, "_$$fn").unwrap();
+      let discover_fn_wrap_function = v8::Script::compile(*scope, discover_fn_wrap_function, None).unwrap();
+      let discover_fn_wrap_function = discover_fn_wrap_function.run(*scope);
+
+      let wrapper_function = if discover_fn_wrap_function.is_none() {
+        let str = r#"(function _$$fn(functionDecl, scope) {
+          return new Proxy(functionDecl, {
+            has: function(target, property) {
+              return property === "name" || property === "$serialize" || Reflect.has(target, property);
+            },
+            get: function(target, property, receiver) {
+              if (property === "name") {
+                return target.name + "_synthetic";
+              } else if (property === "$$scope") {
+                return scope;
+              } else if (property === "$$src") {
+                return target.toString();
+              } else if (property == "$serialize") {
+                return {
+                  "$$parentScope": scope,
+                  "$$src": target.toString(),
+                  "$$name": target.name,
+                }
+              } else {
+                return Reflect.get(target, property, receiver);
+              }
+            },
+            apply: function(target, thisArg, parameters) {
+              return target.apply(thisArg, [ scope, ...parameters ]);
+            }		
+          });
+        })"#;
+        let str = v8::String::new(*scope, &str).unwrap();
+
+        let script = v8::Script::compile(
+          *scope,
+          str,
+          None,
+        ).unwrap();
+        script.run(*scope).unwrap()
+      } else {
+        discover_fn_wrap_function.unwrap()
+      };
       let wrapper_function = v8::Local::<v8::Function>::try_from(wrapper_function).unwrap();
+
       let undefined = v8::undefined(*scope);
-      let v8_value = wrapper_function.call(*scope, undefined.into(), &[self.func_scope.unwrap_or(undefined.into())]).unwrap();
+      let try_scope = &mut v8::TryCatch::new(*scope);
+      let v8_value = wrapper_function.call(
+        try_scope,
+        undefined.into(),
+        &[
+          orig_func,
+          self.func_scope.unwrap_or(undefined.into()),
+        ]
+      );
+
+      if try_scope.has_caught() {
+        println!("Error: {}", try_scope.exception().unwrap().to_string(try_scope).unwrap().to_rust_string_lossy(try_scope));
+      }
+
+      let v8_value = v8_value.unwrap();
 
       self.single_value = Some(v8_value);
       self.ramson_tag = RamsonTagDiscovery::None;
@@ -472,11 +570,11 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
   }
 
   fn end(mut self) -> JsResult<'a> {
-    let result = if let Some(single_value) = self.single_value {
+    let scope = &mut *self.scope.borrow_mut();
+    let mut result = if let Some(single_value) = self.single_value {
       single_value
     } else {
       debug_assert!(self.keys.len() == self.values.len());
-      let scope = &mut *self.scope.borrow_mut();
       let null = v8::null(scope).into();
       let obj = v8::Object::with_prototype_and_properties(
         scope,
@@ -486,16 +584,38 @@ impl<'a, 'b, 'c> ser::SerializeMap for MapSerializer<'a, 'b, 'c> {
       );
       obj.into()
     };
+    
     if let Some(ramson_pool) = &mut self.ramson_pool {
+      let pool = ramson_pool.borrow_mut();
+      let mut pool = pool.lock().unwrap();
       if let Some(deftag) = self.deftag {
-        let pool = ramson_pool.borrow_mut();
-        pool.lock().unwrap().insert(deftag, result);
+        let pending_obj = pool.get_pending(&deftag);
+        if let Some(pending_obj) = pending_obj {
+          if self.prototype.is_some() {
+            pending_obj.set_prototype(scope, self.prototype.unwrap());
+          }
+
+          self.keys.iter().enumerate().for_each(|(index, key)| {
+            let val = self.values.get(index).unwrap();
+            pending_obj.set(scope, (*key).into(), *val);
+          });
+          
+          result = pending_obj.clone().into();
+          pool.remove_pending(&deftag);
+        }
+
+        let previous_entry = pool.insert(deftag, result);
+        if previous_entry.is_some() {
+          panic!("Duplicate deftag for {}", deftag);
+        }
       } else if let Some(reftag) = self.reftag {
-        let pool = ramson_pool.borrow_mut();
-        let pool = pool.lock().unwrap();
-        // TODO: this will panic if the reference is not found
-        let obj = pool.get(&reftag).unwrap().clone();
-        return Ok(obj);
+        if let Some(obj) = pool.get(&reftag) {
+          return Ok(obj.clone());
+        } else {
+          let temporary_object = v8::Object::new(*scope);
+          pool.insert_pending(reftag, temporary_object);
+          return Ok(temporary_object.into());
+        }
       }
     }
 
