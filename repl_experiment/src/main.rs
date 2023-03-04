@@ -1,9 +1,5 @@
 use std::io::{self, BufRead, Write};
 
-use apeiro_engine::{Engine, DEngine, db::ApeiroPersistence};
-use tokio::spawn;
-use v8::GetPropertyNamesArgsBuilder;
-
 pub fn v8_init() {
     let platform = v8::new_default_platform(0, false).make_shared();
     v8::V8::initialize_platform(platform);
@@ -37,18 +33,31 @@ async fn main() -> anyhow::Result<()> {
 
     let mut persist_apeiro_scope: Option<serde_json::Value> = None;
 
+    let mut init_script = apeiro_compiler::apeiro_compile("function empty() {}".into()).unwrap().compiled_src;
+    init_script.push_str("\n globalThis.$scope = $scope");
+    js_exec(scope, &init_script).unwrap();
+
     // read file scope.json into a string called x
     if let Result::Ok(stored_scope) = std::fs::read_to_string("scope.json") {
         let x: serde_json::Value = serde_json::from_str(&stored_scope).unwrap();
         let scope_in_v8 = serde_v8::ramson_to_v8(scope, &x).unwrap();
         persist_apeiro_scope = Some(x);
+
+        let proxytoglobal = r#"new Proxy(globalThis, {
+            get: function(target, property, receiver) {
+                return {
+                    $val: Reflect.get(target, property, receiver),
+                };
+            },
+        });"#;
+        let proxytoglobal = v8::String::new(scope, proxytoglobal).unwrap();
+        let proxytoglobal = v8::Script::compile(scope, proxytoglobal, None).unwrap();
+        let proxytoglobal = proxytoglobal.run(scope).unwrap();
+
+        scope_in_v8.to_object(scope).unwrap().set_prototype(scope, proxytoglobal);
         context.global(scope).set(scope, v8_key_scope.into(), scope_in_v8).unwrap();
     }
 
-    let mut init_script = apeiro_compiler::apeiro_compile("function empty() {}".into()).unwrap().compiled_src;
-    init_script.push_str("\n globalThis.$scope = $scope");
-    println!("{}", init_script);
-    js_exec(scope, &init_script).unwrap();
 
     for line in stdin.lock().lines() {
         scope.reset();
@@ -56,8 +65,12 @@ async fn main() -> anyhow::Result<()> {
         let line = line.unwrap();
         println!("{}", line);
 
-        let r = apeiro_compiler::apeiro_compile_for_repl(line).unwrap();
-        let line = r.compiled_src;
+        let r = apeiro_compiler::apeiro_compile_for_repl(line);
+        if r.is_err() {
+            println!("apeiro_compiler error: {:?}", r.err().unwrap());
+            continue;
+        }
+        let line = r.unwrap().compiled_src;
         println!("{}", line);
 
         let output = js_exec(scope, &line);
@@ -82,9 +95,15 @@ async fn main() -> anyhow::Result<()> {
 
         let apeiro_scope = context.global(scope).get(scope, v8_key_scope.into()).unwrap();
         let apeiro_scope: serde_json::Value = serde_v8::ramson_from_v8(scope, apeiro_scope)?;
-        println!("apeiro_scope: {:?}", apeiro_scope);
-        println!("");
+        {
+            let apeiro_scope_keys = apeiro_scope.as_object().unwrap().keys().collect::<Vec<_>>();
+            println!("apeiro_scope: {:?}", apeiro_scope_keys);
+            println!("");
+        }
+        
         persist_apeiro_scope = Some(apeiro_scope);
+
+        
 
         print!("> ");
         io::stdout().flush()?;
