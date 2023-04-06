@@ -21,17 +21,51 @@ Every process must export a default value, that can be:
 
 ## Create a process that adds two numbers and run through it
 ```bash
-$ echo "export default function main() { let a = $recv({first:1}); let b = $recv({second:2}); return a + b; }" > func.js
+$ echo "export default function main() {
+	let a = $recv({ a: {$type:["number"]}});
 
-$ cargo run --bin apeiro_cli -- new ./func.js
+	let b = $recv({ b: {$type:["number"]}});
 
-ProcNewOutput { id: "ejOVu8zP1aka3BUZgikTC", state: StepResult { status: SUSPEND, val: None, suspension: Some(Object {"first": Number(1)}) } }
+	if (b.b > 50) {
+		let c = $recv({ c: {$type:["number"]}});
+		return a.a+b.b;
+	}
+	
+	return a.a+b.b;
+}
+}" > func.js
 
-$ cargo run --bin apeiro_cli -- send ejOVu8zP1aka3BUZgikTC 123 
+$ cargo run --bin ap -- new ./func.js
 
-StepResult { status: SUSPEND, val: None, suspension: Some(Object {"second": Number(2)}) }
+Object {"mid": String("JivvYkLzqk1q3JKphAffb")}
+Ok(ProcNewOutput { id: "z_FciTLcNKnWRhykJbZAR", state: StepResult { status: SUSPEND, val: None, suspension: Some(Object {"a": Object {"$type": Array [String("number")]}}) } })
 
-$ cargo run --bin apeiro_cli -- send ejOVu8zP1aka3BUZgikTC 100
+$ cargo run --bin ap -- send z_FciTLcNKnWRhykJbZAR '{"a":1}'
 
-StepResult { status: DONE, val: Some(Number(223)), suspension: None }
+status: SUSPEND
+val: 
+suspension: {
+  "b": {
+    "$type": [
+      "number"
+    ]
+  }
+}
+
+$ cargo run --bin ap -- send z_FciTLcNKnWRhykJbZAR '{"b":51}'
+
+status: SUSPEND
+val: 
+suspension: {
+  "c": {
+    "$type": [
+      "number"
+    ]
+  }
+}
+
+$ cargo run --bin ap -- send z_FciTLcNKnWRhykJbZAR '{"c":100}'
+
+status: DONE
+val: 152
 ```
