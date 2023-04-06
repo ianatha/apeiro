@@ -658,15 +658,22 @@ impl Engine {
     ) {
         let new_function = args.get(0);
         if let Result::Ok(new_function) = v8::Local::<v8::Function>::try_from(new_function) {
-            let function_serialized: serde_json::Value =
-                apeiro_serde::from_v8(scope, new_function.into()).unwrap();
-            let fn_src = function_serialized.get("src").unwrap().as_str().unwrap();
+            let src_key = v8::String::new(scope, "$$src").unwrap();
+            println!("before src");
+            let fn_src = new_function.get(scope, src_key.into()).unwrap().to_string(scope).unwrap().to_rust_string_lossy(scope);
+            // let function_serialized: serde_json::Value =
+            //     apeiro_serde::from_v8(scope, new_function.into()).unwrap();
+            // let fn_src = function_serialized.get("$$src").unwrap().as_str().unwrap();
             let synthetic_src = format!("let main = {}; export default main;", fn_src);
+            println!("after src");
 
             let dengine = self.dengine.clone().unwrap();
+            
+            println!("before handle");
 
             let handle = tokio::runtime::Handle::current();
             let _guard = handle.enter();
+            println!("before mount_new");
             let new_mount = futures::executor::block_on(dengine.mount_new(MountNewRequest {
                 src: synthetic_src.clone(),
                 name: Some(format!("synthetic_{}", now_as_millis())),
