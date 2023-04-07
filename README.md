@@ -1,37 +1,37 @@
-# Quickstart
+# 🚀 Quickstart
 
-## Run the daemon
+## 🏃‍♂️ Run the daemon
 ```bash
 $ cargo run --bin apeirod 
 ```
 
-## ApeiroJS
+## 🧩 ApeiroJS
 
-* `log()`
-* * `$recv(matcher)`
-* `$send(pid, msg)`
-* `$pid()`
+* 📝 `log()`
+* 📬 `$recv(matcher)`
+* 📨 `$send(pid, msg)`
+* 🔢 `$pid()`
 * `$send("clock", { sender: $pid(), wait: ms });`
-* `let new_pid = $spawn(fn)`
+* 🕒 `let new_pid = $spawn(fn)`
 
-Every process must export a default value, that can be:
-* a function,
-* an async function,
-* a generator.
+Every file declaring a process must export a default value, that can be:
+* 🧮 a function,
+* 🌐 an async function,
+* 🔄 a generator.
 
-## Create a process that adds two numbers and run through it
+## 🔢 Create a process that adds two numbers and run through it
 ```bash
 $ echo "export default function main() {
-	let a = $recv({ a: {$type:["number"]}});
+	let a = $recv({$type:["number"]});
 
-	let b = $recv({ b: {$type:["number"]}});
+	let b = $recv({$type:["number"]});
 
-	if (b.b > 50) {
-		let c = $recv({ c: {$type:["number"]}});
-		return a.a+b.b;
+	if (b > 50) {
+		let c = $recv({$type:["number"]});
+		return a + b + c;
 	}
 	
-	return a.a+b.b;
+	return a + b;
 }
 }" > func.js
 
