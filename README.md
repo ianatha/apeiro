@@ -11,8 +11,8 @@ $ cargo run --bin apeirod
 * 📬 `$recv(matcher)`
 * 📨 `$send(pid, msg)`
 * 🔢 `$pid()`
-* `$send("clock", { sender: $pid(), wait: ms });`
-* 🕒 `let new_pid = $spawn(fn)`
+* 🕒 `$send("clock", { sender: $pid(), wait: ms });`
+* 🐣 `let new_pid = $spawn(fn)`
 
 Every file declaring a process must export a default value, that can be:
 * 🧮 a function,
