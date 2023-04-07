@@ -10,5 +10,4 @@ members = [
 	"cli",
 	"serde_apeiro_v8",
 	"serde",
-	"repl_experiment",
 ]

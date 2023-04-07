@@ -1,8 +1,7 @@
-mod repl;
+use std::env;
+use crate::librepl;
 
-use repl::*;
-
-async fn read_lines(container: &mut Container) {
+async fn read_lines(container: &mut librepl::Container) {
     use tokio::io::AsyncBufReadExt;
     let stdin = tokio::io::stdin();
     let mut reader = tokio::io::BufReader::new(stdin);
@@ -33,21 +32,20 @@ async fn read_lines(container: &mut Container) {
     container.shutdown().await;
 }
 
-#[tokio::main]
-async fn main() -> Result<(), std::io::Error> {
-    v8_init();
+pub async fn repl_main(scope_file: Option<String>) -> Result<(), std::io::Error> {
+    librepl::v8_init();
      
-    let (sender, receiver) = Container::new_channels();
+    let (sender, receiver) = librepl::Container::new_channels();
     
     tokio::spawn(async move {
-        let mut container = Container::new(sender);
+        let mut container = librepl::Container::new(sender);
         read_lines(&mut container).await;
     });
 
     let local = tokio::task::LocalSet::new();
     local.run_until(async move {
         tokio::task::spawn_local(async move {
-            let mut event_loop = EventLoop::new(receiver);
+            let mut event_loop = librepl::EventLoop::new(receiver, scope_file.unwrap_or("scope.json".into()));
             event_loop.run().await;
         }).await.unwrap();
     }).await;

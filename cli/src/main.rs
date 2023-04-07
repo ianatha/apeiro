@@ -1,4 +1,6 @@
 mod cmds;
+mod librepl;
+mod repl;
 
 use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
@@ -64,6 +66,11 @@ enum Commands {
     Watch {
         proc_id: String,
     },
+    /// A local, persistent, REPL
+    Local_Repl {
+        #[clap(short, long)]
+        scope_file: Option<String>,
+    }
 }
 
 #[tokio::main]
@@ -96,5 +103,6 @@ async fn main() -> Result<()> {
         Commands::Ps {} => ps(remote, cli.output_json).await,
         Commands::Mounts {} => mounts_list(remote).await,
         Commands::Mount { srcfile } => mount_new(remote, srcfile).await,
+        Commands::Local_Repl { scope_file } => Ok(repl::repl_main(scope_file.clone()).await.unwrap()),
     }
 }

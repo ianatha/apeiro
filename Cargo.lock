@@ -368,17 +368,36 @@ checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 name = "apeiro_cli"
 version = "0.1.0"
 dependencies = [
+ "actix-cors",
+ "actix-web",
  "anyhow",
+ "apeiro_compiler",
  "apeiro_engine",
  "apeiro_internal_api",
+ "apeiro_port_mqtt",
+ "apeiro_port_syslog",
+ "async-stream",
+ "async-trait",
  "clap 4.0.27",
  "cli-table",
+ "console-subscriber",
+ "env_logger",
  "futures",
+ "futures-core",
+ "nanoid",
+ "r2d2",
+ "r2d2_sqlite",
  "reqwest",
  "reqwest-eventsource",
+ "rumqttc 0.19.0",
  "serde",
  "serde_json",
+ "serde_v8 0.84.0",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "typetag",
+ "v8 0.63.0",
 ]
 
 [[package]]
@@ -5198,40 +5217,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi",
-]
-
-[[package]]
-name = "repl_experiment"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-web",
- "anyhow",
- "apeiro_compiler",
- "apeiro_engine",
- "apeiro_internal_api",
- "apeiro_port_mqtt",
- "apeiro_port_syslog",
- "async-stream",
- "async-trait",
- "clap 4.0.27",
- "console-subscriber",
- "criterion",
- "env_logger",
- "futures",
- "futures-core",
- "nanoid",
- "r2d2",
- "r2d2_sqlite",
- "rumqttc 0.19.0",
- "serde",
- "serde_json",
- "serde_v8 0.84.0",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "typetag",
- "v8 0.63.0",
 ]
 
 [[package]]

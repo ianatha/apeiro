@@ -2,6 +2,7 @@ use std::{io::{self, BufRead, Write}, cell::RefCell, borrow::BorrowMut};
 
 use futures::io::Flush;
 use tokio::{sync::mpsc::Sender, io::BufReader};
+use v8;
 
 pub fn v8_init() {
     let platform = v8::new_default_platform(0, false).make_shared();
@@ -24,6 +25,7 @@ pub struct Container {
 
 pub struct EventLoop {
     receiver: tokio::sync::mpsc::Receiver<EventLoopMsg>,
+    persistence_lifetime: String,
 }
 
 
@@ -35,9 +37,13 @@ pub enum EventLoopMsg {
 }
 
 impl EventLoop {
-    pub fn new(receiver: tokio::sync::mpsc::Receiver<EventLoopMsg>) -> Self {
+    pub fn new(
+        receiver: tokio::sync::mpsc::Receiver<EventLoopMsg>,
+        persistence_lifetime: String,
+    ) -> Self {
         Self {
             receiver,
+            persistence_lifetime,
         }
     }
 
@@ -56,7 +62,7 @@ impl EventLoop {
         init_script.push_str("\n globalThis.$scope = $scope");
         js_exec(scope, &init_script).unwrap();
     
-        if let Result::Ok(stored_scope) = std::fs::read_to_string("scope.json") {
+        if let Result::Ok(stored_scope) = std::fs::read_to_string(self.persistence_lifetime.clone()) {
             let x: serde_json::Value = serde_json::from_str(&stored_scope).unwrap();
             let scope_in_v8 = serde_v8::ramson_to_v8(scope, &x).unwrap();
             persist_apeiro_scope = Some(x);
@@ -76,7 +82,6 @@ impl EventLoop {
             context.global(scope).set(scope, v8_key_scope.into(), scope_in_v8).unwrap();
         }
     
-        println!("event loop running");
         while let Some(msg) = self.receiver.recv().await {
             match msg {
                 EventLoopMsg::InspectScope(response) => {
@@ -110,6 +115,7 @@ impl EventLoop {
                             response.send(output).unwrap();
                         }
                     } else {
+                        response.send(serde_json::Value::Null).unwrap();
                         println!("no output");
                     }
             
@@ -128,10 +134,9 @@ impl EventLoop {
                 EventLoopMsg::Shutdown => {
                     if let Some(persist_apeiro_scope) = &persist_apeiro_scope {
                         let x = persist_apeiro_scope.to_string();
-                        println!("{}", x);
                 
                         // write x to file "scope.json"
-                let mut file = std::fs::File::create("scope.json").unwrap();
+                let mut file = std::fs::File::create(self.persistence_lifetime.clone()).unwrap();
                     file.write_all(x.as_bytes()).unwrap();
                     }
                 }
