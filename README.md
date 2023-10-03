@@ -21,7 +21,7 @@ Every file declaring a process must export a default value, that can be:
 
 ## 🔢 Create a process that adds two numbers and run through it
 ```bash
-$ echo "export default function main() {
+$ echo 'export default function main() {
 	let a = $recv({$type:["number"]});
 
 	let b = $recv({$type:["number"]});
@@ -32,27 +32,22 @@ $ echo "export default function main() {
 	}
 	
 	return a + b;
-}
-}" > func.js
+}' > func.js
 
-$ cargo run --bin ap -- new ./func.js
+$ cargo run --bin ap -- new --src ./func.js
+Ok(ProcNewOutput { id: "yVPxlQTnVcclpV0c3tSWq", state: StepResult { status: SUSPEND, val: None, suspension: Some(Object {"$type": Array [String("number")]}) } })
 
-Object {"mid": String("JivvYkLzqk1q3JKphAffb")}
-Ok(ProcNewOutput { id: "z_FciTLcNKnWRhykJbZAR", state: StepResult { status: SUSPEND, val: None, suspension: Some(Object {"a": Object {"$type": Array [String("number")]}}) } })
-
-$ cargo run --bin ap -- send z_FciTLcNKnWRhykJbZAR '{"a":1}'
+$ cargo run --bin ap -- send yVPxlQTnVcclpV0c3tSWq '{"a":1}'
 
 status: SUSPEND
 val: 
 suspension: {
-  "b": {
-    "$type": [
-      "number"
-    ]
-  }
+  "$type": [
+    "number"
+  ]
 }
 
-$ cargo run --bin ap -- send z_FciTLcNKnWRhykJbZAR '{"b":51}'
+$ cargo run --bin ap -- send yVPxlQTnVcclpV0c3tSWq '{"b":51}'
 
 status: SUSPEND
 val: 
@@ -64,7 +59,7 @@ suspension: {
   }
 }
 
-$ cargo run --bin ap -- send z_FciTLcNKnWRhykJbZAR '{"c":100}'
+$ cargo run --bin ap -- send yVPxlQTnVcclpV0c3tSWq '{"c":100}'
 
 status: DONE
 val: 152
