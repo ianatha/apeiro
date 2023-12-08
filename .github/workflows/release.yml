@@ -87,30 +87,33 @@ jobs:
                 stage=$(mktemp -d -t tmp)
                 ;;
         esac
+        
+        for BINARY in ap apeirod
+        do
+          cp target/${{ matrix.target }}/release/$BINARY $stage/
+          cd $stage
 
-        cp target/${{ matrix.target }}/release/apeirod $stage/
-        cd $stage
+          RELEASE_VERSION=${GITHUB_REF#refs/tags/}
+          ASSET_NAME="$BINARY-$RELEASE_VERSION-${{ matrix.target }}.tar.gz"
+          ASSET_PATH="$src/$ASSET_NAME"
+          CHECKSUM_PATH="$ASSET_PATH.sha256"
 
-        RELEASE_VERSION=${GITHUB_REF#refs/tags/}
-        ASSET_NAME="apeirod-$RELEASE_VERSION-${{ matrix.target }}.tar.gz"
-        ASSET_PATH="$src/$ASSET_NAME"
-        CHECKSUM_PATH="$ASSET_PATH.sha256"
+          echo "ASSET_PATH_$BINARY=$ASSET_PATH" >> $GITHUB_ENV
+          echo "CHECKSUM_PATH_$BINARY=$CHECKSUM_PATH" >> $GITHUB_ENV
 
-        echo "ASSET_PATH=$ASSET_PATH" >> $GITHUB_ENV
-        echo "CHECKSUM_PATH=$CHECKSUM_PATH" >> $GITHUB_ENV
+          tar czf $ASSET_PATH *
 
-        tar czf $ASSET_PATH *
+          cd $src
 
-        cd $src
-
-        case $RUNNER_OS in
-            Linux)
-                sha256sum $ASSET_NAME > $CHECKSUM_PATH
-                ;;
-            macOS)
-                shasum -a 256 $ASSET_NAME > $CHECKSUM_PATH
-                ;;
-        esac
+          case $RUNNER_OS in
+              Linux)
+                  sha256sum $ASSET_NAME > $CHECKSUM_PATH
+                  ;;
+              macOS)
+                  shasum -a 256 $ASSET_NAME > $CHECKSUM_PATH
+                  ;;
+          esac
+        done
 
 
     - name: Release
@@ -118,7 +121,9 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
-          ${{ env.ASSET_PATH }}
-          ${{ env.CHECKSUM_PATH }}
+          ${{ env.ASSET_PATH_apeirod }}
+          ${{ env.CHECKSUM_PATH_apeirod }}
+          ${{ env.ASSET_PATH_ap }}
+          ${{ env.CHECKSUM_PATH_ap }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
