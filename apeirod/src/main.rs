@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     let port = cli.port.unwrap_or(5151);
     let store = cli.store.unwrap_or("world.db".into());
 
-    let (mut dengine, mut event_loop) = DEngine::new(
+    let (dengine, mut event_loop) = DEngine::new(
         Some(get_engine_runtime),
         Box::new(apeiro_engine::db_sqlite::Db {
             pool: establish_db_connection(store)?,

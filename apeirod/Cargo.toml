@@ -13,6 +13,7 @@ serde_json = "1.0.89"
 actix-web = "4.3.0"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.23.0"
+libsqlite3-sys = { version = "0.27.0", features = ["bundled"]}
 nanoid = "0.4.0"
 serde = { version = "^1.0.100", features = ["derive"] }
 env_logger = "0.10.0"
