@@ -87,12 +87,12 @@ async fn main() -> anyhow::Result<()> {
         event_loop.run().await;
     });
 
-    if cli.swarm {
-        let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone(), cli.swarm_peer_addr)
-            .await
-            .unwrap();
-        dengine.set_p2p_channel(p2pchan).await;
-    }
+    // if cli.swarm {
+    //     let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone(), cli.swarm_peer_addr)
+    //         .await
+    //         .unwrap();
+    //     dengine.set_p2p_channel(p2pchan).await;
+    // }
 
     dengine.load_proc_subscriptions().await?;
 

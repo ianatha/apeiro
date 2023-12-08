@@ -814,7 +814,7 @@ pub fn resolve_ref<'s>(
                 scope,
                 v8::GetPropertyNamesArgs {
                     mode: v8::KeyCollectionMode::OwnOnly,
-                    property_filter: v8::ALL_PROPERTIES,
+                    property_filter: v8::PropertyFilter::ALL_PROPERTIES,
                     index_filter: v8::IndexFilter::SkipIndices,
                     key_conversion: v8::KeyConversionMode::KeepNumbers,
                 },

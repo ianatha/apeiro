@@ -11,15 +11,15 @@ path = "lib.rs"
 
 [dependencies]
 better_scoped_tls = "0.1.0"
-bytes = "=1.2.1"
+bytes = "1.5.0"
 derive_more = "0.99.17"
 serde = { version = "^1.0.100", features = ["derive"] }
 serde_bytes = "0.11"
-serde_json = "=1.0.91"
-serde_v8 = "0.75.0"
+serde_json = "1.0.108"
+serde_v8 = "0.146.0"
 smallvec = { version = "1.8", features = ["union"] }
-v8 = { version = "0.60.0", default-features = false }
+v8 = { version = "0.82.0", default-features = false }
 
 [dev-dependencies]
 bencher = "0.1"
-serde_json = "=1.0.91"
+serde_json = "1.0.108"
