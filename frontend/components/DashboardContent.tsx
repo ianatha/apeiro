@@ -91,7 +91,7 @@ export function DashboardContent() {
                 Code
               </Heading>
             </HStack>
-            {data?.NumMounts}
+            {data?.NumModules}
             <SkeletonText
               isLoaded={data !== undefined}
               noOfLines={3}

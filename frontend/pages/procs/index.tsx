@@ -45,7 +45,7 @@ const Home: NextPage = () => {
         <Stack spacing={4}>
           {instances?.procs?.map((instance: {
             id: string;
-            mount_id: string;
+            module_id: string;
             name: string;
             status: string;
             snapshot_v2_size: number;
@@ -57,7 +57,7 @@ const Home: NextPage = () => {
                   {instance.name} &middot;{" "}
                   <Text fontSize="lg" as="span" color="muted">
                     {instance.status ?? "none"} &nbsp;
-                    {instance.id} ({instance.mount_id}) - {instance.snapshot_v2_size} bytes
+                    {instance.id} ({instance.module_id}) - {instance.snapshot_v2_size} bytes
                   </Text>
                 </Heading>
                 <HStack>

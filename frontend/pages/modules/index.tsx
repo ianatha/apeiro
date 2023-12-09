@@ -21,12 +21,12 @@ import { App, title } from "../../components/App";
 import { CodeList } from "../../components/CodeList";
 import Form from "@rjsf/chakra-ui";
 import validator from "@rjsf/validator-ajv6";
-import { useMount, useMounts, useProcess } from "../../lib/Workspace";
+import { useModule, useModules, useProcess } from "../../lib/Workspace";
 import { Card } from "../../components/DashboardContent";
 import Link from "next/link";
 import { FiPlusSquare } from "react-icons/fi";
 import { Router, useRouter } from "next/router";
-import { trimPrefix } from "../../components/Mounts/FunctionDisplay";
+import { trimPrefix } from "../../components/Modules/FunctionDisplay";
 import useWorkspace from "../../lib/useWorkspace";
 import { ProtectedPage } from "../../lib/auth";
 
@@ -117,24 +117,24 @@ function ProcessSummary({pid}: {
   </li>;
 }
 
-function MountInstances({ mid }: {
+function ModuleInstances({ mid }: {
   mid: string;
 }) {
   const workspace = useWorkspace();
-  const { data: mount } = useMount(mid);
+  const { data: module } = useModule(mid);
 
   return (
     <>
-    <h1>MountInstances for {mid}</h1>
+    <h1>ModuleInstances for {mid}</h1>
     <ul>
-    {mount?.procs.map((proc: string) =>
+    {module?.procs.map((proc: string) =>
       <li key={proc}><ProcessSummary pid={proc} /></li>)}
     </ul>
     </>
   );
 }
 
-interface MountDescription {
+interface ModuleDescription {
   name: string;
   id: string;
   singleton?: boolean;
@@ -150,7 +150,7 @@ export const CircleIcon = (props: IconProps) => (
 );
 const Home: NextPage = () => {
   const router = useRouter();
-  const { data: mounts } = useMounts();
+  const { data: modules } = useModules();
   const workspace = useWorkspace();
 
   return (
@@ -177,23 +177,23 @@ const Home: NextPage = () => {
         </HStack>
 
         <Stack spacing={4}>
-          {mounts?.map((mount: MountDescription) => (
-            <Card key={mount.id} minH={0} p={4} bgColor="bg-surface">
+          {modules?.map((module: ModuleDescription) => (
+            <Card key={module.id} minH={0} p={4} bgColor="bg-surface">
               <HStack justify="space-between">
                 <Heading size="xs">
                   <CircleIcon mr={2} color="green.500" />
-                  {mount.name} &nbsp;
+                  {module.name} &nbsp;
                 </Heading>
                 <HStack>
-                  {mount.singleton && (<Tag>Singleton</Tag>)}
-                  <Text fontSize="sm" as="span" color="muted">{mount.id} &middot;</Text>
-                  <Link href={`/modules/${mount.id}`}>
+                  {module.singleton && (<Tag>Singleton</Tag>)}
+                  <Text fontSize="sm" as="span" color="muted">{module.id} &middot;</Text>
+                  <Link href={`/modules/${module.id}`}>
                     <Button>Edit</Button>
                   </Link>
-                  {!mount.singleton && <Button
+                  {!module.singleton && <Button
                     variant="primary"
                     onClick={async (e) => {
-                      const newProcess = await workspace.spawn(mount.id);
+                      const newProcess = await workspace.spawn(module.id);
                       router.push(
                         `/procs/${newProcess.id}`,
                       );
@@ -235,7 +235,7 @@ const Home: NextPage = () => {
                             </AccordionButton>
                           </h2>
                           <AccordionPanel pb={4}>
-                            <MountInstances mid={mount.id} />
+                            <ModuleInstances mid={module.id} />
                           </AccordionPanel>
                         </>
                       );

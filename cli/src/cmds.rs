@@ -1,6 +1,6 @@
 use anyhow::{Ok, Result};
 use apeiro_internal_api::{
-    ApeiroError, MountNewRequest, MountSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
+    ApeiroError, ModuleNewRequest, ModuleSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
     ProcSendRequest, ProcStatus, ProcStatusDebug, StepResult, StepResultStatus,
 };
 use cli_table::format::VerticalLine;
@@ -125,12 +125,12 @@ pub(crate) async fn send(remote: String, proc_id: &String, message: &String) -> 
     Ok(())
 }
 
-pub(crate) async fn new(remote: String, mount_id: &String, name: &Option<String>) -> Result<()> {
+pub(crate) async fn new(remote: String, module_id: &String, name: &Option<String>) -> Result<()> {
     let client = reqwest::Client::new();
     let resp = client
         .post(remote + "/proc/")
         .json(&ProcNewRequest {
-            mount_id: mount_id.clone(),
+            module_id: module_id.clone(),
             name: name.clone(),
             version: None,
         })
@@ -194,10 +194,10 @@ pub(crate) async fn ps(remote: String, _output_json: bool) -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn mounts_list(remote: String) -> Result<()> {
-    let resp = reqwest::get(remote + "/mount/")
+pub(crate) async fn modules_list(remote: String) -> Result<()> {
+    let resp = reqwest::get(remote + "/module/")
         .await?
-        .json::<Vec<MountSummary>>()
+        .json::<Vec<ModuleSummary>>()
         .await?;
 
     println!("{:?}", resp);
@@ -205,11 +205,11 @@ pub(crate) async fn mounts_list(remote: String) -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn mount_new_inner(remote: String, srcfile: &PathBuf) -> Result<String> {
+pub(crate) async fn module_new_inner(remote: String, srcfile: &PathBuf) -> Result<String> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(remote + "/mount/")
-        .json(&MountNewRequest {
+        .post(remote + "/module/")
+        .json(&ModuleNewRequest {
             name: None,
             src: std::fs::read_to_string(srcfile)?,
             singleton: Some(false),
@@ -232,8 +232,8 @@ pub(crate) async fn mount_new_inner(remote: String, srcfile: &PathBuf) -> Result
     Ok(res)
 }
 
-pub(crate) async fn mount_new(remote: String, srcfile: &PathBuf) -> Result<()> {
-    let resp = mount_new_inner(remote, srcfile).await?;
+pub(crate) async fn module_new(remote: String, srcfile: &PathBuf) -> Result<()> {
+    let resp = module_new_inner(remote, srcfile).await?;
 
     println!("{:?}", resp);
 
