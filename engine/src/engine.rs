@@ -23,7 +23,7 @@ use crate::DEngine;
 use std::cell::RefCell;
 use tracing::trace;
 use std::string::String;
-
+use std::thread;
 use v8::{ContextScope, HandleScope, Isolate};
 
 pub struct Engine {
@@ -746,34 +746,36 @@ impl Engine {
         args: v8::FunctionCallbackArguments<'a>,
         mut retval: v8::ReturnValue<'s>,
     ) {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let _guard = runtime.enter();
-
         let url = args.get(0);
         let options = args.get(1);
         if let Result::Ok(url) = v8::Local::<v8::String>::try_from(url) {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let _guard = runtime.enter();
+
             let options: FetchConfiguration =
                 apeiro_serde::from_v8(scope, options).unwrap_or(FetchConfiguration::default());
 
             let url = url.to_rust_string_lossy(scope);
 
-            let mut res = _fetch(url, options).unwrap();
-            let mut val_received = res.try_recv();
-            while val_received.is_err() {
-                // TODO: wait
-                val_received = res.try_recv();
-            }
-            let val_received = val_received.unwrap();
+            let res = _fetch(url, options).unwrap();
+            let handle = thread::spawn(move || {
+                res.blocking_recv().expect("failed to receive from fetch")
+            });
+
+            let val_received = handle.join().expect("thread panicked");
+            trace!("val received from fetch channel: {}", val_received);
 
             let v8_resp = apeiro_serde::to_v8(scope, &val_received).unwrap();
-            let promise_factory = v8::PromiseResolver::new(scope).unwrap();
-            promise_factory.resolve(scope, v8_resp);
-
-            retval.set(promise_factory.get_promise(scope).into());
+            // if respond with promise:
+            // let promise_factory = v8::PromiseResolver::new(scope).unwrap();
+            // promise_factory.resolve(scope, v8_resp);
+            // retval.set(promise_factory.get_promise(scope).into());
+            // if respond without promise:
+            retval.set(v8_resp.into());
+            std::mem::forget(runtime);
         } else {
             throw_exception!(scope, "1st arg to fetch wasn't a string");
         }
-        std::mem::forget(runtime);
     }
 
     #[inline]
