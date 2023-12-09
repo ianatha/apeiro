@@ -145,7 +145,7 @@ impl DEngine {
         suspension: &serde_json::Value,
     ) {
         if let Some(subscription) = suspension.get("$subscribe") {
-            println!("subscription detected");
+            trace!("subscription detected");
             self.subscribe_proc_to_events(proc_id.clone(), subscription.clone())
                 .await;
         }
@@ -194,11 +194,13 @@ impl DEngine {
         })
     }
 
+    #[instrument(skip(self))]
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
         let module = self.module_get(req.module_id.clone()).await?;
         self.proc_new_compiled(module, req.name).await
     }
 
+    #[instrument(skip(self))]
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
         let procs = self.0.db.proc_list()?;
 
@@ -306,7 +308,6 @@ impl DEngine {
         }
     }
 
-    #[instrument(skip(self))]
     pub async fn proc_is_executing(&self, proc_id: &String) -> Result<bool, anyhow::Error> {
         let executing = {
             let locked_map = self.0.locks.read().await;
@@ -324,7 +325,6 @@ impl DEngine {
         Ok(executing)
     }
 
-    #[instrument(skip(self))]
     pub async fn proc_get(&self, proc_id: String) -> Result<ProcStatus, anyhow::Error> {
         let proc = self
             .0
@@ -419,7 +419,6 @@ impl DEngine {
         Err(anyhow!("watcher closed"))
     }
 
-    #[instrument(skip(self))]
     pub(crate) async fn send(&self, cmd: DEngineCmd) -> Result<(), anyhow::Error> {
         self.0.tx.send(cmd).await.map_err(anyhow::Error::msg)
     }
@@ -563,7 +562,7 @@ impl DEngine {
             if let Some(suspension) = &res.suspension {
                 if let Some(generator_tag) = suspension.get("$generator") {
                     if generator_tag.as_bool().unwrap_or(false) {
-                        println!(
+                        trace!(
                             "advacing {} because of $generator: {:?}",
                             proc.pid, res.suspension
                         );
@@ -579,7 +578,7 @@ impl DEngine {
                         .await?;
                     }
                 } else if let Some(subscription) = suspension.get("$subscribe") {
-                    println!("subscription detected");
+                    trace!("subscription detected");
                     self.subscribe_proc_to_events(proc.pid.clone(), subscription.clone())
                         .await;
                 }

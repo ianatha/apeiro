@@ -1,6 +1,6 @@
 use apeiro_internal_api::StackTraceFrame;
 use sourcemap::SourceMap;
-use tracing::debug;
+use tracing::{trace, debug};
 use v8::{Context, HandleScope, Local, Message, Value};
 
 pub fn stack_trace_to_frames_no_srcmap<'s>(
@@ -137,7 +137,7 @@ pub fn v8_type(val: Local<Value>) -> String {
 pub fn v8_println<'s>(context_scope: &mut HandleScope<'s, Context>, v8_value: Local<'s, Value>) {
     let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
     let json = serde_json::to_string_pretty(&value).unwrap();
-    println!("{}", json);
+    trace!("{}", json);
 }
 
 #[macro_export]
