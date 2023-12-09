@@ -56,7 +56,6 @@ impl From<RawBytes> for bytes::Bytes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem;
 
     const HELLO: &str = "hello";
 

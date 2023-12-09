@@ -1,5 +1,5 @@
-use swc_common::{sync::Lrc, SourceMap};
-use swc_ecma_ast::{Expr, ExprStmt, Lit, Stmt};
+use swc_core::common::{sync::Lrc, SourceMap};
+use swc_core::ecma::ast::{Expr, ExprStmt, Lit, Stmt};
 use swc_ecma_codegen::{text_writer::WriteJs, Emitter};
 
 #[allow(dead_code)]
@@ -15,9 +15,7 @@ pub fn ast_to_str<T: swc_ecma_codegen::Node>(node: &T) -> Vec<u8> {
         )) as Box<dyn WriteJs>;
 
         let mut emitter = Emitter {
-            cfg: swc_ecma_codegen::Config {
-                ..Default::default()
-            },
+            cfg: swc_ecma_codegen::Config::default(),
             comments: None,
             cm: cm.clone(),
             wr,
