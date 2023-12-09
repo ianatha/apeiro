@@ -1,7 +1,7 @@
 use anyhow::Result;
 use apeiro_internal_api::ProcSendRequest;
 use tokio::sync::mpsc;
-use tracing::{event, instrument, Level};
+use tracing::{event, instrument, Level, trace};
 
 use crate::dengine::{DEngineCmd, DEngineStorage, PluginStorage, ProcEvent};
 use crate::DEngine;
@@ -148,7 +148,7 @@ impl EventLoop {
                                 {
                                     Result::Ok(n) => {
                                         if n.as_millis() >= time.into() {
-                                            println!("triggering {} because {}", proc_id, time);
+                                            trace!("triggering {} because {}", proc_id, time);
                                         }
                                     }
                                     Err(_) => panic!("SystemTime before UNIX EPOCH!"),
@@ -169,7 +169,7 @@ impl EventLoop {
                 DEngineCmd::Send(cmd) => {
                     let dengine = self.dengine.clone();
                     let tx = self.tx.clone();
-                    println!("\n\n\n\n\nsending to: {}\n\n\n\n\n\n", cmd.proc_id);
+                    trace!("\n\n\n\n\nsending to: {}\n\n\n\n\n\n", cmd.proc_id);
                     match special_pid_processor(&cmd.proc_id) {
                         Some(processor) => {
                             let plugin_storage = DEngineStorage {

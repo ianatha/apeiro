@@ -36,6 +36,7 @@ use crate::{
     either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers, now_as_millis,
     stmt_exploder, CompilationResult, BASELINE_ES_VERSION,
 };
+use tracing::trace;
 
 pub struct ApeiroCompiler {
     pub cm: Lrc<SourceMap>,
@@ -178,7 +179,7 @@ struct ApeiroSourceMapConfig {}
 impl swc_core::common::source_map::SourceMapGenConfig for ApeiroSourceMapConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         let res = format!("source_todo_{}", now_as_millis());
-        println!("f: {:?} -> {}", f, res);
+        trace!("f: {:?} -> {}", f, res);
         f.to_string()
     }
 
@@ -236,7 +237,7 @@ impl ApeiroCompiler {
                 emitter.emit_module(&bundled.module).unwrap();
             }
 
-            println!("srcmap_buf: {:?}\n", srcmap_buf);
+            trace!("srcmap_buf: {:?}\n", srcmap_buf);
 
             String::from_utf8_lossy(&src_buf).to_string()
         };
@@ -362,7 +363,7 @@ impl ApeiroCompiler {
             FileName::Url(url) => {
                 let res = futures::executor::block_on(reqwest::get(url.clone())).unwrap();
                 let t = futures::executor::block_on(res.text()).unwrap();
-                println!("fecthed url {:?}", url);
+                trace!("fecthed url {:?}", url);
                 t
             }
             _ => unreachable!(),

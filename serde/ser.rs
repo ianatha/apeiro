@@ -1,5 +1,6 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate serde;
+extern crate tracing;
 
 use std::convert::TryInto;
 
@@ -14,6 +15,7 @@ use crate::keys::v8_struct_key;
 use crate::magic::transl8::MAGIC_FIELD;
 use crate::magic::transl8::{opaque_deref_mut, opaque_recv, MagicType, ToV8};
 use crate::{magic, ByteString, DetachedBuffer, StringOrBuffer, U16String, ZeroCopyBuf};
+use self::tracing::trace;
 
 type JsValue<'s> = v8::Local<'s, v8::Value>;
 type JsResult<'s> = Result<JsValue<'s>>;
@@ -716,19 +718,19 @@ pub fn resolve_fn<'s>(
         src
     );
 
-    println!("{}", src);
+    trace!("{}", src);
 
     let v8_src = v8::String::new(scope, &src).unwrap();
     let script = v8::Script::compile(scope, v8_src, None);
     if let Some(script) = script {
         func_from_script(script, scope, obj)
     } else {
-        println!("failed to compile script: {}", src);
+        trace!("failed to compile script: {}", src);
         let src = format!(
             r#"(function x($sc1) {{ return function y() {{ throw new Error("bad function"); }} }})"#
         );
         let v8_src = v8::String::new(scope, &src).unwrap();
-        println!("src: {}", src);
+        trace!("src: {}", src);
         let script = v8::Script::compile(scope, v8_src, None).unwrap();
         func_from_script(script, scope, obj)
     }
@@ -763,7 +765,7 @@ pub fn is_object_ref<'s>(
     let v8_obj_id = obj.get(scope, v8_obj_id_key.into())?;
     if !v8_obj_id.is_null_or_undefined() {
         let obj_ref_id = v8_obj_id.to_integer(scope)?.value() as i32;
-        println!("ref id found: {}", obj_ref_id);
+        trace!("ref id found: {}", obj_ref_id);
         return Some(obj_ref_id);
     }
     None
@@ -845,5 +847,5 @@ fn v8_println<'s>(
 ) {
     let value: serde_json::Value = serde_v8::from_v8(context_scope, v8_value).unwrap();
     let json = serde_json::to_string_pretty(&value).unwrap();
-    println!("{}", json);
+    trace!("{}", json);
 }

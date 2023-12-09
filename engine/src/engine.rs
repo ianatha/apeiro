@@ -21,7 +21,7 @@ use crate::v8_init;
 use crate::v8_str;
 use crate::DEngine;
 use std::cell::RefCell;
-
+use tracing::trace;
 use std::string::String;
 
 use v8::{ContextScope, HandleScope, Isolate};
@@ -374,7 +374,7 @@ impl Engine {
                 let updated_state = global.get(context_scope, state_obj_key.into()).unwrap();
                 let updated_state: serde_json::Value =
                     apeiro_serde::from_v8(context_scope, updated_state).unwrap();
-                println!("\n\n\n\n\n{:?}\n\n\n\n\n", updated_state);
+                trace!("\n\n\n\n\n{:?}\n\n\n\n\n", updated_state);
 
                 // fetch engine_status
                 let get_engine_status = get_module_fn(
@@ -1007,9 +1007,9 @@ fn _fetch(
 ) -> Result<tokio::sync::oneshot::Receiver<serde_json::Value>> {
     let (sender, receiver) = tokio::sync::oneshot::channel::<serde_json::Value>();
 
-    println!("before spawn");
+    trace!("before spawn");
     tokio::task::spawn(async move {
-        println!("spawned start");
+        trace!("spawned start");
         let _headers = if let Some(headers) = options.headers {
             let headers = headers.as_object().unwrap();
             let mut result = reqwest::header::HeaderMap::new();
@@ -1038,17 +1038,17 @@ fn _fetch(
             req = req.body(body);
         };
 
-        println!("request sending");
+        trace!("request sending");
         let res = req.send().await.unwrap();
-        println!("request sent");
+        trace!("request sent");
 
         let resp: serde_json::Value = res.json().await.unwrap();
-        println!("request completed");
+        trace!("request completed {}", resp);
 
         sender.send(resp).unwrap();
     });
 
-    println!("afetr spawn");
+    trace!("after spawn");
 
     Ok(receiver)
 }
