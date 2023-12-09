@@ -64,6 +64,9 @@ enum Commands {
     Watch {
         proc_id: String,
     },
+    Web {
+
+    },
 }
 
 #[tokio::main]
@@ -94,7 +97,12 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Ps {} => ps(remote, cli.output_json).await,
-        Commands::Mounts {} => mounts_list(remote).await,
-        Commands::Mount { srcfile } => mount_new(remote, srcfile).await,
+        Commands::Modules {} => modules_list(remote).await,
+        Commands::Module { srcfile } => module_new(remote, srcfile).await,
+        Commands::Web {} => {
+            println!("Listening on 127.0.0.1:3030");
+            apeiro_frontend_rs::web(([127, 0, 0, 1], 3030)).await;
+            Ok(())
+        }
     }
 }
