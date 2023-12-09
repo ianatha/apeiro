@@ -1,0 +1,9 @@
+[package]
+name = "apeiro_frontend_rs"
+version = "0.1.1"
+edition = "2021"
+
+[dependencies]
+rust-embed = { version = "8.1.0", features = ["compression", "interpolate-folder-path" ] }
+warp = "0.3.6"
+percent-encoding = "2.3.1"

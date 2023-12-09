@@ -1,0 +1,46 @@
+{
+  "name": "aledger-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@chakra-ui/icons": "^2.1.1",
+    "@chakra-ui/pro-theme": "^0.10.0",
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.10.4",
+    "@emotion/styled": "^11.10.4",
+    "@monaco-editor/react": "^4.6.0",
+    "@rjsf/chakra-ui": "^5.15.1",
+    "@rjsf/core": "^5.15.1",
+    "@rjsf/utils": "^5.15.1",
+    "@rjsf/validator-ajv6": "^5.15.1",
+    "chakra-react-select": "^4.7.6",
+    "emoji-unicode-map": "^1.1.11",
+    "framer-motion": "^7.6.1",
+    "monaco-editor": "^0.45.0",
+    "next": "14.0.4",
+    "nextjs-cors": "^2.1.2",
+    "qrcode.react": "^3.1.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-hot-keys": "^2.7.2",
+    "react-icons": "^4.6.0",
+    "supertokens-auth-react": "^0.35.9",
+    "supertokens-node": "^16.6.4",
+    "swr": "^2.2.4"
+  },
+  "devDependencies": {
+    "@next/bundle-analyzer": "^13.1.2",
+    "@types/node": "18.11.2",
+    "@types/react": "18.0.21",
+    "@types/react-dom": "18.0.6",
+    "eslint": "8.25.0",
+    "eslint-config-next": "12.3.1",
+    "typescript": "4.8.4"
+  }
+}
