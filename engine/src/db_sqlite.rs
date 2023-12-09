@@ -5,7 +5,7 @@ use crate::StepResultStatus;
 use anyhow::{anyhow, Context};
 use apeiro_compiler::CompilationResult;
 use apeiro_internal_api::{
-    EngineStatus, MountSummary, ProcDetails, ProcGetResponse, ProcStatusDebug, ProcSummary,
+    EngineStatus, ModuleSummary, ProcDetails, ProcGetResponse, ProcStatusDebug, ProcSummary,
     StepResult,
 };
 use nanoid::nanoid;
@@ -38,7 +38,7 @@ impl ApeiroPersistence for Db {
         )?;
 
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS mounts (
+            "CREATE TABLE IF NOT EXISTS modules (
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
                 src TEXT,
@@ -64,7 +64,7 @@ impl ApeiroPersistence for Db {
             "CREATE TABLE IF NOT EXISTS procs (
                 id TEXT PRIMARY KEY,
                 name TEXT UNIQUE,
-                mount_id TEXT,
+                module_id TEXT,
                 state BLOB,
                 current_step_id INTEGER,
                 singleton_version INTEGER,
@@ -140,14 +140,14 @@ impl ApeiroPersistence for Db {
         Ok(())
     }
 
-    fn proc_new(&self, mount_id: &String, name: &Option<String>) -> Result<String, anyhow::Error> {
+    fn proc_new(&self, module_id: &String, name: &Option<String>) -> Result<String, anyhow::Error> {
         let id = nanoid!();
 
         let conn = self.pool.get()?;
 
         conn.execute(
-            "INSERT INTO procs (id, name, mount_id, current_step_id) VALUES (?, ?, ?, ?)",
-            params![&id, name, mount_id, 0],
+            "INSERT INTO procs (id, name, module_id, current_step_id) VALUES (?, ?, ?, ?)",
+            params![&id, name, module_id, 0],
         )
         .unwrap();
 
@@ -206,7 +206,7 @@ impl ApeiroPersistence for Db {
         let proc = self.proc_get(proc_id_or_name)?;
 
         let mut stmt =
-            conn.prepare("SELECT mounts.compiled_src, steps.frames, steps.funcs, steps.snapshot FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) JOIN mounts ON (mounts.id = procs.mount_id) WHERE procs.id = ?")
+            conn.prepare("SELECT modules.compiled_src, steps.frames, steps.funcs, steps.snapshot FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) JOIN modules ON (modules.id = procs.module_id) WHERE procs.id = ?")
                 .context("proc_get_details query failed")?;
 
         let result = stmt.query_row(&[&proc.proc_id.clone()], |row| {
@@ -223,7 +223,7 @@ impl ApeiroPersistence for Db {
             };
             Ok(ProcDetails {
                 pid: proc.proc_id,
-                mount_id: proc.mount_id,
+                module_id: proc.module_id,
                 name: proc.name,
                 compiled_src,
                 engine_status,
@@ -239,12 +239,12 @@ impl ApeiroPersistence for Db {
 
         let mut stmt = if is_proc_id(proc_id_or_name) {
             conn.prepare(
-                "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.mount_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.id = ?",
+                "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.module_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.id = ?",
             )
             .context("proc_get by id query failed")?
         } else {
             conn.prepare(
-                "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.mount_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.name = ?",
+                "SELECT steps.status, steps.val, steps.suspension, procs.id, procs.name, procs.module_id FROM procs JOIN steps ON (steps.step_id = procs.current_step_id AND procs.id = steps.proc_id) WHERE procs.name = ?",
             )
             .context("proc_get by name query failed")?
         };
@@ -266,11 +266,11 @@ impl ApeiroPersistence for Db {
             };
             let proc_id: String = row.get(3)?;
             let name: Option<String> = row.get(4)?;
-            let mount_id: String = row.get(5)?;
+            let module_id: String = row.get(5)?;
 
             Ok(ProcGetResponse {
                 proc_id,
-                mount_id,
+                module_id,
                 step_result: StepResult {
                     status,
                     val,
@@ -351,7 +351,7 @@ impl ApeiroPersistence for Db {
         Ok(result)
     }
 
-    fn mount_new(
+    fn module_new(
         &self,
         name: &String,
         src: &String,
@@ -367,7 +367,7 @@ impl ApeiroPersistence for Db {
         let pc_to_map = serde_json::to_string(&compiled_src.program_counter_mapping)?;
 
         conn.execute(
-            r#"INSERT INTO mounts
+            r#"INSERT INTO modules
             (id, name, src, compiled_src, source_map, pc_to_map, hash_sha256, singleton_version)
             VALUES
             (?, ?, ?, ?, ?, ?, ?, ?)"#,
@@ -385,20 +385,20 @@ impl ApeiroPersistence for Db {
         .map_err(|e| match e {
             r2d2_sqlite::rusqlite::Error::SqliteFailure(error, _) => {
                 if error.code == r2d2_sqlite::rusqlite::ErrorCode::ConstraintViolation {
-                    anyhow!("mount already exists")
+                    anyhow!("module already exists")
                 } else {
-                    anyhow!("mount_new failed: {}", e)
+                    anyhow!("module_new failed: {}", e)
                 }
             }
-            _ => anyhow!("mount_new failed: {}", e),
+            _ => anyhow!("module_new failed: {}", e),
         })?;
 
         Ok(id)
     }
 
-    fn mount_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error> {
+    fn module_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("SELECT id FROM mounts WHERE hash_sha256 = ?")?;
+        let mut stmt = conn.prepare("SELECT id FROM modules WHERE hash_sha256 = ?")?;
 
         let result = stmt
             .query_row(params![hash_sha256], |row| {
@@ -410,10 +410,10 @@ impl ApeiroPersistence for Db {
         Ok(result)
     }
 
-    fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
+    fn module_list(&self) -> Result<Vec<ModuleSummary>, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt =
-            conn.prepare("SELECT id, src, compiled_src, name, singleton_version FROM mounts")?;
+            conn.prepare("SELECT id, src, compiled_src, name, singleton_version FROM modules")?;
 
         let result = stmt
             .query_map((), |row| {
@@ -423,7 +423,7 @@ impl ApeiroPersistence for Db {
                 let name: String = row.get(3)?;
                 let singleton: Option<u32> = row.get(4)?;
 
-                Ok(MountSummary {
+                Ok(ModuleSummary {
                     id,
                     src,
                     compiled_src,
@@ -438,27 +438,27 @@ impl ApeiroPersistence for Db {
         Ok(result)
     }
 
-    fn mount_edit(
+    fn module_edit(
         &self,
-        mount_id: &String,
+        module_id: &String,
         new_src: &String,
         compiled_src: &String,
     ) -> Result<(), anyhow::Error> {
         let conn = self.pool.get()?;
-        let mut stmt = conn.prepare("UPDATE mounts SET src = ?, compiled_src = ? WHERE id = ?")?;
+        let mut stmt = conn.prepare("UPDATE modules SET src = ?, compiled_src = ? WHERE id = ?")?;
 
-        stmt.execute(params![new_src, compiled_src, mount_id])?;
+        stmt.execute(params![new_src, compiled_src, module_id])?;
 
         Ok(())
     }
 
-    fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error> {
+    fn module_get(&self, module_id: &String) -> Result<ModuleSummary, anyhow::Error> {
         let conn = self.pool.get()?;
         let mut stmt = conn.prepare(
-            "SELECT id, src, compiled_src, name, singleton_version FROM mounts WHERE id = ?",
+            "SELECT id, src, compiled_src, name, singleton_version FROM modules WHERE id = ?",
         )?;
 
-        let (id, src, compiled_src, name, singleton) = stmt.query_row(&[mount_id], |row| {
+        let (id, src, compiled_src, name, singleton) = stmt.query_row(&[module_id], |row| {
             let id: String = row.get(0)?;
             let src: String = row.get(1)?;
             let compiled_src: String = row.get(2)?;
@@ -468,14 +468,14 @@ impl ApeiroPersistence for Db {
             Ok((id, src, compiled_src, name, singleton))
         })?;
 
-        let mut stmt = conn.prepare("SELECT id FROM procs WHERE mount_id = ?")?;
-        let procs = stmt.query_map(&[mount_id], |row| row.get(0))?;
+        let mut stmt = conn.prepare("SELECT id FROM procs WHERE module_id = ?")?;
+        let procs = stmt.query_map(&[module_id], |row| row.get(0))?;
         let mut proc_vec = Vec::new();
         for proc in procs {
             proc_vec.push(proc?);
         }
 
-        let result = MountSummary {
+        let result = ModuleSummary {
             id,
             src,
             compiled_src,

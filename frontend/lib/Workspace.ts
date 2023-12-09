@@ -6,14 +6,14 @@ export interface ProcState {
   name: string;
 }
 
-export function useMounts() {
+export function useModules() {
   const workspace = useWorkspace();
-  return useSWR("mount/", workspace.fetch);
+  return useSWR("module/", workspace.fetch);
 }
 
-export function useMount(mid: string) {
+export function useModule(mid: string) {
   const workspace = useWorkspace();
-  return useSWR(mid ? `mount/${mid}` : false, workspace.fetch);
+  return useSWR(mid ? `module/${mid}` : false, workspace.fetch);
 }
 
 export function useProcesses() {
@@ -88,8 +88,8 @@ export class Workspace {
     }
   }
 
-  async mount(src: string, name: string, singleton = ""): Promise<Record<string, any>> {
-    return this.fetch(`mount/`, {
+  async module(src: string, name: string, singleton = ""): Promise<Record<string, any>> {
+    return this.fetch(`module/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -146,12 +146,12 @@ export class Workspace {
     return eventSource;
   }
 
-  async mountUpdate(
+  async moduleUpdate(
     mid: string,
     src: string,
     name: string,
   ): Promise<Record<string, any>> {
-    return this.fetch(`mount/${mid}`, {
+    return this.fetch(`module/${mid}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -196,7 +196,7 @@ export class Workspace {
         "Apeiro-Wait": "true",
       },
       body: JSON.stringify({
-        mount_id: mid,
+        module_id: mid,
         fromAIA,
       }),
     });

@@ -62,7 +62,7 @@ async fn proc_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Respond
     let proc_id: String = req
         .match_info()
         .get("proc_id")
-        .ok_or(ErrorBadRequest("no mount name"))?
+        .ok_or(ErrorBadRequest("no module name"))?
         .parse()?;
 
     let res = dengine.proc_get(proc_id).await.map_err(apeiro_err)?;
@@ -75,7 +75,7 @@ async fn proc_delete(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Resp
     let proc_id: String = req
         .match_info()
         .get("proc_id")
-        .ok_or(ErrorBadRequest("no mount name"))?
+        .ok_or(ErrorBadRequest("no module name"))?
         .parse()?;
 
     dengine.proc_delete(proc_id).await.map_err(apeiro_err)?;
@@ -88,7 +88,7 @@ async fn proc_get_debug(req: HttpRequest, dengine: web::Data<DEngine>) -> impl R
     let proc_id: String = req
         .match_info()
         .get("proc_id")
-        .ok_or(ErrorBadRequest("no mount name"))?
+        .ok_or(ErrorBadRequest("no module name"))?
         .parse()?;
 
     let res = dengine.proc_get_debug(proc_id).await.map_err(apeiro_err)?;
@@ -208,64 +208,64 @@ async fn proc_watch(
     // Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[get("/mount/")]
-async fn mount_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
-    let res = dengine.mount_list().await.map_err(apeiro_err)?;
+#[get("/module/")]
+async fn module_list(_req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
+    let res = dengine.module_list().await.map_err(apeiro_err)?;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[get("/mount/{mount_id}")]
-async fn mount_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
-    let mount_id: String = req
+#[get("/module/{module_id}")]
+async fn module_get(req: HttpRequest, dengine: web::Data<DEngine>) -> impl Responder {
+    let module_id: String = req
         .match_info()
-        .get("mount_id")
-        .ok_or(ErrorBadRequest("no mount_id"))?
+        .get("module_id")
+        .ok_or(ErrorBadRequest("no module_id"))?
         .parse()?;
 
-    let res = dengine.mount_get(mount_id).await.map_err(apeiro_err)?;
+    let res = dengine.module_get(module_id).await.map_err(apeiro_err)?;
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[put("/mount/{mount_id}")]
-async fn mount_edit(
+#[put("/module/{module_id}")]
+async fn module_edit(
     req: HttpRequest,
-    body: web::Json<MountEditRequest>,
+    body: web::Json<ModuleEditRequest>,
     dengine: web::Data<DEngine>,
 ) -> impl Responder {
-    let mount_id: String = req
+    let module_id: String = req
         .match_info()
-        .get("mount_id")
-        .ok_or(ErrorBadRequest("no mount_id"))?
+        .get("module_id")
+        .ok_or(ErrorBadRequest("no module_id"))?
         .parse()?;
 
     let res = dengine
-        .mount_edit(mount_id, body.src.clone())
+        .module_edit(module_id, body.src.clone())
         .await
         .map_err(apeiro_err)?;
 
     Ok::<_, actix_web::Error>(web::Json(res))
 }
 
-#[post("/mount/")]
-async fn mount_new(
+#[post("/module/")]
+async fn module_new(
     _req: HttpRequest,
-    body: web::Json<MountNewRequest>,
+    body: web::Json<ModuleNewRequest>,
     dengine: web::Data<DEngine>,
 ) -> impl Responder {
-    let mount_id = dengine
-        .mount_new(body.into_inner())
+    let module_id = dengine
+        .module_new(body.into_inner())
         .await
         .map_err(apeiro_err)?;
 
-    // if body.mode.map_or(false, |x| { x == MountMode::Singleton }) {
+    // if body.mode.map_or(false, |x| { x == ModuleMode::Singleton }) {
     //     let res = dengine
-    //         .proc_new(ProcNewRequest { mount_id: mount_id.clone(), name })
+    //         .proc_new(ProcNewRequest { module_id: module_id.clone(), name })
     //         .await
     //         .map_err(apeiro_err)?;
 
-    //     Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": mount_id, "pid": res.proc_id })))
+    //     Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": module_id, "pid": res.proc_id })))
     // } else {
-    Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": mount_id })))
+    Ok::<_, actix_web::Error>(web::Json(serde_json::json!({ "mid": module_id })))
     // }
 }
 

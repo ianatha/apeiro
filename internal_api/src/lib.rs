@@ -7,7 +7,7 @@ pub type ApeiroId = String;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcGetResponse {
     pub proc_id: String,
-    pub mount_id: String,
+    pub module_id: String,
     pub name: Option<String>,
     pub step_result: StepResult,
 }
@@ -15,7 +15,7 @@ pub struct ProcGetResponse {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcDetails {
     pub pid: String,
-    pub mount_id: String,
+    pub module_id: String,
     pub name: Option<String>,
     pub compiled_src: String,
     pub engine_status: EngineStatus,
@@ -45,18 +45,18 @@ pub struct ProcListOutput {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcNewRequest {
-    pub mount_id: String,
+    pub module_id: String,
     pub name: Option<String>,
     pub version: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MountEditRequest {
+pub struct ModuleEditRequest {
     pub src: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MountNewRequest {
+pub struct ModuleNewRequest {
     pub name: Option<String>,
     pub src: String,
     pub singleton: Option<bool>,
@@ -139,7 +139,7 @@ impl std::fmt::Debug for StepResult {
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ProcStatus {
     pub proc_id: String,
-    pub mount_id: String,
+    pub module_id: String,
     pub name: Option<String>,
     pub status: StepResultStatus,
     pub val: Option<serde_json::Value>,
@@ -156,14 +156,14 @@ pub struct ProcStatusDebug {
 impl ProcStatus {
     pub fn new(
         proc_id: String,
-        mount_id: String,
+        module_id: String,
         name: Option<String>,
         step_result: StepResult,
         executing: bool,
     ) -> Self {
         ProcStatus {
             proc_id,
-            mount_id,
+            module_id,
             name,
             status: step_result.status,
             val: step_result.val,
@@ -179,7 +179,7 @@ pub struct ApeiroError {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MountSummary {
+pub struct ModuleSummary {
     pub id: String,
     pub src: String,
     pub compiled_src: String,

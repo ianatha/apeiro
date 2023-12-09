@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Ok, Result};
 use apeiro_internal_api::EngineStatus;
-use apeiro_internal_api::MountNewRequest;
+use apeiro_internal_api::ModuleNewRequest;
 use apeiro_internal_api::ProcSendRequest;
 use apeiro_internal_api::StackTraceFrame;
 use apeiro_internal_api::StepResult;
@@ -667,7 +667,7 @@ impl Engine {
 
             let handle = tokio::runtime::Handle::current();
             let _guard = handle.enter();
-            let new_mount = futures::executor::block_on(dengine.mount_new(MountNewRequest {
+            let new_module = futures::executor::block_on(dengine.module_new(ModuleNewRequest {
                 src: synthetic_src.clone(),
                 name: Some(format!("synthetic_{}", now_as_millis())),
                 singleton: None,
@@ -675,10 +675,10 @@ impl Engine {
             }))
             .unwrap();
 
-            let new_mount = futures::executor::block_on(dengine.mount_get(new_mount)).unwrap();
+            let new_module = futures::executor::block_on(dengine.module_get(new_module)).unwrap();
 
             let res =
-                futures::executor::block_on(dengine.proc_new_compiled(new_mount, None)).unwrap();
+                futures::executor::block_on(dengine.proc_new_compiled(new_module, None)).unwrap();
 
             let new_function_pid = v8::String::new(scope, res.id.as_str()).unwrap();
             retval.set(new_function_pid.into());

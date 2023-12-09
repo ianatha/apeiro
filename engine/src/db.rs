@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use apeiro_compiler::CompilationResult;
 use apeiro_internal_api::{
-    EngineStatus, MountSummary, ProcDetails, ProcGetResponse, ProcStatusDebug, ProcSummary,
+    EngineStatus, ModuleSummary, ProcDetails, ProcGetResponse, ProcStatusDebug, ProcSummary,
     StepResult,
 };
 use serde_json;
@@ -15,7 +15,7 @@ pub trait ApeiroPersistence: Sync + Send + Debug + 'static {
     fn plugin_set_state(&self, name: &String, val: &serde_json::Value)
         -> Result<(), anyhow::Error>;
 
-    fn proc_new(&self, mount_id: &String, name: &Option<String>) -> Result<String, anyhow::Error>;
+    fn proc_new(&self, module_id: &String, name: &Option<String>) -> Result<String, anyhow::Error>;
 
     fn proc_subscription_new(
         &self,
@@ -49,7 +49,7 @@ pub trait ApeiroPersistence: Sync + Send + Debug + 'static {
 
     fn proc_delete(&self, id: &String) -> Result<(), anyhow::Error>;
 
-    fn mount_new(
+    fn module_new(
         &self,
         name: &String,
         src: &String,
@@ -57,15 +57,15 @@ pub trait ApeiroPersistence: Sync + Send + Debug + 'static {
         singleton: Option<u32>,
     ) -> Result<String, anyhow::Error>;
 
-    fn mount_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error>;
+    fn module_find_by_hash(&self, hash_sha256: &String) -> Result<Option<String>, anyhow::Error>;
 
-    fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error>;
+    fn module_list(&self) -> Result<Vec<ModuleSummary>, anyhow::Error>;
 
-    fn mount_get(&self, mount_id: &String) -> Result<MountSummary, anyhow::Error>;
+    fn module_get(&self, module_id: &String) -> Result<ModuleSummary, anyhow::Error>;
 
-    fn mount_edit(
+    fn module_edit(
         &self,
-        mount_id: &String,
+        module_id: &String,
         new_src: &String,
         compiled_src: &String,
     ) -> Result<(), anyhow::Error>;

@@ -2,8 +2,8 @@ use anyhow::{anyhow, Ok, Result};
 use apeiro_compiler::apeiro_compile;
 use apeiro_compiler::extract_export_name;
 use apeiro_compiler::CompilationResult;
-use apeiro_internal_api::MountNewRequest;
-use apeiro_internal_api::MountSummary;
+use apeiro_internal_api::ModuleNewRequest;
+use apeiro_internal_api::ModuleSummary;
 use apeiro_internal_api::ProcListOutput;
 use apeiro_internal_api::ProcNewOutput;
 use apeiro_internal_api::ProcNewRequest;
@@ -153,21 +153,21 @@ impl DEngine {
 
     pub async fn proc_new_compiled(
         &self,
-        mount: MountSummary,
+        module: ModuleSummary,
         name: Option<String>,
     ) -> Result<ProcNewOutput, anyhow::Error> {
-        let name = if mount.singleton.is_some() {
+        let name = if module.singleton.is_some() {
             self.0.db.proc_rename_if_exists(
-                &mount.name,
-                &format!("{}_{}", mount.name, now_as_millis()).clone(),
+                &module.name,
+                &format!("{}_{}", module.name, now_as_millis()).clone(),
             )?;
 
-            mount.name
+            module.name
         } else {
-            name.unwrap_or_else(|| format!("{}_{}", mount.name, now_as_millis()))
+            name.unwrap_or_else(|| format!("{}_{}", module.name, now_as_millis()))
         };
 
-        let proc_id = self.0.db.proc_new(&mount.id, &Some(name))?;
+        let proc_id = self.0.db.proc_new(&module.id, &Some(name))?;
         let step_id = nanoid!();
 
         let mut engine = crate::Engine::new(
@@ -178,7 +178,7 @@ impl DEngine {
         );
 
         let (res, engine_status) = engine
-            .step_process(mount.compiled_src, None, None, None)
+            .step_process(module.compiled_src, None, None, None)
             .await?;
 
         self.0.db.proc_update(&proc_id, &res, &engine_status)?;
@@ -195,8 +195,8 @@ impl DEngine {
     }
 
     pub async fn proc_new(&self, req: ProcNewRequest) -> Result<ProcNewOutput, anyhow::Error> {
-        let mount = self.mount_get(req.mount_id.clone()).await?;
-        self.proc_new_compiled(mount, req.name).await
+        let module = self.module_get(req.module_id.clone()).await?;
+        self.proc_new_compiled(module, req.name).await
     }
 
     pub async fn proc_list(&self) -> Result<ProcListOutput, anyhow::Error> {
@@ -205,24 +205,24 @@ impl DEngine {
         Ok(ProcListOutput { procs })
     }
 
-    pub async fn mount_edit(
+    pub async fn module_edit(
         &self,
-        mount_id: String,
+        module_id: String,
         new_src: String,
     ) -> Result<Option<ProcNewOutput>, anyhow::Error> {
-        let mount_summary = self.0.db.mount_get(&mount_id)?;
+        let module_summary = self.0.db.module_get(&module_id)?;
 
         // let mut procs_not_done = 0;
         // let mut max_version = 0;
 
-        // for proc in mount_summary.procs {
+        // for proc in module_summary.procs {
         //     let proc = self.0.db.proc_get(&proc).unwrap();
         //     if !(proc.step_result.status == StepResultStatus::DONE || proc.step_result.status == StepResultStatus::CRASHED) {
         //     } else {
         //         procs_not_done += 1;
         //     }
         // }
-        let procs_not_done = mount_summary
+        let procs_not_done = module_summary
             .procs
             .iter()
             .filter(|proc_id| {
@@ -234,7 +234,7 @@ impl DEngine {
 
         if procs_not_done > 0 {
             Err(anyhow!(
-                "can't edit mount while there are procs still running"
+                "can't edit module while there are procs still running"
             ))
         } else {
             let src = new_src.clone();
@@ -242,12 +242,12 @@ impl DEngine {
 
             self.0
                 .db
-                .mount_edit(&mount_id, &new_src, &compiled_src.compiled_src)?;
+                .module_edit(&module_id, &new_src, &compiled_src.compiled_src)?;
 
-            if mount_summary.singleton.is_some() {
+            if module_summary.singleton.is_some() {
                 let new_proc = self
                     .proc_new(ProcNewRequest {
-                        mount_id: mount_id.clone(),
+                        module_id: module_id.clone(),
                         name: None,
                         version: None,
                     })
@@ -260,25 +260,25 @@ impl DEngine {
     }
 
     #[instrument(skip(self))]
-    pub async fn mount_get(&self, mount_id: String) -> Result<MountSummary, anyhow::Error> {
-        Ok(self.0.db.mount_get(&mount_id)?)
+    pub async fn module_get(&self, module_id: String) -> Result<ModuleSummary, anyhow::Error> {
+        Ok(self.0.db.module_get(&module_id)?)
     }
 
     #[instrument(skip(self))]
-    pub async fn mount_list(&self) -> Result<Vec<MountSummary>, anyhow::Error> {
-        Ok(self.0.db.mount_list()?)
+    pub async fn module_list(&self) -> Result<Vec<ModuleSummary>, anyhow::Error> {
+        Ok(self.0.db.module_list()?)
     }
 
     #[instrument(skip(self))]
     // calculate hash
     // check if hash exists in db
-    // if it does, return the mount id
+    // if it does, return the module id
     // if it doesn't, compile and insert into db
-    pub async fn mount_new(&self, req: MountNewRequest) -> Result<String, anyhow::Error> {
+    pub async fn module_new(&self, req: ModuleNewRequest) -> Result<String, anyhow::Error> {
         use sha256::digest;
         let hash = digest(req.src.clone());
-        if let Result::Ok(Some(mount)) = self.0.db.mount_find_by_hash(&hash) {
-            Ok(mount)
+        if let Result::Ok(Some(module)) = self.0.db.module_find_by_hash(&hash) {
+            Ok(module)
         } else {
             let src = req.src.clone();
             let compiled_src = if !req.src_is_compiled.unwrap_or(false) {
@@ -291,7 +291,7 @@ impl DEngine {
                 }
             };
 
-            let mount = self.0.db.mount_new(
+            let module = self.0.db.module_new(
                 &req.name.unwrap_or(extract_export_name(req.src.clone())),
                 &req.src,
                 &compiled_src,
@@ -302,7 +302,7 @@ impl DEngine {
                 },
             )?;
 
-            Ok(mount)
+            Ok(module)
         }
     }
 
@@ -336,7 +336,7 @@ impl DEngine {
 
         Ok(ProcStatus::new(
             proc.proc_id,
-            proc.mount_id,
+            proc.module_id,
             proc.name,
             proc.step_result,
             executing,

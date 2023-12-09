@@ -45,16 +45,16 @@ enum Commands {
         proc_id: String,
         message: String,
     },
-    /// New mount
-    Mount {
+    /// New module
+    Module {
         srcfile: PathBuf,
     },
-    /// List mounts
-    Mounts {},
+    /// List modules
+    Modules {},
     /// Start a new process
     New {
         #[clap(short, long)]
-        mount: Option<String>,
+        module: Option<String>,
         #[clap(short, long)]
         src: Option<PathBuf>,
         #[clap(short, long)]
@@ -86,14 +86,14 @@ async fn main() -> Result<()> {
         Commands::Get { proc_id, value } => get(&remote, proc_id, value, cli.output_json).await,
         Commands::Inspect { proc_id } => inspect(remote, proc_id).await,
         Commands::Send { proc_id, message } => send(remote, proc_id, message).await,
-        Commands::New { src, mount, name } => {
+        Commands::New { src, module, name } => {
             if let Some(src) = src {
-                let mount_id = mount_new_inner(remote.clone(), src).await?;
-                new(remote, &mount_id, name).await
-            } else if let Some(mount_id) = mount {
-                new(remote, mount_id, name).await
+                let module_id = module_new_inner(remote.clone(), src).await?;
+                new(remote, &module_id, name).await
+            } else if let Some(module_id) = module {
+                new(remote, module_id, name).await
             } else {
-                Err(anyhow::anyhow!("either --src or --mount must be specified"))
+                Err(anyhow::anyhow!("either --src or --module must be specified"))
             }
         }
         Commands::Ps {} => ps(remote, cli.output_json).await,

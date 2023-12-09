@@ -83,7 +83,7 @@ import {
 import { QuickstartPopover } from "../Quickstart/Filter";
 import { useEffect, useRef, useState } from "react";
 import { FiCpu, FiSave } from "react-icons/fi";
-import { useMount } from "../../lib/Workspace";
+import { useModule } from "../../lib/Workspace";
 import { quickstarts } from "./quickstarts";
 import { useRouter } from "next/router";
 import { MdOutlineSyncAlt } from "react-icons/md";
@@ -139,7 +139,7 @@ export function FunctionDisplay({
   const monacoRef = useRef<Monaco | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const [submitting, setSubmitting] = useState<boolean | string>(false);
-  const { data: mount, error, mutate } = useMount(mid as string);
+  const { data: module, error, mutate } = useModule(mid as string);
   const [name, setName] = useState(newFunction ? "untitled" : undefined);
   const [fix, setFix] = useState(false);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -191,11 +191,11 @@ export function FunctionDisplay({
   }
 
   useEffect(() => {
-    if (mount) {
-      editorRef.current?.setValue(mount.src);
-      setName(mount.name);
+    if (module) {
+      editorRef.current?.setValue(module.src);
+      setName(module.name);
     }
-  }, [mount]);
+  }, [module]);
 
   useEffect(() => {
     if (router.query["fix"] === "true") {
@@ -211,10 +211,10 @@ export function FunctionDisplay({
     try {
       const src = editorRef.current?.getValue() ?? "";
       if (mid === undefined) {
-        const resp = await workspace.mount(src, name ?? "untitled");
+        const resp = await workspace.module(src, name ?? "untitled");
         window.location.href = `/modules/${trimPrefix(resp.mid, "fn_")}`;
       } else {
-        const resp = await workspace.mountUpdate(mid, src, name ?? "untitled");
+        const resp = await workspace.moduleUpdate(mid, src, name ?? "untitled");
         editorRef.current?.updateOptions({
           readOnly: false,
         });
@@ -272,7 +272,7 @@ export function FunctionDisplay({
       //   }
       // }
       if (mid === undefined) {
-        const resp = await workspace.mount(src, name ?? "untitled", mode);
+        const resp = await workspace.module(src, name ?? "untitled", mode);
         const mid = resp.mid;
         const spawn_resp = await workspace.spawn(mid, fromAIA);
         if (spawn_resp.id) {
@@ -302,7 +302,7 @@ export function FunctionDisplay({
             readOnly: false,
           });
           setSubmitting(false);
-          // router.push(`/mounts/${mid}`);
+          // router.push(`/modules/${mid}`);
 
           // alert(
           //   "Guesstimating that it failed because " +
@@ -472,7 +472,7 @@ export function FunctionDisplay({
           </Flex>
         )}
         <Input
-          value={name || mount?.name}
+          value={name || module?.name}
           onChange={(e) => setName(e.target.value)}
         />
         <Editor
@@ -481,7 +481,7 @@ export function FunctionDisplay({
           beforeMount={handleEditorWillMount}
           onMount={handleEditorDidMount}
           onChange={handleEditorChange}
-          defaultValue={newFunction ? quickstarts.empty.code : mount?.src}
+          defaultValue={newFunction ? quickstarts.empty.code : module?.src}
           options={{
             minimap: {
               enabled: false,
@@ -489,10 +489,10 @@ export function FunctionDisplay({
           }}
         />
         {/* <pre>
-          {mount?.compiled_src}
+          {module?.compiled_src}
         </pre>
         <pre>
-          {JSON.stringify(get_src_map(mount?.compiled_src), null, 2)}
+          {JSON.stringify(get_src_map(module?.compiled_src), null, 2)}
         </pre> */}
       </Box>
       {fix &&
