@@ -1,12 +1,12 @@
-use swc_common::util::take::Take;
-use swc_common::Spanned;
-use swc_ecma_ast::{
+use swc_core::common::util::take::Take;
+use swc_core::common::Spanned;
+use swc_core::ecma::ast::{
     Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module, ModuleDecl,
     ModuleItem, VarDecl, VarDeclKind, VarDeclarator,
 };
 
-use swc_ecmascript::visit::{as_folder, Fold};
-use swc_ecmascript::visit::{VisitMut, VisitMutWith};
+use swc_core::ecma::visit::{as_folder, Fold};
+use swc_core::ecma::visit::{VisitMut, VisitMutWith};
 
 pub fn folder() -> impl Fold {
     as_folder(VisitorFnDeclToFnExpr {})

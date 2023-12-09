@@ -4,30 +4,31 @@ use std::path::Path;
 
 use swc::{Compiler, SwcComments};
 
-use swc_atoms::js_word;
+use swc_core::atoms::js_word;
 use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord};
-use swc_common::comments::SingleThreadedComments;
-use swc_common::errors::ColorConfig;
-use swc_common::sync::Lrc;
+use swc_core::common::comments::SingleThreadedComments;
+use swc_core::common::errors::ColorConfig;
+use swc_core::common::sync::Lrc;
 
-use swc_common::{chain, Globals, Mark, SourceFile, Span, GLOBALS};
-use swc_common::{errors::Handler, FileName, SourceMap};
+use swc_core::common::{chain, Globals, Mark, SourceFile, Span, GLOBALS};
+use swc_core::common::{errors::Handler, FileName, SourceMap};
 
 use anyhow::{anyhow, Error, Result};
-use swc_ecma_ast::{
+use swc_core::ecma::ast::{
     Bool, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, MetaPropExpr, MetaPropKind,
     Module, Program, PropName, Str,
 };
+
 use swc_ecma_codegen::text_writer::{omit_trailing_semi, JsWriter, WriteJs};
 use swc_ecma_codegen::Emitter;
-use swc_ecma_loader::resolvers::lru::CachingResolver;
+use swc_core::ecma::loader::resolvers::lru::CachingResolver;
 use swc_ecma_minifier::option::{
     CompressOptions, ExtraOptions, MangleOptions, MinifyOptions, TopLevelOptions,
 };
 use swc_ecma_parser::{Syntax, TsConfig};
-use swc_ecma_transforms::fixer;
-use swc_ecma_transforms::pass::noop;
-use swc_ecma_visit::VisitMutWith;
+use swc_core::ecma::transforms::base::fixer::fixer;
+use swc_core::ecma::transforms::base::pass::noop;
+use swc_core::ecma::visit::VisitMutWith;
 use tracing::{event, instrument, Level};
 
 use crate::helpers::{Helpers, HELPERS};
@@ -49,13 +50,13 @@ impl std::fmt::Debug for ApeiroCompiler {
 
 pub fn custom_apeiro_compile<P>(
     input: String,
-    folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
+    folder_chain: impl FnOnce(&Program) -> P,
     source_map: bool,
     external_helpers: bool,
     minify: bool,
 ) -> Result<CompilationResult>
 where
-    P: swc_ecmascript::visit::Fold,
+    P: swc_core::ecma::visit::Fold,
 {
     let compiler = ApeiroCompiler::new();
     GLOBALS.set(&Globals::new(), || {
@@ -103,7 +104,7 @@ impl swc_bundler::Hook for Hook {
         &self,
         span: Span,
         module_record: &ModuleRecord,
-    ) -> Result<Vec<swc_ecma_ast::KeyValueProp>, anyhow::Error> {
+    ) -> Result<Vec<swc_core::ecma::ast::KeyValueProp>, anyhow::Error> {
         let file_name = module_record.file_name.to_string();
 
         Ok(vec![
@@ -174,7 +175,7 @@ impl<'a> Load for Loader<'a> {
 
 struct ApeiroSourceMapConfig {}
 
-impl swc_common::source_map::SourceMapGenConfig for ApeiroSourceMapConfig {
+impl swc_core::common::source_map::SourceMapGenConfig for ApeiroSourceMapConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         let res = format!("source_todo_{}", now_as_millis());
         println!("f: {:?} -> {}", f, res);
@@ -221,11 +222,8 @@ impl ApeiroCompiler {
             let mut src_buf = vec![];
             {
                 let wr = JsWriter::new(self.cm.clone(), "\n", &mut src_buf, Some(&mut srcmap_buf));
-                let mut emitter = Emitter {
-                    cfg: swc_ecma_codegen::Config {
-                        minify,
-                        ..Default::default()
-                    },
+                let mut emitter: Emitter<'_, Box<dyn WriteJs>, SourceMap> = Emitter {
+                    cfg: swc_ecma_codegen::Config::default().with_minify(minify),
                     cm: self.cm.clone(),
                     comments: None,
                     wr: if minify {
@@ -400,7 +398,7 @@ impl ApeiroCompiler {
             self.parse(filename, compiled_str.compiled_src)
         })?;
 
-        if let swc_ecma_ast::Program::Module(module) = program {
+        if let Program::Module(module) = program {
             Ok((file, module))
         } else {
             Err(anyhow!("not a module"))
@@ -411,13 +409,13 @@ impl ApeiroCompiler {
         &self,
         file: Lrc<SourceFile>,
         program: Program,
-        folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
+        folder_chain: impl FnOnce(&Program) -> P,
         source_map: bool,
         external_helpers: bool,
         minify: bool,
     ) -> Result<CompilationResult>
     where
-        P: swc_ecmascript::visit::Fold,
+        P: swc_core::ecma::visit::Fold,
     {
         HELPERS.set(&Helpers::new(external_helpers), || {
             let handler =
@@ -437,7 +435,7 @@ impl ApeiroCompiler {
                     config: swc::config::Config {
                         input_source_map: Some(swc::config::InputSourceMap::Bool(true)),
                         jsc: swc::config::JscConfig {
-                            target: Some(swc_ecma_ast::EsVersion::Es2017),
+                            target: Some(swc_core::ecma::ast::EsVersion::Es2017),
                             syntax: Some(swc_ecma_parser::Syntax::Typescript(config)),
                             ..Default::default()
                         },
@@ -496,13 +494,13 @@ impl ApeiroCompiler {
     pub fn custom_apeiro_compile_string<P>(
         &self,
         input: String,
-        folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
+        folder_chain: impl FnOnce(&Program) -> P,
         source_map: bool,
         external_helpers: bool,
         minify: bool,
     ) -> Result<CompilationResult>
     where
-        P: swc_ecmascript::visit::Fold,
+        P: swc_core::ecma::visit::Fold,
     {
         let (file, program) = self.parse("toplevel".into(), input)?;
 

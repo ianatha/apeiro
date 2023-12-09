@@ -1,8 +1,8 @@
-use swc_common::util::take::Take;
-use swc_ecma_ast::{CallExpr, Callee};
-use swc_ecma_utils::ExprFactory;
-use swc_ecmascript::visit::{as_folder, Fold};
-use swc_ecmascript::{
+use swc_core::common::util::take::Take;
+use swc_core::ecma::ast::{CallExpr, Callee};
+use swc_core::ecma::utils::ExprFactory;
+use swc_core::ecma::visit::{as_folder, Fold};
+use swc_core::ecma::{
     ast::Expr,
     visit::{VisitMut, VisitMutWith},
 };

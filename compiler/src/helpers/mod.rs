@@ -7,11 +7,11 @@ use std::{
 
 use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
-use swc_atoms::JsWord;
-use swc_common::{FileName, FilePathMapping, Mark, SourceMap, SyntaxContext, DUMMY_SP};
-use swc_ecma_ast::*;
-use swc_ecma_utils::{prepend_stmts, DropSpan};
-use swc_ecma_visit::{as_folder, noop_visit_mut_type, Fold, VisitMut, VisitMutWith};
+use swc_core::atoms::JsWord;
+use swc_core::common::{FileName, FilePathMapping, Mark, SourceMap, SyntaxContext, DUMMY_SP};
+use swc_core::ecma::ast::*;
+use swc_core::ecma::utils::{prepend_stmts, DropSpan};
+use swc_core::ecma::visit::{as_folder, noop_visit_mut_type, Fold, VisitMut, VisitMutWith};
 
 use crate::ProgramCounterToSourceLocation;
 
@@ -19,12 +19,12 @@ use crate::ProgramCounterToSourceLocation;
 #[macro_export]
 macro_rules! helper_expr {
     (ts, $field_name:ident, $s:tt) => {{
-        $crate::helper_expr!(ts, ::swc_common::DUMMY_SP, $field_name, $s)
+        $crate::helper_expr!(ts, ::swc_core::common::DUMMY_SP, $field_name, $s)
     }};
 
     (ts, $span:expr, $field_name:ident, $s:tt) => {{
         #[allow(unused_imports)]
-        use swc_ecma_utils::{quote_ident, ExprFactory};
+        use swc_core::ecma::utils::{quote_ident, ExprFactory};
 
         debug_assert!(
             $s.starts_with("__"),
@@ -35,22 +35,22 @@ macro_rules! helper_expr {
         let external = $crate::helpers::HELPERS.with(|helper| helper.external());
 
         if external {
-            Expr::from(swc_ecma_utils::quote_ident!(
+            Expr::from(swc_core::ecma::utils::quote_ident!(
                 span,
                 concat!("_", stringify!($field_name))
             ))
         } else {
-            Expr::from(swc_ecma_utils::quote_ident!(span, $s))
+            Expr::from(swc_core::ecma::utils::quote_ident!(span, $s))
         }
     }};
 
     ($field_name:ident, $s:tt) => {{
-        $crate::helper_expr!(::swc_common::DUMMY_SP, $field_name, $s)
+        $crate::helper_expr!(::swc_core::common::DUMMY_SP, $field_name, $s)
     }};
 
     ($span:expr, $field_name:ident, $s:tt) => {{
         #[allow(unused_imports)]
-        use swc_ecma_utils::{quote_ident, ExprFactory};
+        use swc_core::ecma::utils::{quote_ident, ExprFactory};
 
         debug_assert!(
             !$s.starts_with("_"),
@@ -61,12 +61,12 @@ macro_rules! helper_expr {
         let external = $crate::helpers::HELPERS.with(|helper| helper.external());
 
         if external {
-            Expr::from(swc_ecma_utils::quote_ident!(
+            Expr::from(swc_core::ecma::utils::quote_ident!(
                 span,
                 concat!("_", stringify!($field_name))
             ))
         } else {
-            Expr::from(swc_ecma_utils::quote_ident!(span, concat!("_", $s)))
+            Expr::from(swc_core::ecma::utils::quote_ident!(span, concat!("_", $s)))
         }
     }};
 }
@@ -74,7 +74,7 @@ macro_rules! helper_expr {
 #[macro_export]
 macro_rules! helper {
     ($($t:tt)*) => {{
-        use swc_ecma_utils::ExprFactory;
+        use swc_core::ecma::utils::ExprFactory;
         $crate::helper_expr!($($t)*).as_callee()
     }};
 }
@@ -153,7 +153,7 @@ macro_rules! add_import_to {
                 span: DUMMY_SP,
                 specifiers: vec![s],
                 src: Box::new(src),
-                asserts: Default::default(),
+                with: Default::default(),
                 type_only: Default::default(),
             })))
         }
@@ -439,7 +439,7 @@ impl VisitMut for Marker {
 
 // #[cfg(test)]
 // mod tests {
-//     use swc_ecma_visit::{as_folder, FoldWith};
+//     use swc_core::ecma::visit::{as_folder, FoldWith};
 //     use testing::DebugUsingDisplay;
 
 //     use super::*;

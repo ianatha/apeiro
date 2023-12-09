@@ -8,10 +8,10 @@ use crate::{self as compiler, extract_export_name};
 
 pub fn compiler_test<P>(
     input: &str,
-    folder_chain: impl FnOnce(&swc_ecma_ast::Program) -> P,
+    folder_chain: impl FnOnce(&swc_core::ecma::ast::Program) -> P,
     expected: &str,
 ) where
-    P: swc_ecmascript::visit::Fold,
+    P: swc_core::ecma::visit::Fold,
 {
     let out = compiler::custom_apeiro_compile(input.to_string(), folder_chain, false, true, false)
         .unwrap();

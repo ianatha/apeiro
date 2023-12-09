@@ -5,20 +5,30 @@ use std::{
     rc::Rc,
 };
 
-use is_macro::Is;
-use swc_atoms::{js_word, JsWord};
-use swc_common::{
-    util::take::Take, BytePos, EqIgnoreSpan, Mark, Span, Spanned, SyntaxContext, DUMMY_SP,
-};
-use swc_ecma_ast::*;
 use swc_ecma_transforms_base::ext::AsOptExpr;
-use swc_ecma_utils::{
-    function::FnEnvHoister, private_ident, prop_name_to_expr_value, quote_ident, undefined,
-    ExprFactory,
+
+use swc_core::{
+    atoms::{
+        js_word, JsWord
+    },
+    common::{
+        util::take::Take, BytePos, EqIgnoreSpan, Mark, Span, Spanned, SyntaxContext, DUMMY_SP,
+    },
+    ecma::{
+        utils::{
+            function::FnEnvHoister,
+            private_ident,
+            prop_name_to_expr_value,
+            quote_ident,
+            undefined,
+            ExprFactory,
+        },
+        ast::*,
+        ast::{ExprOrSpread, PatOrExpr},
+        visit::{as_folder, noop_visit_mut_type, noop_visit_type, Fold, Visit, VisitMut, VisitMutWith, VisitWith},
+    },
 };
-use swc_ecma_visit::{
-    as_folder, noop_visit_mut_type, noop_visit_type, Fold, Visit, VisitMut, VisitMutWith, VisitWith,
-};
+use is_macro::Is;
 use tracing::debug;
 
 use crate::helper;
@@ -937,8 +947,8 @@ impl VisitMut for Generator {
             self.begin_script_loop_block();
         }
 
-        if let VarDeclOrPat::VarDecl(initializer) = &mut node.left {
-            for variable in &initializer.decls {
+        if let Some(var_decl) = node.left.as_var_decl() {
+            for variable in &var_decl.decls {
                 self.hoist_variable_declaration(variable.name.as_ident().unwrap());
             }
 
@@ -1739,7 +1749,9 @@ impl Generator {
             node.right.visit_mut_with(self);
             self.emit_stmt(Stmt::ForIn(ForInStmt {
                 span: DUMMY_SP,
-                left: VarDeclOrPat::Pat(key.clone().into()),
+                left: ForHead::Pat(Box::new(
+                    Pat::Ident(key.clone().into()).into(),
+                )),
                 right: node.right.take(),
                 body: Box::new(Stmt::Expr(ExprStmt {
                     span: DUMMY_SP,
@@ -1772,16 +1784,20 @@ impl Generator {
             );
 
             let variable = match node.left {
-                VarDeclOrPat::VarDecl(initializer) => {
+                ForHead::VarDecl(initializer) => {
                     for variable in initializer.decls.iter() {
                         self.hoist_variable_declaration(variable.name.as_ident().unwrap());
                     }
 
                     initializer.decls[0].name.clone()
                 }
-                VarDeclOrPat::Pat(mut initializer) => {
-                    initializer.visit_mut_with(self);
-                    *initializer
+                ForHead::UsingDecl(ref _decl) => {
+                    todo!("ForHead::UsingDecl should be removed before generator pass")
+                }
+                ForHead::Pat(pat) => {
+                    let mut pat = pat.to_owned();
+                    pat.visit_mut_with(self);
+                    *pat
                 }
             };
             self.emit_assignment(

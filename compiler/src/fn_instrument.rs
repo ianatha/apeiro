@@ -1,57 +1,69 @@
 use std::borrow::BorrowMut;
 
-use swc_common::util::take::Take;
-use swc_common::BytePos;
-use swc_common::Spanned;
+use swc_core::common::{
+    util::take::Take,
+    BytePos,
+    Spanned,
+    Span,
+    SyntaxContext,
+    DUMMY_SP,
+};
 
-use swc_common::Span;
-use swc_common::SyntaxContext;
-use swc_common::DUMMY_SP;
+use swc_core::ecma::ast::{
+    AssignPatProp,
+    BlockStmt,
+    ExprStmt,
+    FnExpr,
+    Function,
+    Id,
+    Ident,
+    IfStmt,
+    ImportDecl,
+    ImportSpecifier,
+    KeyValueProp,
+    MemberExpr,
+    Module,
+    ModuleDecl,
+    ModuleItem,
+    Null,
+    ObjectLit,
+    ObjectPat,
+    ObjectPatProp,
+    Param,
+    Pat,
+    Prop,
+    ReturnStmt,
+    Stmt,
+    SwitchCase,
+    SwitchStmt,
+    ThrowStmt,
+    TryStmt,
+    CallExpr,
+    Callee,
+    Decl,
+    ExprOrSpread,
+    VarDecl,
+    VarDeclKind,
+    VarDeclarator,
+};
 
-use swc_ecma_ast::AssignPatProp;
-use swc_ecma_ast::BlockStmt;
+use swc_core::ecma::utils::{
+    private_ident,
+    ExprFactory,
+    quote_ident,
+};
 
-use swc_ecma_ast::ExprStmt;
-use swc_ecma_ast::FnExpr;
-use swc_ecma_ast::Function;
-use swc_ecma_ast::Id;
-use swc_ecma_ast::Ident;
-use swc_ecma_ast::IfStmt;
-use swc_ecma_ast::ImportDecl;
-use swc_ecma_ast::ImportSpecifier;
-use swc_ecma_ast::KeyValueProp;
-use swc_ecma_ast::MemberExpr;
-use swc_ecma_ast::Module;
-use swc_ecma_ast::ModuleDecl;
-use swc_ecma_ast::ModuleItem;
-use swc_ecma_ast::Null;
-use swc_ecma_ast::ObjectLit;
-use swc_ecma_ast::ObjectPat;
-use swc_ecma_ast::ObjectPatProp;
-use swc_ecma_ast::Param;
-use swc_ecma_ast::Pat;
-use swc_ecma_ast::Prop;
-use swc_ecma_ast::ReturnStmt;
-use swc_ecma_ast::Stmt;
-use swc_ecma_ast::SwitchCase;
-use swc_ecma_ast::SwitchStmt;
-use swc_ecma_ast::ThrowStmt;
-use swc_ecma_ast::TryStmt;
-use swc_ecma_ast::{CallExpr, Callee, Decl, ExprOrSpread, VarDecl, VarDeclKind, VarDeclarator};
-
-use swc_ecma_utils::private_ident;
-use swc_ecma_utils::ExprFactory;
-
-use swc_ecma_utils::quote_ident;
-
-use swc_ecmascript::{
+use swc_core::ecma::{
     ast::Expr,
-    visit::{VisitMut, VisitMutWith},
-};
-use swc_ecmascript::{
     ast::Lit,
-    visit::{as_folder, Fold},
+    visit::{
+        VisitMut,
+        VisitMutWith,
+        as_folder,
+        Fold,
+    },
 };
+
 use tracing::{event, Level};
 
 use crate::helpers::HELPERS;
@@ -213,7 +225,7 @@ impl WrapFunctions {
     fn expr_set_frame_pc(&mut self, pc: i32) -> Stmt {
         ExprStmt {
             span: DUMMY_SP,
-            expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
+            expr: Box::new(Expr::Assign(swc_core::ecma::ast::AssignExpr {
                 span: DUMMY_SP,
                 left: MemberExpr {
                     span: DUMMY_SP,
@@ -221,8 +233,8 @@ impl WrapFunctions {
                     prop: quote_ident!("$pc").take().into(),
                 }
                 .into(),
-                op: swc_ecma_ast::AssignOp::Assign,
-                right: swc_ecma_ast::Number {
+                op: swc_core::ecma::ast::AssignOp::Assign,
+                right: swc_core::ecma::ast::Number {
                     span: DUMMY_SP,
                     value: (pc) as f64,
                     raw: None,
@@ -265,7 +277,7 @@ impl WrapFunctions {
                         new_stmts.push(
                             ExprStmt {
                                 span: var.span,
-                                expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
+                                expr: Box::new(Expr::Assign(swc_core::ecma::ast::AssignExpr {
                                     span: var.span, // todo?
                                     left: MemberExpr {
                                         span: var.span, // todo?
@@ -273,10 +285,10 @@ impl WrapFunctions {
                                         prop: assignee_name.id.clone().into(),
                                     }
                                     .into(),
-                                    op: swc_ecma_ast::AssignOp::Assign,
+                                    op: swc_core::ecma::ast::AssignOp::Assign,
                                     right: ObjectLit {
                                         span: var.span, // todo?
-                                        props: vec![swc_ecma_ast::PropOrSpread::Prop(
+                                        props: vec![swc_core::ecma::ast::PropOrSpread::Prop(
                                             Prop::KeyValue(KeyValueProp {
                                                 key: quote_ident!("value").into(),
                                                 value: init.clone(),
@@ -301,7 +313,7 @@ impl WrapFunctions {
                         new_stmts.push(
                             ExprStmt {
                                 span: DUMMY_SP,
-                                expr: Box::new(Expr::Assign(swc_ecma_ast::AssignExpr {
+                                expr: Box::new(Expr::Assign(swc_core::ecma::ast::AssignExpr {
                                     span: DUMMY_SP,
                                     left: MemberExpr {
                                         span: DUMMY_SP,
@@ -309,7 +321,7 @@ impl WrapFunctions {
                                         prop: assignee_name.id.clone().into(),
                                     }
                                     .into(),
-                                    op: swc_ecma_ast::AssignOp::Assign,
+                                    op: swc_core::ecma::ast::AssignOp::Assign,
                                     right: ObjectLit {
                                         span: DUMMY_SP,
                                         props: vec![],
@@ -344,7 +356,7 @@ impl WrapFunctions {
             cases.push(SwitchCase {
                 span: DUMMY_SP,
                 test: Some(
-                    swc_ecma_ast::Number {
+                    swc_core::ecma::ast::Number {
                         span: DUMMY_SP,
                         value: pc as f64,
                         raw: None,
@@ -388,7 +400,7 @@ impl WrapFunctions {
                     HELPERS.with(|mut helpers| {
                         let helpers = helpers.borrow_mut();
                         let fnhash = *self.fn_hash.last().unwrap();
-                        let orig_span: swc_common::Span = stmt.span();
+                        let orig_span: swc_core::common::Span = stmt.span();
                         helpers.add_pc_to_src(fnhash, pc, orig_span.lo.0, orig_span.hi.0);
                     });
                     let mut res = vec![];
@@ -505,7 +517,7 @@ impl VisitMut for WrapFunctions {
                         0,
                         IfStmt {
                             span: DUMMY_SP,
-                            test: Box::new(Expr::Call(swc_ecma_ast::CallExpr {
+                            test: Box::new(Expr::Call(swc_core::ecma::ast::CallExpr {
                                 span: DUMMY_SP,
                                 callee: Callee::Expr(
                                     Expr::Ident(quote_ident!("$isSuspendSignal")).into(),

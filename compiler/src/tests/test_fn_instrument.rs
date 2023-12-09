@@ -1,4 +1,4 @@
-use swc_common::chain;
+use swc_core::common::chain;
 
 use crate::{fn_decl_to_fn_expr, fn_instrument, stmt_exploder};
 
