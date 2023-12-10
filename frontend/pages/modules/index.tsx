@@ -170,7 +170,7 @@ const Home: NextPage = () => {
                 variant="secondary"
                 leftIcon={<FiPlusSquare fontSize="1.25rem" />}
               >
-                New Function
+                New Module
               </Button>
             </Link>
           </HStack>

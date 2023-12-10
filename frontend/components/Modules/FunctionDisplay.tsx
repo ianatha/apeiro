@@ -390,7 +390,7 @@ export function FunctionDisplay({
       >
         <HStack justify={"space-between"}>
           <Heading size="md">
-            {newFunction ? "New Function" : "mid_" + mid}
+            {newFunction ? "New Module" : "mid_" + mid}
           </Heading>
           {/* <Button
             leftIcon={<Icon as={FiCpu} />}
