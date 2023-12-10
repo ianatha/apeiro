@@ -55,7 +55,7 @@ export function DashboardContent() {
               variant="primary"
               leftIcon={<FiPlusSquare fontSize="1.25rem" />}
             >
-              New Function
+              New Module
             </Button>
           </Link>
         </Stack>
@@ -88,7 +88,7 @@ export function DashboardContent() {
             <HStack fontSize={"lg"} mb={4}>
               <Icon as={FiCode} boxSize="10" />
               <Heading size={useBreakpointValue({ base: "xs", lg: "sm" })}>
-                Code
+                Modules
               </Heading>
             </HStack>
             {data?.NumModules}
