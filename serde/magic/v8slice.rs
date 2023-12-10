@@ -1,16 +1,12 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
-use std::convert::TryInto;
+use std::{
+    convert::{TryFrom, TryInto},
+    ops::{Deref, DerefMut, Range},
+    rc::Rc,
+};
 
-use std::convert::TryFrom;
-
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::ops::Range;
-use std::rc::Rc;
-
-use super::rawbytes;
-use super::transl8::FromV8;
+use super::{rawbytes, transl8::FromV8};
 
 /// A V8Slice encapsulates a slice that's been borrowed from a JavaScript
 /// ArrayBuffer object. JavaScript objects can normally be garbage collected,
@@ -57,7 +53,7 @@ impl V8Slice {
     fn as_slice_mut(&mut self) -> &mut [u8] {
         let store = &self.store;
         let Some(ptr) = store.data() else {
-          return &mut [];
+            return &mut [];
         };
         let ptr = ptr.cast::<u8>().as_ptr();
         // SAFETY: v8::SharedRef<v8::BackingStore> is similar to Arc<[u8]>,

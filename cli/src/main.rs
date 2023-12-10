@@ -1,10 +1,10 @@
 mod cmds;
 
+use std::{path::PathBuf, string::String};
+
 use anyhow::{Ok, Result};
 use clap::{command, Parser, Subcommand};
 use cmds::*;
-
-use std::{path::PathBuf, string::String};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -64,9 +64,7 @@ enum Commands {
     Watch {
         proc_id: String,
     },
-    Web {
-
-    },
+    Web {},
 }
 
 #[tokio::main]
@@ -93,7 +91,9 @@ async fn main() -> Result<()> {
             } else if let Some(module_id) = module {
                 new(remote, module_id, name).await
             } else {
-                Err(anyhow::anyhow!("either --src or --module must be specified"))
+                Err(anyhow::anyhow!(
+                    "either --src or --module must be specified"
+                ))
             }
         }
         Commands::Ps {} => ps(remote, cli.output_json).await,

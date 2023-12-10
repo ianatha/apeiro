@@ -9,5 +9,4 @@ pub mod transl8;
 pub mod u16string;
 pub mod v8slice;
 mod value;
-pub use self::global::Global;
-pub use self::value::Value;
+pub use self::{global::Global, value::Value};

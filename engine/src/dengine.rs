@@ -1,26 +1,15 @@
+use std::{collections::HashMap, string::String, sync::Arc};
+
 use anyhow::{anyhow, Ok, Result};
-use apeiro_compiler::apeiro_compile;
-use apeiro_compiler::extract_export_name;
-use apeiro_compiler::CompilationResult;
-use apeiro_internal_api::ModuleNewRequest;
-use apeiro_internal_api::ModuleSummary;
-use apeiro_internal_api::ProcListOutput;
-use apeiro_internal_api::ProcNewOutput;
-use apeiro_internal_api::ProcNewRequest;
-use apeiro_internal_api::ProcSendRequest;
-use apeiro_internal_api::ProcStatus;
-use apeiro_internal_api::ProcStatusDebug;
-use apeiro_internal_api::StepResult;
-use apeiro_internal_api::StepResultStatus;
+use apeiro_compiler::{apeiro_compile, extract_export_name, CompilationResult};
+use apeiro_internal_api::{
+    ModuleNewRequest, ModuleSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
+    ProcSendRequest, ProcStatus, ProcStatusDebug, StepResult, StepResultStatus,
+};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 use tracing::trace;
-
-use std::collections::HashMap;
-use std::string::String;
-use std::sync::Arc;
 
 pub struct DEngine(Arc<SharedDEngine>);
 
@@ -74,9 +63,10 @@ struct SharedDEngine {
 
 use tracing::{event, instrument, Level};
 
-use crate::db::ApeiroPersistence;
-use crate::eventloop::now_as_millis;
-use crate::eventloop::EventLoop;
+use crate::{
+    db::ApeiroPersistence,
+    eventloop::{now_as_millis, EventLoop},
+};
 
 pub trait PluginStorage {
     fn get(&self) -> Result<serde_json::Value, anyhow::Error>;
@@ -564,7 +554,8 @@ impl DEngine {
                     if generator_tag.as_bool().unwrap_or(false) {
                         trace!(
                             "advacing {} because of $generator: {:?}",
-                            proc.pid, res.suspension
+                            proc.pid,
+                            res.suspension
                         );
                         self.send(DEngineCmd::Send(DEngineCmdSend {
                             proc_id: proc.pid.clone(),

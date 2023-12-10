@@ -1,10 +1,7 @@
 use std::time::Duration;
 
-use apeiro_engine::plugins::ApeiroPlugin;
-use apeiro_engine::DEngine;
-use apeiro_engine::ProcSendRequest;
-
 use anyhow;
+use apeiro_engine::{plugins::ApeiroPlugin, DEngine, ProcSendRequest};
 use async_trait::async_trait;
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
 use serde::{Deserialize, Serialize};

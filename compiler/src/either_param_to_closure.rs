@@ -1,10 +1,10 @@
-use swc_core::common::util::take::Take;
-use swc_core::ecma::ast::{CallExpr, Callee};
-use swc_core::ecma::utils::ExprFactory;
-use swc_core::ecma::visit::{as_folder, Fold};
-use swc_core::ecma::{
-    ast::Expr,
-    visit::{VisitMut, VisitMutWith},
+use swc_core::{
+    common::util::take::Take,
+    ecma::{
+        ast::{CallExpr, Callee, Expr},
+        utils::ExprFactory,
+        visit::{as_folder, Fold, VisitMut, VisitMutWith},
+    },
 };
 
 pub fn folder() -> impl Fold {

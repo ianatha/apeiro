@@ -1,6 +1,5 @@
-use crate::stmt_exploder;
-
 use super::compiler_test;
+use crate::stmt_exploder;
 
 macro_rules! folder_chain {
     () => {

@@ -1,10 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
-use std::any::TypeId;
-use std::mem::transmute_copy;
+use std::{any::TypeId, mem::transmute_copy};
 
-use crate::ByteString;
-use crate::U16String;
-use crate::ZeroCopyBuf;
+use crate::{ByteString, U16String, ZeroCopyBuf};
 
 /// Serializable exists to allow boxing values as "objects" to be serialized later,
 /// this is particularly useful for async op-responses. This trait is a more efficient

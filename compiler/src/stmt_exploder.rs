@@ -1,23 +1,12 @@
-use swc_core::common::util::take::Take;
-use swc_core::common::BytePos;
-use swc_core::common::Span;
-use swc_core::common::SyntaxContext;
-
-use swc_core::ecma::ast::BlockStmt;
-
-use swc_core::ecma::ast::Decl;
-use swc_core::ecma::ast::Expr;
-use swc_core::ecma::ast::ExprStmt;
-use swc_core::ecma::ast::Function;
-use swc_core::ecma::ast::Ident;
-use swc_core::ecma::ast::Stmt;
+use swc_core::{
+    common::{util::take::Take, BytePos, Span, Spanned, SyntaxContext},
+    ecma::{
+        ast::{BlockStmt, Decl, Expr, ExprStmt, Function, Ident, Stmt, VarDecl, VarDeclarator},
+        visit::{as_folder, Fold, VisitMut, VisitMutWith},
+    },
+};
 
 use super::utils::is_use_strict;
-use swc_core::common::Spanned;
-use swc_core::ecma::ast::VarDecl;
-use swc_core::ecma::ast::VarDeclarator;
-use swc_core::ecma::visit::{as_folder, Fold};
-use swc_core::ecma::visit::{VisitMut, VisitMutWith};
 
 pub fn folder() -> impl Fold {
     as_folder(StmtExploder {

@@ -1,6 +1,6 @@
 use apeiro_internal_api::StackTraceFrame;
 use sourcemap::SourceMap;
-use tracing::{trace, debug};
+use tracing::{debug, trace};
 use v8::{Context, HandleScope, Local, Message, Value};
 
 pub fn stack_trace_to_frames_no_srcmap<'s>(

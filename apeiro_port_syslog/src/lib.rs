@@ -1,13 +1,9 @@
-use apeiro_engine::plugins::ApeiroPlugin;
-use apeiro_engine::DEngine;
-use apeiro_engine::ProcSendRequest;
+use std::{io::Error, net::SocketAddr};
 
 use anyhow;
+use apeiro_engine::{plugins::ApeiroPlugin, DEngine, ProcSendRequest};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-
-use std::io::Error;
-use std::net::SocketAddr;
 use syslog::SyslogMsg;
 
 mod syslog;

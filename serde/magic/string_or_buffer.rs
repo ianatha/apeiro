@@ -1,9 +1,11 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
-use super::buffer::ZeroCopyBuf;
-use super::transl8::{FromV8, ToV8};
-use crate::magic::transl8::impl_magic;
-use crate::Error;
 use std::ops::Deref;
+
+use super::{
+    buffer::ZeroCopyBuf,
+    transl8::{FromV8, ToV8},
+};
+use crate::{magic::transl8::impl_magic, Error};
 
 #[derive(Debug)]
 pub enum StringOrBuffer {

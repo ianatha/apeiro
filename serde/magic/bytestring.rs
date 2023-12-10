@@ -1,13 +1,11 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate smallvec;
 
-use std::convert::TryFrom;
+use std::{convert::TryFrom, mem::size_of};
 
 use self::smallvec::SmallVec;
 use super::transl8::{FromV8, ToV8};
-use crate::magic::transl8::impl_magic;
-use crate::Error;
-use std::mem::size_of;
+use crate::{magic::transl8::impl_magic, Error};
 
 const USIZE2X: usize = size_of::<usize>() * 2;
 

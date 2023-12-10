@@ -1,13 +1,11 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::ops::Range;
+use std::ops::{Deref, DerefMut, Range};
 
-use super::transl8::FromV8;
-use super::transl8::ToV8;
-use super::v8slice::to_ranged_buffer;
-use super::v8slice::V8Slice;
+use super::{
+    transl8::{FromV8, ToV8},
+    v8slice::{to_ranged_buffer, V8Slice},
+};
 use crate::magic::transl8::impl_magic;
 
 // A buffer that detaches when deserialized from JS

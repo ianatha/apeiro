@@ -1,9 +1,7 @@
-use chrono::prelude::*;
-use chrono::serde::ts_seconds_option;
+use std::{collections::HashMap, net::SocketAddr, str};
+
+use chrono::{prelude::*, serde::ts_seconds_option};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::str;
 
 // ASL facility codes
 const LOG_KERN: u8 = 0;

@@ -1,7 +1,5 @@
 use std::fmt::Debug;
 
-use crate::db::ApeiroPersistence;
-use crate::StepResultStatus;
 use anyhow::{anyhow, Context};
 use apeiro_compiler::CompilationResult;
 use apeiro_internal_api::{
@@ -10,9 +8,10 @@ use apeiro_internal_api::{
 };
 use nanoid::nanoid;
 use r2d2::Pool;
-use r2d2_sqlite::rusqlite::params;
-use r2d2_sqlite::SqliteConnectionManager;
+use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use serde_json;
+
+use crate::{db::ApeiroPersistence, StepResultStatus};
 
 pub struct Db {
     pub pool: Pool<SqliteConnectionManager>,

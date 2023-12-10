@@ -2,20 +2,19 @@
 extern crate serde;
 extern crate tracing;
 
-use std::convert::TryInto;
+use std::{cell::RefCell, convert::TryInto, ops::DerefMut};
 
-use self::serde::ser;
-use self::serde::ser::Serialize;
-
-use std::cell::RefCell;
-use std::ops::DerefMut;
-
-use crate::error::{Error, Result};
-use crate::keys::v8_struct_key;
-use crate::magic::transl8::MAGIC_FIELD;
-use crate::magic::transl8::{opaque_deref_mut, opaque_recv, MagicType, ToV8};
-use crate::{magic, ByteString, DetachedBuffer, StringOrBuffer, U16String, ZeroCopyBuf};
-use self::tracing::trace;
+use self::{
+    serde::{ser, ser::Serialize},
+    tracing::trace,
+};
+use crate::{
+    error::{Error, Result},
+    keys::v8_struct_key,
+    magic,
+    magic::transl8::{opaque_deref_mut, opaque_recv, MagicType, ToV8, MAGIC_FIELD},
+    ByteString, DetachedBuffer, StringOrBuffer, U16String, ZeroCopyBuf,
+};
 
 type JsValue<'s> = v8::Local<'s, v8::Value>;
 type JsResult<'s> = Result<JsValue<'s>>;

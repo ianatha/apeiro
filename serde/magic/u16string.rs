@@ -1,7 +1,7 @@
+use std::convert::TryFrom;
+
 use super::transl8::{impl_magic, impl_wrapper, FromV8, ToV8};
 use crate::Error;
-
-use std::convert::TryFrom;
 
 impl_wrapper!(
     pub struct U16String(Vec<u16>);

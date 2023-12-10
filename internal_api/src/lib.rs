@@ -114,13 +114,15 @@ impl std::fmt::Display for StepResult {
             self.status,
             "val".bold(),
             val
-        )).unwrap();
+        ))
+        .unwrap();
         if let Some(suspension) = &self.suspension {
             f.write_fmt(format_args!(
                 "{}: {}",
                 "suspension".bold(),
                 serde_json::to_string_pretty(suspension).unwrap()
-            )).unwrap();
+            ))
+            .unwrap();
         };
         Ok(())
     }
