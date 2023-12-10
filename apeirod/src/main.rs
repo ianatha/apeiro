@@ -32,6 +32,9 @@ struct Cli {
 
     #[clap(long)]
     allowed_origin: Option<String>,
+
+    #[clap(long)]
+    no_web: bool,
 }
 
 #[cfg(not(test))]
@@ -84,6 +87,13 @@ async fn main() -> anyhow::Result<()> {
     tokio::task::spawn(async move {
         event_loop.run().await;
     });
+
+    if !cli.no_web {
+        tokio::task::spawn(async move {
+            println!("Listening on 127.0.0.1:3030");
+            apeiro_frontend_rs::web(([127, 0, 0, 1], 3030)).await;
+        });
+    }
 
     // if cli.swarm {
     //     let p2pchan = apeiro_engine::p2prpc::start_p2p(dengine.clone(), cli.swarm_peer_addr)

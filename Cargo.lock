@@ -464,6 +464,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "apeiro_engine",
+ "apeiro_frontend_rs",
  "apeiro_internal_api",
  "apeiro_port_mqtt",
  "apeiro_port_syslog",
