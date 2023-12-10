@@ -1,8 +1,7 @@
 use swc_core::common::chain;
 
-use crate::{fn_decl_to_fn_expr, fn_instrument, stmt_exploder};
-
 use super::compiler_test;
+use crate::{fn_decl_to_fn_expr, fn_instrument, stmt_exploder};
 
 macro_rules! folder_chain {
     () => {

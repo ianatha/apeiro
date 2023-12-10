@@ -1,30 +1,20 @@
+use std::{cell::RefCell, string::String, thread};
+
 use anyhow::{anyhow, Ok, Result};
-use apeiro_internal_api::EngineStatus;
-use apeiro_internal_api::ModuleNewRequest;
-use apeiro_internal_api::ProcSendRequest;
-use apeiro_internal_api::StackTraceFrame;
-use apeiro_internal_api::StepResult;
-
+use apeiro_internal_api::{
+    EngineStatus, ModuleNewRequest, ProcSendRequest, StackTraceFrame, StepResult,
+};
 use serde_json::Value;
-use tracing::{event, instrument, Level};
-use v8::CreateParams;
-use v8::PromiseState;
+use tracing::{event, instrument, trace, Level};
+use v8::{ContextScope, CreateParams, HandleScope, Isolate, PromiseState};
 
-use crate::dengine::DEngineCmd;
-use crate::eventloop::now_as_millis;
-use crate::struct_method_to_v8;
-use crate::throw_exception;
-use crate::v8_helpers::stack_trace_to_frames;
-use crate::v8_helpers::v8_println;
-use crate::v8_helpers::v8_struct_key;
-use crate::v8_init;
-use crate::v8_str;
-use crate::DEngine;
-use std::cell::RefCell;
-use tracing::trace;
-use std::string::String;
-use std::thread;
-use v8::{ContextScope, HandleScope, Isolate};
+use crate::{
+    dengine::DEngineCmd,
+    eventloop::now_as_millis,
+    struct_method_to_v8, throw_exception,
+    v8_helpers::{stack_trace_to_frames, v8_println, v8_struct_key},
+    v8_init, v8_str, DEngine,
+};
 
 pub struct Engine {
     runtime_js_src: Option<fn() -> String>,
@@ -758,9 +748,8 @@ impl Engine {
             let url = url.to_rust_string_lossy(scope);
 
             let res = _fetch(url, options).unwrap();
-            let handle = thread::spawn(move || {
-                res.blocking_recv().expect("failed to receive from fetch")
-            });
+            let handle =
+                thread::spawn(move || res.blocking_recv().expect("failed to receive from fetch"));
 
             let val_received = handle.join().expect("thread panicked");
             trace!("val received from fetch channel: {}", val_received);

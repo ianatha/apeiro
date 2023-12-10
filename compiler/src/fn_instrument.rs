@@ -1,75 +1,23 @@
 use std::borrow::BorrowMut;
 
-use swc_core::common::{
-    util::take::Take,
-    BytePos,
-    Spanned,
-    Span,
-    SyntaxContext,
-    DUMMY_SP,
-};
-
-use swc_core::ecma::ast::{
-    AssignPatProp,
-    BlockStmt,
-    ExprStmt,
-    FnExpr,
-    Function,
-    Id,
-    Ident,
-    IfStmt,
-    ImportDecl,
-    ImportSpecifier,
-    KeyValueProp,
-    MemberExpr,
-    Module,
-    ModuleDecl,
-    ModuleItem,
-    Null,
-    ObjectLit,
-    ObjectPat,
-    ObjectPatProp,
-    Param,
-    Pat,
-    Prop,
-    ReturnStmt,
-    Stmt,
-    SwitchCase,
-    SwitchStmt,
-    ThrowStmt,
-    TryStmt,
-    CallExpr,
-    Callee,
-    Decl,
-    ExprOrSpread,
-    VarDecl,
-    VarDeclKind,
-    VarDeclarator,
-};
-
-use swc_core::ecma::utils::{
-    private_ident,
-    ExprFactory,
-    quote_ident,
-};
-
-use swc_core::ecma::{
-    ast::Expr,
-    ast::Lit,
-    visit::{
-        VisitMut,
-        VisitMutWith,
-        as_folder,
-        Fold,
+use swc_core::{
+    common::{util::take::Take, BytePos, Span, Spanned, SyntaxContext, DUMMY_SP},
+    ecma::{
+        ast::{
+            AssignPatProp, BlockStmt, CallExpr, Callee, Decl, Expr, ExprOrSpread, ExprStmt, FnExpr,
+            Function, Id, Ident, IfStmt, ImportDecl, ImportSpecifier, KeyValueProp, Lit,
+            MemberExpr, Module, ModuleDecl, ModuleItem, Null, ObjectLit, ObjectPat, ObjectPatProp,
+            Param, Pat, Prop, ReturnStmt, Stmt, SwitchCase, SwitchStmt, ThrowStmt, TryStmt,
+            VarDecl, VarDeclKind, VarDeclarator,
+        },
+        utils::{private_ident, quote_ident, ExprFactory},
+        visit::{as_folder, Fold, VisitMut, VisitMutWith},
     },
 };
-
 use tracing::{event, Level};
 
-use crate::helpers::HELPERS;
-use crate::utils::ast_to_hash;
-
 use super::utils::is_use_strict;
+use crate::{helpers::HELPERS, utils::ast_to_hash};
 
 pub fn folder() -> impl Fold {
     as_folder(WrapFunctions {

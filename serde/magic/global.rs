@@ -1,8 +1,6 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
-use crate::magic::transl8::impl_magic;
-use crate::magic::transl8::FromV8;
-use crate::magic::transl8::ToV8;
+use crate::magic::transl8::{impl_magic, FromV8, ToV8};
 
 pub struct Global {
     pub v8_value: v8::Global<v8::Value>,

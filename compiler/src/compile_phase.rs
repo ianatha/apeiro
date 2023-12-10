@@ -1,42 +1,42 @@
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-
-use swc::{Compiler, SwcComments};
-
-use swc_core::atoms::js_word;
-use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord};
-use swc_core::common::comments::SingleThreadedComments;
-use swc_core::common::errors::ColorConfig;
-use swc_core::common::sync::Lrc;
-
-use swc_core::common::{chain, Globals, Mark, SourceFile, Span, GLOBALS};
-use swc_core::common::{errors::Handler, FileName, SourceMap};
+use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{anyhow, Error, Result};
-use swc_core::ecma::ast::{
-    Bool, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, MetaPropExpr, MetaPropKind,
-    Module, Program, PropName, Str,
+use swc::{Compiler, SwcComments};
+use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord};
+use swc_core::{
+    atoms::js_word,
+    common::{
+        chain,
+        comments::SingleThreadedComments,
+        errors::{ColorConfig, Handler},
+        sync::Lrc,
+        FileName, Globals, Mark, SourceFile, SourceMap, Span, GLOBALS,
+    },
+    ecma::{
+        ast::{
+            Bool, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, MetaPropExpr,
+            MetaPropKind, Module, Program, PropName, Str,
+        },
+        loader::resolvers::lru::CachingResolver,
+        transforms::base::{fixer::fixer, pass::noop},
+        visit::VisitMutWith,
+    },
 };
-
-use swc_ecma_codegen::text_writer::{omit_trailing_semi, JsWriter, WriteJs};
-use swc_ecma_codegen::Emitter;
-use swc_core::ecma::loader::resolvers::lru::CachingResolver;
+use swc_ecma_codegen::{
+    text_writer::{omit_trailing_semi, JsWriter, WriteJs},
+    Emitter,
+};
 use swc_ecma_minifier::option::{
     CompressOptions, ExtraOptions, MangleOptions, MinifyOptions, TopLevelOptions,
 };
 use swc_ecma_parser::{Syntax, TsConfig};
-use swc_core::ecma::transforms::base::fixer::fixer;
-use swc_core::ecma::transforms::base::pass::noop;
-use swc_core::ecma::visit::VisitMutWith;
-use tracing::{event, instrument, Level};
+use tracing::{event, instrument, trace, Level};
 
-use crate::helpers::{Helpers, HELPERS};
 use crate::{
-    either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers, now_as_millis,
-    stmt_exploder, CompilationResult, BASELINE_ES_VERSION,
+    either_param_to_closure, fn_decl_to_fn_expr, fn_instrument, helpers,
+    helpers::{Helpers, HELPERS},
+    now_as_millis, stmt_exploder, CompilationResult, BASELINE_ES_VERSION,
 };
-use tracing::trace;
 
 pub struct ApeiroCompiler {
     pub cm: Lrc<SourceMap>,

@@ -1,12 +1,13 @@
-use swc_core::common::util::take::Take;
-use swc_core::common::Spanned;
-use swc_core::ecma::ast::{
-    Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module, ModuleDecl,
-    ModuleItem, VarDecl, VarDeclKind, VarDeclarator,
+use swc_core::{
+    common::{util::take::Take, Spanned},
+    ecma::{
+        ast::{
+            Decl, DefaultDecl, ExportDefaultDecl, ExportDefaultExpr, Expr, FnExpr, Module,
+            ModuleDecl, ModuleItem, VarDecl, VarDeclKind, VarDeclarator,
+        },
+        visit::{as_folder, Fold, VisitMut, VisitMutWith},
+    },
 };
-
-use swc_core::ecma::visit::{as_folder, Fold};
-use swc_core::ecma::visit::{VisitMut, VisitMutWith};
 
 pub fn folder() -> impl Fold {
     as_folder(VisitorFnDeclToFnExpr {})

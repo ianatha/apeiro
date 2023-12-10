@@ -1,3 +1,5 @@
+use std::{path::PathBuf, string::String};
+
 use anyhow::{Ok, Result};
 use apeiro_internal_api::{
     ApeiroError, ModuleNewRequest, ModuleSummary, ProcListOutput, ProcNewOutput, ProcNewRequest,
@@ -7,8 +9,6 @@ use cli_table::format::VerticalLine;
 use futures::stream::StreamExt;
 use reqwest::Response;
 use reqwest_eventsource::{Event, EventSource};
-
-use std::{path::PathBuf, string::String};
 
 pub(crate) async fn watch(remote: &String, proc_id: &String) -> Result<()> {
     let url = format!("{}/proc/{}/watch", remote, proc_id);

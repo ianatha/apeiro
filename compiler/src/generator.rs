@@ -5,30 +5,25 @@ use std::{
     rc::Rc,
 };
 
-use swc_ecma_transforms_base::ext::AsOptExpr;
-
+use is_macro::Is;
 use swc_core::{
-    atoms::{
-        js_word, JsWord
-    },
+    atoms::{js_word, JsWord},
     common::{
         util::take::Take, BytePos, EqIgnoreSpan, Mark, Span, Spanned, SyntaxContext, DUMMY_SP,
     },
     ecma::{
+        ast::{ExprOrSpread, PatOrExpr, *},
         utils::{
-            function::FnEnvHoister,
-            private_ident,
-            prop_name_to_expr_value,
-            quote_ident,
-            undefined,
+            function::FnEnvHoister, private_ident, prop_name_to_expr_value, quote_ident, undefined,
             ExprFactory,
         },
-        ast::*,
-        ast::{ExprOrSpread, PatOrExpr},
-        visit::{as_folder, noop_visit_mut_type, noop_visit_type, Fold, Visit, VisitMut, VisitMutWith, VisitWith},
+        visit::{
+            as_folder, noop_visit_mut_type, noop_visit_type, Fold, Visit, VisitMut, VisitMutWith,
+            VisitWith,
+        },
     },
 };
-use is_macro::Is;
+use swc_ecma_transforms_base::ext::AsOptExpr;
 use tracing::debug;
 
 use crate::helper;
@@ -1749,9 +1744,7 @@ impl Generator {
             node.right.visit_mut_with(self);
             self.emit_stmt(Stmt::ForIn(ForInStmt {
                 span: DUMMY_SP,
-                left: ForHead::Pat(Box::new(
-                    Pat::Ident(key.clone().into()).into(),
-                )),
+                left: ForHead::Pat(Box::new(Pat::Ident(key.clone().into()).into())),
                 right: node.right.take(),
                 body: Box::new(Stmt::Expr(ExprStmt {
                     span: DUMMY_SP,

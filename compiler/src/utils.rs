@@ -1,5 +1,7 @@
-use swc_core::common::{sync::Lrc, SourceMap};
-use swc_core::ecma::ast::{Expr, ExprStmt, Lit, Stmt};
+use swc_core::{
+    common::{sync::Lrc, SourceMap},
+    ecma::ast::{Expr, ExprStmt, Lit, Stmt},
+};
 use swc_ecma_codegen::{text_writer::WriteJs, Emitter};
 
 #[allow(dead_code)]

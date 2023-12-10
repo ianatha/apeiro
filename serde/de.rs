@@ -1,20 +1,20 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate serde;
 
-use std::cell::RefCell;
-use std::convert::TryFrom;
-use std::ffi::c_void;
+use std::{cell::RefCell, convert::TryFrom, ffi::c_void};
 
-use self::serde::de::IntoDeserializer;
-use self::serde::de::{self, SeqAccess as _, Visitor};
-use self::serde::Deserialize;
-
-use crate::error::{Error, Result};
-use crate::keys::{v8_struct_key, KeyCache};
-use crate::magic::transl8::FromV8;
-use crate::magic::transl8::{visit_magic, MagicType};
-use crate::payload::ValueType;
-use crate::{magic, ByteString, DetachedBuffer, StringOrBuffer, U16String, ZeroCopyBuf};
+use self::serde::{
+    de::{self, IntoDeserializer, SeqAccess as _, Visitor},
+    Deserialize,
+};
+use crate::{
+    error::{Error, Result},
+    keys::{v8_struct_key, KeyCache},
+    magic,
+    magic::transl8::{visit_magic, FromV8, MagicType},
+    payload::ValueType,
+    ByteString, DetachedBuffer, StringOrBuffer, U16String, ZeroCopyBuf,
+};
 
 pub struct Deserializer<'a, 'b, 's> {
     input: v8::Local<'a, v8::Value>,

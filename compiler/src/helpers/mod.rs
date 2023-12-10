@@ -7,11 +7,15 @@ use std::{
 
 use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
-use swc_core::atoms::JsWord;
-use swc_core::common::{FileName, FilePathMapping, Mark, SourceMap, SyntaxContext, DUMMY_SP};
-use swc_core::ecma::ast::*;
-use swc_core::ecma::utils::{prepend_stmts, DropSpan};
-use swc_core::ecma::visit::{as_folder, noop_visit_mut_type, Fold, VisitMut, VisitMutWith};
+use swc_core::{
+    atoms::JsWord,
+    common::{FileName, FilePathMapping, Mark, SourceMap, SyntaxContext, DUMMY_SP},
+    ecma::{
+        ast::*,
+        utils::{prepend_stmts, DropSpan},
+        visit::{as_folder, noop_visit_mut_type, Fold, VisitMut, VisitMutWith},
+    },
+};
 
 use crate::ProgramCounterToSourceLocation;
 

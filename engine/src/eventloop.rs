@@ -1,10 +1,12 @@
 use anyhow::Result;
 use apeiro_internal_api::ProcSendRequest;
 use tokio::sync::mpsc;
-use tracing::{event, instrument, Level, trace};
+use tracing::{event, instrument, trace, Level};
 
-use crate::dengine::{DEngineCmd, DEngineStorage, PluginStorage, ProcEvent};
-use crate::DEngine;
+use crate::{
+    dengine::{DEngineCmd, DEngineStorage, PluginStorage, ProcEvent},
+    DEngine,
+};
 
 pub struct EventLoop {
     pub dengine: DEngine,

@@ -1,9 +1,7 @@
 mod handlers;
 
-use actix_web::middleware::Logger;
-use actix_web::{App, HttpServer};
-use apeiro_engine::plugins::PluginConfiguration;
-use apeiro_engine::{get_engine_runtime, DEngine};
+use actix_web::{middleware::Logger, App, HttpServer};
+use apeiro_engine::{get_engine_runtime, plugins::PluginConfiguration, DEngine};
 use clap::{command, Parser};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;

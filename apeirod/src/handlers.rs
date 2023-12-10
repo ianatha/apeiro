@@ -1,5 +1,8 @@
-use actix_web::error::{self, ErrorBadRequest};
-use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{
+    delete,
+    error::{self, ErrorBadRequest},
+    get, post, put, web, HttpRequest, HttpResponse, Responder,
+};
 use apeiro_engine::DEngine;
 use apeiro_internal_api::*;
 use tracing::{event, Level};
