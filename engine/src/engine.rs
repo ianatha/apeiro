@@ -266,38 +266,7 @@ impl Engine {
 
             let context_scope = &mut v8::TryCatch::new(context_scope);
             let new_state = (|| {
-                if let Some(engine_runtime_fn) = self.runtime_js_src {
-                    let engine_runtime = engine_runtime_fn();
-                    let enginecode_module =
-                        instantiate_module(context_scope, "engine".into(), engine_runtime).unwrap();
-
-                    if let Some(v8_funcs) = engine_instance.funcs {
-                        let enginecode_obj = enginecode_module
-                            .get_module_namespace()
-                            .to_object(context_scope)
-                            .unwrap();
-                        let fns_key = v8::String::new(context_scope, "$fns").unwrap();
-                        assert!(enginecode_obj
-                            .set(context_scope, fns_key.into(), v8_funcs.into())
-                            .unwrap());
-                    }
-
-                    engine_instance.enginecode = Some(enginecode_module);
-
-                    let global = context.global(context_scope);
-                    export_symbols_to_global(
-                        context_scope,
-                        enginecode_module,
-                        global,
-                        vec![
-                            "$fn",
-                            "$new_frame",
-                            "$scope",
-                            "$frame_end",
-                            "$isSuspendSignal",
-                        ],
-                    );
-                }
+                self.load_engine_runtime_ts(context_scope, &mut engine_instance, context);
 
                 let usercode_module =
                     instantiate_module(context_scope, "usercode".into(), src.clone())?;
@@ -486,6 +455,42 @@ impl Engine {
                 event!(Level::INFO, "error: {:?}", e);
                 Err(e)
             }
+        }
+    }
+
+    fn load_engine_runtime_ts<'s>(&mut self, context_scope: &mut v8::TryCatch<'_, HandleScope<'s>>, engine_instance: &mut EngineInstance<'s>, context: v8::Local<'_, v8::Context>) {
+        if let Some(engine_runtime_fn) = self.runtime_js_src {
+            let engine_runtime = engine_runtime_fn();
+            let enginecode_module =
+                instantiate_module(context_scope, "engine".into(), engine_runtime).unwrap();
+
+            if let Some(v8_funcs) = engine_instance.funcs {
+                let enginecode_obj = enginecode_module
+                    .get_module_namespace()
+                    .to_object(context_scope)
+                    .unwrap();
+                let fns_key = v8::String::new(context_scope, "$fns").unwrap();
+                assert!(enginecode_obj
+                    .set(context_scope, fns_key.into(), v8_funcs.into())
+                    .unwrap());
+            }
+
+            engine_instance.enginecode = Some(enginecode_module);
+
+            let global = context.global(context_scope);
+            export_symbols_to_global(
+                context_scope,
+                enginecode_module,
+                global,
+                vec![
+                    "$fn",
+                    "$new_frame",
+                    "$scope",
+                    "$frame_end",
+                    "$isSuspendSignal",
+                    "$dyn_import",
+                ],
+            );
         }
     }
 
