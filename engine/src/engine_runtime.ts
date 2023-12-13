@@ -287,3 +287,7 @@ export default async function $step(): Promise<StepResult> {
 		}
 	}
 }
+
+export function $dyn_import(spec) {
+	throw new Error("$dyn_import not implemented");
+}
