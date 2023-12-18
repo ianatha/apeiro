@@ -11,7 +11,7 @@ import { App, title } from "../../components/App";
 import { useProcesses } from "../../lib/Workspace";
 import React from "react";
 import Link from "next/link";
-import { Card } from "../../components/DashboardContent";
+import { Card } from "../../components/pages/DashboardContent";
 import { CircleIcon } from "../modules";
 import { FiSearch } from "react-icons/fi";
 import { ProtectedPage } from "../../lib/auth";

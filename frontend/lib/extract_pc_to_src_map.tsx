@@ -1,4 +1,4 @@
-import { PCToSrcMapping } from "../pages/procs/[pid]";
+import { PCToSrcMapping } from "./PCToSrcMapping";
 
 
 export function extract_pc_to_src_map(src: string): PCToSrcMapping[] {

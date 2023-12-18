@@ -21,7 +21,7 @@ import {
 } from "react-icons/fi";
 import { NavButtons, user } from "./App";
 import { Logo } from "./Logo";
-import { NavButton } from "./NavButton";
+import { NavButton } from "./reusable/NavButton";
 import { UserProfile } from "./UserProfile";
 
 export const Sidebar = () => (

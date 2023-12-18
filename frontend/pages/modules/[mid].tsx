@@ -4,7 +4,7 @@ import { App, title } from "../../components/App";
 import { useRouter } from "next/router";
 import { ProtectedPage } from "../../lib/auth";
 import { Source } from "../../components/Source";
-import { FunctionDisplay } from "../../components/Modules/FunctionDisplay";
+import { FunctionDisplay } from "../../components/pages/FunctionDisplay";
 
 const Home: NextPage = () => {
   const router = useRouter();

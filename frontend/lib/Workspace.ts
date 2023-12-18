@@ -187,7 +187,6 @@ export class Workspace {
 
   async spawn(
     mid: string,
-    fromAIA: boolean = false,
   ): Promise<Record<string, any>> {
     return this.fetch('proc/', {
       method: "POST",
@@ -197,7 +196,6 @@ export class Workspace {
       },
       body: JSON.stringify({
         module_id: mid,
-        fromAIA,
       }),
     });
   }

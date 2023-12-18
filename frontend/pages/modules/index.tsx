@@ -18,15 +18,12 @@ import {
 import type { NextPage } from "next";
 import Head from "next/head";
 import { App, title } from "../../components/App";
-import { CodeList } from "../../components/CodeList";
-import Form from "@rjsf/chakra-ui";
-import validator from "@rjsf/validator-ajv6";
 import { useModule, useModules, useProcess } from "../../lib/Workspace";
-import { Card } from "../../components/DashboardContent";
+import { Card } from "../../components/pages/DashboardContent";
 import Link from "next/link";
 import { FiPlusSquare } from "react-icons/fi";
 import { Router, useRouter } from "next/router";
-import { trimPrefix } from "../../components/Modules/FunctionDisplay";
+import { trimPrefix } from "../../components/pages/FunctionDisplay";
 import useWorkspace from "../../lib/useWorkspace";
 import { ProtectedPage } from "../../lib/auth";
 
@@ -77,31 +74,6 @@ const schema = {
     },
   },
 };
-
-function A() {
-  return (
-    <>
-      <Flex align="center" justify="center" direction="column">
-        <Flex>
-          Selected Emoji:{" "}
-          {/* {selectedEmoji === null ? null : <Emoji emoji={selectedEmoji} />} */}
-        </Flex>
-        <Form
-          schema={schema}
-          validator={validator}
-          onChange={log("changed")}
-          onSubmit={log("submitted")}
-          onError={log("errors")}
-        />
-        {/* <EmojiButton  */}
-        {/* // onSelectEmoji={(emoji) => dispatch(selectEmoji(emoji))} */}
-        {/* /> */}
-      </Flex>
-
-      <CodeList />
-    </>
-  );
-}
 
 function ProcessSummary({pid}: {
   pid: any;

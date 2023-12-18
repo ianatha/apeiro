@@ -11,12 +11,12 @@ import {
   useBreakpointValue,
   useColorModeValue,
 } from "@chakra-ui/react";
-import { Button } from "./Button";
+import { Button } from "../reusable/Button";
 import Link from "next/link";
 import * as React from "react";
 import { FiBell, FiCode, FiPackage, FiPlusSquare } from "react-icons/fi";
 import useSWR from "swr";
-import useWorkspace from "../lib/useWorkspace";
+import useWorkspace from "../../lib/useWorkspace";
 
 export function DashboardContent() {
   const workspace = useWorkspace();

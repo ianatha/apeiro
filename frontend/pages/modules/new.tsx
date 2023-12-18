@@ -2,7 +2,7 @@ import { ProtectedPage } from "../../lib/auth";
 import type { NextPage } from "next";
 import Head from "next/head";
 import { App, title } from "../../components/App";
-import { FunctionDisplay } from "../../components/Modules/FunctionDisplay";
+import { FunctionDisplay } from "../../components/pages/FunctionDisplay";
 
 const Home: NextPage = () => {
   return (

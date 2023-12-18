@@ -3,12 +3,12 @@ import React from "react";
 
 export type FilterActionButtonsProps = {
   onClickCancel?: VoidFunction;
-  isCancelDisabled?: boolean;
   onClickApply?: VoidFunction;
+  isCancelDisabled?: boolean;
 };
 
 export const FilterActionButtons = (props: FilterActionButtonsProps) => {
-  const { onClickApply, onClickCancel, isCancelDisabled } = props;
+  const { onClickCancel, isCancelDisabled } = props;
   return (
     <HStack spacing="2" justify="space-between">
       <Button
@@ -19,11 +19,6 @@ export const FilterActionButtons = (props: FilterActionButtonsProps) => {
       >
         Cancel
       </Button>
-      {
-        /* <Button size="sm" colorScheme="blue" onClick={onClickApply}>
-        Save
-      </Button> */
-      }
     </HStack>
   );
 };

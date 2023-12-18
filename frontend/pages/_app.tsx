@@ -1,20 +1,12 @@
 import type { AppProps } from "next/app";
 import { ChakraProvider } from "@chakra-ui/react";
 import { apeiroTheme } from "../components/theme";
-// import { UserProvider } from "@auth0/nextjs-auth0";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import useLocalStorage from "../lib/useLocalStorage";
 import { WorkspaceProvider } from "../lib/useWorkspace";
 import { BASE_URL, Workspace } from "../lib/Workspace";
 
-import SuperTokensReact, { SuperTokensWrapper } from 'supertokens-auth-react';
-
-import { frontendConfig } from '../config/frontendConfig'
-
-if (typeof window !== 'undefined') {
-  // we only want to call this init function on the frontend, so we check typeof window !== 'undefined'
-  SuperTokensReact.init(frontendConfig())
-}
+import { appConfig } from "../lib/backendConfig";
 
 function MyApp({ Component, pageProps }: AppProps) {
   const [accessToken, setAccessToken] = useLocalStorage<string | undefined>(
@@ -23,24 +15,19 @@ function MyApp({ Component, pageProps }: AppProps) {
   );
 
   useEffect(() => {
-    if (accessToken === undefined) {
-      // fetch("/api/session").then((resp) => resp.json()).then((json) => {
-      //   setAccessToken(json.accessToken);
-      // });
+    if (appConfig.auth && accessToken === undefined) {
+      fetch("/api/session").then((resp) => resp.json()).then((json) => {
+        setAccessToken(json.accessToken);
+      });
     }  
   }, [accessToken, setAccessToken]);
 
-
   return (
-    <SuperTokensWrapper>
-      {/* <UserProvider> */}
-        <WorkspaceProvider value={new Workspace(BASE_URL, accessToken, setAccessToken)}>
-          <ChakraProvider theme={apeiroTheme}>
-            <Component {...pageProps} />
-          </ChakraProvider>
-        </WorkspaceProvider>
-      {/* </UserProvider> */}
-    </SuperTokensWrapper>
+    <WorkspaceProvider value={new Workspace(BASE_URL, accessToken, setAccessToken)}>
+      <ChakraProvider theme={apeiroTheme}>
+        <Component {...pageProps} />
+      </ChakraProvider>
+    </WorkspaceProvider>
   );
 }
 
