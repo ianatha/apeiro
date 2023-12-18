@@ -12,7 +12,7 @@ import {
   useBreakpointValue,
   useDisclosure,
 } from "@chakra-ui/react";
-import { Button } from "./Button";
+import { Button } from "./reusable/Button";
 import Link from "next/link";
 import { Router, useRouter } from "next/router";
 import * as React from "react";
@@ -20,7 +20,7 @@ import { FiHelpCircle, FiSearch, FiSettings } from "react-icons/fi";
 import useWorkspace from "../lib/useWorkspace";
 import { NavButtons, user } from "./App";
 import { Logo } from "./Logo";
-import { NavButton } from "./NavButton";
+import { NavButton } from "./reusable/NavButton";
 import { Sidebar } from "./Sidebar";
 import { ToggleButton } from "./ToggleButton";
 

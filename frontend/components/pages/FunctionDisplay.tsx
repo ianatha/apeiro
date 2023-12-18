@@ -1,57 +1,3 @@
-// var jsCode = [
-// 	'"use strict";',
-// 	'function Person(age) {',
-// 	'	if (age) {',
-// 	'		this.age = age;',
-// 	'	}',
-// 	'}',
-// 	'Person.prototype.getAge = function () {',
-// 	'	return this.age;',
-// 	'};'
-// ].join('\n');
-
-// var editor = monaco.editor.create(document.getElementById('container'), {
-// 	value: jsCode,
-// 	language: 'javascript'
-// });
-
-// var decorations = editor.deltaDecorations(
-// 	[],
-// 	[
-// 		{
-// 			range: new monaco.Range(3, 1, 5, 1),
-// 			options: {
-// 				isWholeLine: true,
-// 				linesDecorationsClassName: 'myLineDecoration'
-// 			}
-// 		},
-// 		{
-// 			range: new monaco.Range(7, 1, 7, 24),
-// 			options: {
-//                 beforeContentClassName: 'myInlineDecoration' }
-// 		}
-// 	]
-// );
-
-// .myInlineDecoration::before {
-//   content: "<SUSPENDED> ";
-// }
-
-// .myInlineDecoration {
-// font-weight: bold;
-// font-style: oblique;
-//   color: red;
-// }
-
-// .myLineDecoration {
-// background: lightblue;
-// width: 5px !important;
-// margin-left: 3px;
-// }
-
-
-
-
 import monaco from 'monaco-editor';
 import Editor, { Monaco } from "@monaco-editor/react";
 import {
@@ -77,17 +23,15 @@ import {
   Select,
   Spinner,
   Stack,
-  Textarea,
   useDisclosure,
 } from "@chakra-ui/react";
-import { QuickstartPopover } from "../Quickstart/Filter";
+import { QuickstartPopover } from "../reusable/QuickstartPopover";
 import { useEffect, useRef, useState } from "react";
-import { FiCpu, FiSave } from "react-icons/fi";
+import { FiSave } from "react-icons/fi";
 import { useModule } from "../../lib/Workspace";
-import { quickstarts } from "./quickstarts";
+import { quickstarts } from "../../lib/quickstarts";
 import { useRouter } from "next/router";
 import { MdOutlineSyncAlt } from "react-icons/md";
-import Hotkeys from "react-hot-keys";
 import useWorkspace from "../../lib/useWorkspace";
 
 const snakeCase = (string: string) => {
@@ -114,21 +58,6 @@ const files: Record<string, string> = {
   "models/index.d.ts": "declare function $recv(schema: any): any; declare function $pid(): Pid; declare interface Pid { __pid: string }; declare function $send(recipient: Pid, msg: any); declare function $spawn(fn: () => any): Pid;",
 };
 
-function get_src_map(src: string|undefined): any|undefined {
-  if (src === undefined) {
-    return undefined;
-  }
-  const identifier = "//# sourceMappingURL=data:application/json;base64,";
-  let loc = src.indexOf(identifier);
-  if (loc >= 0) {
-    let srcmap_end = src.indexOf("\n", loc);
-    const srcmap_base64 = src.slice(loc + identifier.length, srcmap_end);
-    const srcmap = JSON.parse(atob(srcmap_base64));
-    return srcmap;
-  }
-  return undefined;
-}
-
 export function FunctionDisplay({
   mid,
 }: {
@@ -144,10 +73,6 @@ export function FunctionDisplay({
   const [fix, setFix] = useState(false);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const dialogPromise = useRef<any>();
-  const [showAssistant, setShowAssistant] = useState(false);
-  const [fromAIA, setFromAIA] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  const [fixPrompt, setFixPrompt] = useState("");
   const workspace = useWorkspace();
 
   function handleEditorDidMount(editor: monaco.editor.IStandaloneCodeEditor, monaco: Monaco) {
@@ -274,7 +199,7 @@ export function FunctionDisplay({
       if (mid === undefined) {
         const resp = await workspace.module(src, name ?? "untitled", mode);
         const mid = resp.mid;
-        const spawn_resp = await workspace.spawn(mid, fromAIA);
+        const spawn_resp = await workspace.spawn(mid);
         if (spawn_resp.id) {
           router.push(`/procs/${spawn_resp.id}`);
         } else {
@@ -338,10 +263,6 @@ export function FunctionDisplay({
   };
 
   const email = "{pid}@test.apeiromont.com";
-
-  const onKeyDown = (e: any) => {
-    setShowAssistant(true);
-  };
 
   if (error) {
     return <Alert status='error'>
@@ -495,116 +416,6 @@ export function FunctionDisplay({
           {JSON.stringify(get_src_map(module?.compiled_src), null, 2)}
         </pre> */}
       </Box>
-      {fix &&
-        (
-          <Modal
-            size="xl"
-            isOpen={fix}
-            onClose={() => {
-              setFix(false);
-            }}
-          >
-            <ModalOverlay />
-            <ModalContent>
-              <ModalHeader>AI Fix Bug</ModalHeader>
-              <ModalCloseButton />
-              <ModalBody>
-                <Heading size="2xs">
-                  What&apos;s wrong with your process?
-                </Heading>
-                <Textarea
-                  autoFocus={true}
-                  placeholder="it [...], but it should [...]"
-                  value={fixPrompt}
-                  onChange={(e) => {
-                    setFixPrompt(e.target.value);
-                  }}
-                />
-              </ModalBody>
-
-              <ModalFooter>
-                <Button
-                  colorScheme="blue"
-                  mr={3}
-                  onClick={(e) => {
-                    setFix(false);
-                    setFromAIA(true);
-                    router.query["fix"] = undefined;
-                    workspace.fixCode(
-                      mid ?? "",
-                      fixPrompt,
-                      function (newCode: string) {
-                        editorRef.current?.setValue(newCode);
-                      },
-                    );
-                  }}
-                >
-                  Submit
-                </Button>
-              </ModalFooter>
-            </ModalContent>
-          </Modal>
-        )}
-      <Hotkeys
-        keyName="ctrl+a"
-        onKeyDown={onKeyDown}
-      >
-        {showAssistant &&
-          (
-            <Modal
-              size="xl"
-              isOpen={showAssistant}
-              onClose={() => {
-                setShowAssistant(false);
-              }}
-            >
-              <ModalOverlay />
-              <ModalContent>
-                <ModalHeader>AI Assistant</ModalHeader>
-                <ModalCloseButton />
-                <ModalBody>
-                  <Heading size="2xs">
-                    What do you want your process to do?
-                  </Heading>
-                  <Textarea
-                    autoFocus={true}
-                    placeholder="gimme instructions"
-                    value={prompt}
-                    onChange={(e) => {
-                      setPrompt(e.target.value);
-                    }}
-                  />
-                </ModalBody>
-
-                <ModalFooter>
-                  <Button
-                    colorScheme="blue"
-                    mr={3}
-                    onClick={(e) => {
-                      setShowAssistant(false);
-                      editorRef.current?.setValue(
-                        "// " + prompt + "\nimport ",
-                      );
-                      console.log("setting fromaia = true;");
-                      setFromAIA(true);
-                      workspace.generateCode(
-                        prompt,
-                        function (new_word: string) {
-                          console.log({ new_word });
-                          editorRef.current?.setValue(
-                            editorRef.current?.getValue() + new_word,
-                          );
-                        },
-                      );
-                    }}
-                  >
-                    Submit
-                  </Button>
-                </ModalFooter>
-              </ModalContent>
-            </Modal>
-          )}
-      </Hotkeys>
     </>
   );
 }

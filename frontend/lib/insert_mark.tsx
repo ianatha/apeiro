@@ -1,4 +1,4 @@
-import { PCToSrcMapping } from "../pages/procs/[pid]";
+import { PCToSrcMapping } from "./PCToSrcMapping";
 
 
 export function insert_mark(last_frame: any, mapping: PCToSrcMapping[], src: string): string {

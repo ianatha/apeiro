@@ -15,11 +15,11 @@ import {
 import { useRouter } from "next/router";
 import React, { useEffect } from "react";
 import { Card } from "./DashboardContent";
-import { useProcess, useProcessDebug } from "../lib/Workspace";
+import { useProcess, useProcessDebug } from "../../lib/Workspace";
 import { FiInfo } from "react-icons/fi";
 import { AiOutlineBug } from "react-icons/ai";
-import useWorkspace from "../lib/useWorkspace";
-import { Source } from "./Source";
+import useWorkspace from "../../lib/useWorkspace";
+import { Source } from "../Source";
 import { FunctionSummary } from "./FunctionSummary";
 
 export function ProcessOverview({ pid }: {

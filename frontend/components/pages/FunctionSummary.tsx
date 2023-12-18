@@ -10,11 +10,20 @@ import Form from "@rjsf/chakra-ui";
 import { IChangeEvent } from "@rjsf/core";
 import validator from "@rjsf/validator-ajv6";
 import React from "react";
-import useWorkspace from "../lib/useWorkspace";
+import useWorkspace from "../../lib/useWorkspace";
 import { QRCodeSVG } from "qrcode.react";
-import { NonUIInput } from "./NonUIInput";
-import { transformSchemaDescriptionToTitle, log } from "../pages/procs/[pid]";
+import { NonUIInput } from "../NonUIInput";
 
+function transformSchemaDescriptionToTitle(schema?: Record<string, any>) {
+  Object.entries(schema?.properties as Record<string, any>[])
+    .forEach(([key, prop]) => {
+      if (prop.description) {
+        prop.title = prop.description;
+        delete prop.description;
+      }
+    });
+  return schema;
+}
 
 export function FunctionSummary({ process }: {
   process: any;
@@ -71,7 +80,7 @@ export function FunctionSummary({ process }: {
             validator={validator}
             onChange={change}
             onSubmit={submit}
-            onError={log("errors")}
+            onError={(e) => console.error(e)}
           >
             <Button variant="primary" type="submit" minW="3xs">
               {submitting ? <Spinner /> : "Submit"}
