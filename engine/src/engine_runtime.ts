@@ -289,5 +289,27 @@ export default async function $step(): Promise<StepResult> {
 }
 
 export function $dyn_import(spec) {
-	throw new Error("$dyn_import not implemented");
+	if (spec === "apeiro://$") {
+		const input = (spec) => {
+			throw new ApeiroSignal({
+				until_input: spec,
+			});
+		};
+		const string = () => { return { t: "string"} }
+		const number = () => { return { t: "number"} }
+		return {
+			io: {
+				input,
+				number,
+				string,
+			}
+		};
+	}
+	if (spec === "apeiro://$/emailbox") {
+		return {
+			recvEmail: () => {},
+			sendEmail: () => {},
+		}
+	}
+	throw new Error("$dyn_import not implemented for spec " + spec);
 }

@@ -931,7 +931,7 @@ fn unexpected_module_resolve_callback<'a>(
     _import_assertions: v8::Local<'a, v8::FixedArray>,
     _referrer: v8::Local<'a, v8::Module>,
 ) -> Option<v8::Local<'a, v8::Module>> {
-    unreachable!()
+    unreachable!("unexpected_module_resolve_callback")
 }
 
 pub fn get_module_fn<'a>(
