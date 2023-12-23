@@ -18,7 +18,7 @@ nanoid = "0.4.0"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.23.0"
 futures-core = "0.3.25"
-serde_json_matcher = "0.1.4"
+serde_json_matcher = { path = "../serde_json_matcher" }
 tracing = { version = "0.1", features = ["log-always"] }
 serde_v8 = "0.146.0"
 futures = "0.3.25"

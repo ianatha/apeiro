@@ -10,5 +10,6 @@ members = [
 	"apeiro_port_syslog",
 	"internal_api",
 	"cli",
-	"serde"
+	"serde",
+	"serde_json_matcher",
 ]

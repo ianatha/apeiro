@@ -3449,9 +3449,7 @@ dependencies = [
 
 [[package]]
 name = "serde_json_matcher"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9454918f95b57569234fa9ff548115b8536fecdc6277d4d31e45419ab78ba1d6"
+version = "0.1.6"
 dependencies = [
  "serde",
  "serde_json",

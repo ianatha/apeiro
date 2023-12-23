@@ -1,0 +1,13 @@
+[package]
+name = "serde_json_matcher"
+version = "0.1.6"
+edition = "2018"
+license = "Apache-2.0"
+description = "A library for matching JSON data using a declarative syntax"
+repository = "https://github.com/ianatha/apeiro"
+readme = "README.md"
+rust-version = "1.36"
+
+[dependencies]
+serde = { version = "^1.0.140", features = ["derive"] }
+serde_json = "1.0.90"
