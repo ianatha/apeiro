@@ -127,7 +127,13 @@ impl MatchesValue for OrOperator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TypeOperator {
+pub struct TypeValueOperator {
+    #[serde(rename = "$type")]
+    val: TypeOperatorMatcher,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeArrayOperator {
     #[serde(rename = "$type")]
     val: Vec<TypeOperatorMatcher>,
 }
@@ -147,7 +153,25 @@ pub struct TypeOperator {
 //     val: Vec<TypeOperatorMatcher>,
 // }
 
-impl MatchesValue for TypeOperator {
+impl MatchesValue for TypeValueOperator {
+    fn matches(&self, other: &Value) -> bool {
+        let other_value_type = match other {
+            Value::Null => TypeOperatorMatcher::Null,
+            Value::Bool(_) => TypeOperatorMatcher::Bool,
+            Value::Number(_) => TypeOperatorMatcher::Number,
+            Value::String(_) => TypeOperatorMatcher::String,
+            Value::Array(_) => TypeOperatorMatcher::Array,
+            Value::Object(_) => TypeOperatorMatcher::Object,
+        };
+
+        if &self.val == &other_value_type {
+            return true;
+        }
+        false
+    }
+}
+
+impl MatchesValue for TypeArrayOperator {
     fn matches(&self, other: &Value) -> bool {
         let other_value_type = match other {
             Value::Null => TypeOperatorMatcher::Null,
@@ -188,7 +212,8 @@ pub enum ObjMatcher {
     And(AndOperator),
     Not(NotOperator),
     Or(OrOperator),
-    Type(TypeOperator),
+    TypeValue(TypeValueOperator),
+    TypeArray(TypeArrayOperator),
     Value(Value),
 }
 
@@ -216,7 +241,11 @@ fn try_into_operator(value: Value) -> Option<ObjMatcher> {
         } else if obj.contains_key("$or") {
             return Some(ObjMatcher::Or(serde_json::from_value(value).unwrap()));
         } else if obj.contains_key("$type") {
-            return Some(ObjMatcher::Type(serde_json::from_value(value).unwrap()));
+            if let Ok(v) = serde_json::from_value::<TypeArrayOperator>(value.clone()) {
+                return Some(ObjMatcher::TypeArray(v));
+            } else if let Ok(v) = serde_json::from_value::<TypeValueOperator>(value) {
+                return Some(ObjMatcher::TypeValue(v));
+            }
         }
     }
     None
@@ -232,7 +261,8 @@ impl MatchesValue for ObjMatcher {
             ObjMatcher::And(op) => op.matches(other),
             ObjMatcher::Not(op) => op.matches(other),
             ObjMatcher::Or(op) => op.matches(other),
-            ObjMatcher::Type(op) => op.matches(other),
+            ObjMatcher::TypeValue(op) => op.matches(other),
+            ObjMatcher::TypeArray(op) => op.matches(other),
             ObjMatcher::Value(value) => match try_into_operator(value.clone()) {
                 Some(obj_matcher) => obj_matcher.matches(other),
                 None => match value {
@@ -373,5 +403,33 @@ mod tests {
         assert!(!matcher.matches(&val));
         let val = json!({"b": 2});
         assert!(matcher.matches(&val));
+    }
+
+    #[test]
+    pub fn test_type_array() {
+        let input = r#"{"x":{"$type": ["number"]}}"#;
+        let matcher: ObjMatcher = from_str(input).unwrap();
+        let val = json!({"x": 0});
+        assert!(matcher.matches(&val));
+        let val = json!({"x": -1});
+        assert!(matcher.matches(&val));
+        let val = json!({"x": 1});
+        assert!(matcher.matches(&val));
+        let val = json!({"x": "hello"});
+        assert!(!matcher.matches(&val));
+    }
+
+    #[test]
+    pub fn test_type_value() {
+        let input = r#"{"x":{"$type": "number"}}"#;
+        let matcher: ObjMatcher = from_str(input).unwrap();
+        let val = json!({"x": 0});
+        assert!(matcher.matches(&val));
+        let val = json!({"x": -1});
+        assert!(matcher.matches(&val));
+        let val = json!({"x": 1});
+        assert!(matcher.matches(&val));
+        let val = json!({"x": "hello"});
+        assert!(!matcher.matches(&val));
     }
 }
