@@ -316,7 +316,7 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "apeiro_cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "apeiro_engine",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "apeiro_compiler"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "better_scoped_tls",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "apeiro_engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "apeiro_compiler",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "apeiro_internal_api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "colored",
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "apeiro_port_mqtt"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "apeiro_engine",
