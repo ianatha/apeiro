@@ -161,24 +161,63 @@ pub(crate) async fn ps(remote: String, _output_json: bool) -> Result<()> {
             vec![
                 p.id.clone().cell(),
                 p.name.clone().unwrap_or("".into()).cell(),
-                p.status.clone().cell(),
                 match p.suspension.clone() {
                     Some(s) => truncate(&s.to_string(), 64).to_string(),
-                    None => "".to_string(),
+                    None => p.status.clone().to_string(),
                 }
                 .cell(),
-                format!("{:.3} KB", (p.snapshot_size as f32 / 1024.0)).cell(),
-                format!("{:.3} KB", (p.snapshot_v2_size as f32 / 1024.0)).cell(),
+                format!("{:.3}KB",
+                    (p.snapshot_size as f32 / 1024.0),
+                ).cell(),
+                format!("{:.3}KB",
+                    (p.snapshot_v2_size as f32 / 1024.0),
+                ).cell(),
             ]
         })
         .table()
         .title(vec![
-            "proc_id".cell().bold(true).justify(Justify::Center),
+            "proc_id".cell().bold(true),
             "name".cell().bold(true),
             "status".cell().bold(true),
-            "suspension".cell().bold(true),
-            "snapshot size".cell().bold(true),
-            "snapshot v2 size".cell().bold(true),
+            "snapshot".cell().bold(true),
+            "scope".cell().bold(true),
+        ])
+        .border(empty_border)
+        .separator(
+            cli_table::format::Separator::builder()
+                .column(Some(VerticalLine::default()))
+                .build(),
+        );
+
+    cli_table::print_stdout(table)?;
+
+    Ok(())
+}
+
+pub(crate) async fn modules_list(remote: String) -> Result<()> {
+    use cli_table::{format::Justify, Cell, Style, Table};
+
+    let resp = reqwest::get(remote + "/module/")
+        .await?
+        .json::<Vec<ModuleSummary>>()
+        .await?;
+
+    let empty_border = cli_table::format::Border::builder().build();
+
+    let table = resp
+        .iter()
+        .map(|p| {
+            vec![
+                p.id.clone().cell(),
+                p.name.clone().cell(),
+                p.src.clone().cell(),
+            ]
+        })
+        .table()
+        .title(vec![
+            "mid".cell().bold(true).justify(Justify::Center),
+            "name".cell().bold(true),
+            "src".cell().bold(true),
         ])
         .border(empty_border)
         .separator(
@@ -190,17 +229,6 @@ pub(crate) async fn ps(remote: String, _output_json: bool) -> Result<()> {
     cli_table::print_stdout(table)?;
 
     // println!("{:?}", resp);
-
-    Ok(())
-}
-
-pub(crate) async fn modules_list(remote: String) -> Result<()> {
-    let resp = reqwest::get(remote + "/module/")
-        .await?
-        .json::<Vec<ModuleSummary>>()
-        .await?;
-
-    println!("{:?}", resp);
 
     Ok(())
 }
