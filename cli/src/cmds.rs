@@ -145,7 +145,7 @@ pub(crate) async fn new(remote: String, module_id: &String, name: &Option<String
 }
 
 pub(crate) async fn ps(remote: String, _output_json: bool) -> Result<()> {
-    use cli_table::{format::Justify, Cell, Style, Table};
+    use cli_table::{Cell, Style, Table};
 
     let resp = reqwest::get(remote + "/proc/")
         .await?
