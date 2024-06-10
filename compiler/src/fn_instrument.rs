@@ -505,7 +505,7 @@ impl VisitMut for WrapFunctions {
                         if let ImportSpecifier::Named(import_spec) = import_spec {
                             assign_obj.push(ObjectPatProp::Assign(AssignPatProp {
                                 span: DUMMY_SP,
-                                key: import_spec.local.clone(),
+                                key: import_spec.local.clone().into(),
                                 value: None,
                             }));
                         }

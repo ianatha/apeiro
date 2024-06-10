@@ -1,5 +1,6 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 extern crate serde;
+extern crate serde_v8;
 extern crate tracing;
 
 use std::{cell::RefCell, convert::TryInto, ops::DerefMut};

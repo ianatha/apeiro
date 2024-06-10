@@ -159,6 +159,7 @@ macro_rules! add_import_to {
                 src: Box::new(src),
                 with: Default::default(),
                 type_only: Default::default(),
+                phase: Default::default(),
             })))
         }
     }};

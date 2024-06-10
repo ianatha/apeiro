@@ -4,32 +4,31 @@ version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-brotli = "3.3.4"
-v8 = "0.82.0"
-anyhow = "1.0.66"
-tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7.4", 	features=["compat"] }
+anyhow = { workspace = true }
 apeiro_compiler = { path = "../compiler" }
 apeiro_internal_api = { path = "../internal_api"}
-serde = { version = "^1.0.100", features = ["derive"] }
 apeiro_serde = { path = "../serde" }
-serde_json = "1.0.89"
+async-trait = "0.1.61"
+base64 = "0.22.1"
+brotli = "6.0.0"
+chrono = "0.4.23"
+futures = "0.3.25"
+futures-core = "0.3.25"
 nanoid = "0.4.0"
 r2d2 = "0.8.10"
-r2d2_sqlite = "0.23.0"
-futures-core = "0.3.25"
+r2d2_sqlite = "0.24.0"
+reqwest = { version = "0.12.4", features = ["json", "blocking", "rustls-tls" ], default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
 serde_json_matcher = { path = "../serde_json_matcher" }
-tracing = { version = "0.1", features = ["log-always"] }
-serde_v8 = "0.146.0"
-futures = "0.3.25"
-reqwest = { version = "0.11.13", features = ["json", "blocking", "rustls-tls" ], default-features = false }
-sourcemap = "7.0.1"
-base64 = "0.21.0"
+serde_v8 = { workspace = true }
 sha256 = "1.1.1"
-async-trait = "0.1.61"
+sourcemap = "8.0.1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.4", 	features=["compat"] }
+tracing = { version = "0.1", features = ["log-always"] }
 typetag = "0.2.5"
-# libp2p = { version = "0.53.1", features = ["full"]}
-chrono = "0.4.23"
+v8 = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "0.4.2"

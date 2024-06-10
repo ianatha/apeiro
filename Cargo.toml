@@ -13,3 +13,11 @@ members = [
 	"serde",
 	"serde_json_matcher",
 ]
+
+[workspace.dependencies]
+anyhow = "1.0.66"
+serde = { version = "^1.0.100", features = ["derive"] }
+serde_json = "1.0.108"
+serde_v8 = "0.196.0"
+tokio = { version = "1", features = ["full", "time"] }
+v8 = { version = "0.93.0", default-features = false }

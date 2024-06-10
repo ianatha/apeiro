@@ -8,8 +8,6 @@ mod compile_phase;
 mod either_param_to_closure;
 mod fn_decl_to_fn_expr;
 mod fn_instrument;
-#[allow(dead_code)]
-mod generator;
 mod stmt_exploder;
 mod utils;
 

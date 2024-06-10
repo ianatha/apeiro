@@ -17,7 +17,7 @@ use swc_core::{
             Bool, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, MetaPropExpr,
             MetaPropKind, Module, Program, PropName, Str,
         },
-        loader::resolvers::lru::CachingResolver,
+        loader::{resolve::Resolution, resolvers::lru::CachingResolver},
         transforms::base::{fixer::fixer, pass::noop},
         visit::VisitMutWith,
     },
@@ -73,26 +73,36 @@ where
 
 struct ApeiroResolver {}
 
+fn filename_to_resolution(f: FileName) -> Resolution {
+    Resolution {
+        filename: f,
+        slug: None,
+    }
+}
+
 impl swc_bundler::Resolve for ApeiroResolver {
-    fn resolve(&self, base: &FileName, module_specifier: &str) -> Result<FileName, Error> {
+    fn resolve(&self, base: &FileName, module_specifier: &str) -> Result<Resolution, Error> {
         match base {
             FileName::Custom(_) => {
                 if let Ok(url) = url::Url::parse(module_specifier) {
-                    Ok(FileName::Url(url))
+                    Ok(Resolution {
+                        filename: FileName::Url(url),
+                        slug: None,
+                    })
                 } else {
                     let path = Path::new(module_specifier);
-                    Ok(FileName::Real(path.to_path_buf()))
+                    Ok(filename_to_resolution(FileName::Real(path.to_path_buf())))
                 }
             }
             FileName::Real(parent_path) => {
                 if let Ok(url) = url::Url::parse(module_specifier) {
-                    Ok(FileName::Url(url))
+                    Ok(filename_to_resolution(FileName::Url(url)))
                 } else {
                     let path = parent_path.parent().unwrap().join(module_specifier);
-                    Ok(FileName::Real(path.to_path_buf()))
+                    Ok(filename_to_resolution(FileName::Real(path.to_path_buf())))
                 }
             }
-            FileName::Url(parent_url) => Ok(FileName::Url(parent_url.join(module_specifier)?)),
+            FileName::Url(parent_url) => Ok(filename_to_resolution(FileName::Url(parent_url.join(module_specifier)?))),
             _ => unreachable!(),
         }
     }

@@ -4,22 +4,22 @@ version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.66"
+anyhow = { workspace = true }
 better_scoped_tls = "0.1.0"
 futures = { version = "0.3.25", features = ["executor"] }
 is-macro = "0.3.1"
 once_cell = "1.16.0"
-reqwest = { version = "0.11.13", features = ["blocking", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12.4", features = ["blocking", "rustls-tls"], default-features = false }
 rustc-hash = "1.1.0"
-serde = "1.0.149"
-serde_json = "1.0.91"
-swc = { version = "0.269.*" }
-swc_core = { version = "0.86.*", features = ["__ecma", "__ecma_loader", "__utils", "ecma_plugin_transform"] }
-swc_bundler = { version = "0.222.*" }
-swc_ecma_codegen = { version = "0.146.*" }
-swc_ecma_minifier = { version = "0.189.*" }
-swc_ecma_parser = { version = "0.141.*" }
-swc_ecma_transforms_base = "0.134.55"
+serde = { workspace = true }
+serde_json = { workspace = true }
+swc = { version = "0.276.*" }
+swc_core = { version = "0.93.*", features = ["__ecma", "__ecma_loader", "__utils", "ecma_plugin_transform"] }
+swc_bundler = { version = "0.228.*" }
+swc_ecma_codegen = { version = "0.149.*" }
+swc_ecma_minifier = { version = "0.195.*" }
+swc_ecma_parser = { version = "0.144.*" }
+swc_ecma_transforms_base = { version = "0.138.*" }
 tokio = { version = "1", features = ["macros"] }
 tracing = "0.1.37"
 url = "2.3.1"

@@ -4,13 +4,11 @@ use serde_json::Value;
 
 pub type ApeiroId = String;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ProcGetResponse {
-    pub proc_id: String,
-    pub module_id: String,
-    pub name: Option<String>,
-    pub step_result: StepResult,
-}
+mod proc;
+mod step_result;
+
+pub use step_result::*;
+pub use proc::*;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProcDetails {
@@ -88,13 +86,6 @@ impl std::fmt::Display for StepResultStatus {
     }
 }
 
-#[derive(Default, Deserialize, Serialize, Clone, PartialEq, Eq)]
-pub struct StepResult {
-    pub status: StepResultStatus,
-    pub val: Option<Value>,
-    pub suspension: Option<Value>,
-}
-
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct EngineStatus {
     pub frames: Option<Value>,
@@ -102,41 +93,6 @@ pub struct EngineStatus {
     pub snapshot: Option<Vec<u8>>,
 }
 
-impl std::fmt::Display for StepResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let val = match &self.val {
-            Some(v) => serde_json::to_string_pretty(v).unwrap(),
-            None => "".to_string(),
-        };
-        f.write_fmt(format_args!(
-            "{}: {}\n{}: {}",
-            "status".bold(),
-            self.status,
-            "val".bold(),
-            val
-        ))
-        .unwrap();
-        if let Some(suspension) = &self.suspension {
-            f.write_fmt(format_args!(
-                "{}: {}",
-                "suspension".bold(),
-                serde_json::to_string_pretty(suspension).unwrap()
-            ))
-            .unwrap();
-        };
-        Ok(())
-    }
-}
-
-impl std::fmt::Debug for StepResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StepResult")
-            .field("status", &self.status)
-            .field("val", &self.val)
-            .field("suspension", &self.suspension)
-            .finish()
-    }
-}
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct ProcStatus {

@@ -1,9 +1,0 @@
-{
-    "plugins": [
-        {
-            "module": "SyslogPlugin",
-            "to_pid": "mqtt",
-            "port": 1514
-        }
-    ]
-}
