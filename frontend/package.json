@@ -23,7 +23,7 @@
     "emoji-unicode-map": "^1.1.11",
     "framer-motion": "^7.6.1",
     "monaco-editor": "^0.45.0",
-    "next": "14.0.4",
+    "next": "14.1.1",
     "nextjs-cors": "^2.1.2",
     "qrcode.react": "^3.1.0",
     "react": "18.2.0",
