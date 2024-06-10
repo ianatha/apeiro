@@ -245,6 +245,33 @@ fn test_fn_wrap_export_named() {
 }
 
 #[test]
+fn test_assign() {
+    compiler_test(
+        "function assign(x) {
+let s = {};
+s.x = 3;
+s.x = x;
+    }", folder_chain!(), r#"let assign = $fn(function assign(x) {
+    let $f1 = $new_frame("1", null);
+    let $sc1 = $scope(undefined, $f1);
+    switch($f1.$pc){
+        case 0:
+            $sc1.s = {
+                value: {}
+            };
+            $f1.$pc = 1;
+        case 1:
+            $sc1.s.value.x = 3;
+            $f1.$pc = 2;
+        case 2:
+            $sc1.s.value.x = x;
+            $frame_end($f1);
+    }
+}, "1", null);
+"#);
+}
+
+#[test]
 fn test_fn_while() {
     compiler_test(
         "function sum(x) {

@@ -4,11 +4,7 @@ use swc_core::{
     common::{util::take::Take, BytePos, Span, Spanned, SyntaxContext, DUMMY_SP},
     ecma::{
         ast::{
-            AssignPatProp, BlockStmt, CallExpr, Callee, Decl, Expr, ExprOrSpread, ExprStmt, FnExpr,
-            Function, Id, Ident, IfStmt, ImportDecl, ImportSpecifier, KeyValueProp, Lit,
-            MemberExpr, Module, ModuleDecl, ModuleItem, Null, ObjectLit, ObjectPat, ObjectPatProp,
-            Param, Pat, Prop, ReturnStmt, Stmt, SwitchCase, SwitchStmt, ThrowStmt, TryStmt,
-            VarDecl, VarDeclKind, VarDeclarator,
+            AssignPatProp, BlockStmt, CallExpr, Callee, Decl, Expr, ExprOrSpread, ExprStmt, FnExpr, Function, Id, Ident, IfStmt, ImportDecl, ImportSpecifier, KeyValueProp, Lit, MemberExpr, MemberProp, Module, ModuleDecl, ModuleItem, Null, ObjectLit, ObjectPat, ObjectPatProp, Param, Pat, Prop, ReturnStmt, SimpleAssignTarget, Stmt, SwitchCase, SwitchStmt, ThrowStmt, TryStmt, VarDecl, VarDeclKind, VarDeclarator
         },
         utils::{private_ident, quote_ident, ExprFactory},
         visit::{as_folder, Fold, VisitMut, VisitMutWith},
@@ -427,6 +423,31 @@ impl<'a> VisitMut for VarRewriter<'a> {
         }
     }
 
+    fn visit_mut_simple_assign_target(&mut self, expr: &mut swc_core::ecma::ast::SimpleAssignTarget) {
+        let mut target_ident = None;
+        if let SimpleAssignTarget::Ident(ident) = expr {
+            if self.moved_vars.contains(&ident.to_id()) {
+                target_ident = Some(ident.clone());
+            }
+        }
+
+        if let Some(target_ident) = target_ident {
+            *expr = MemberExpr {
+                span: target_ident.span,
+                obj: MemberExpr {
+                    span: target_ident.span(),
+                    obj: Expr::Ident(self.top_level.clone()).into(),
+                    prop: MemberProp::Ident(target_ident.id),
+                }
+                .into(),
+                prop: quote_ident!("value").into(),
+            }
+            .into();
+        } else {
+            expr.visit_mut_children_with(self);
+        }
+    }
+    
     fn visit_mut_expr(&mut self, expr: &mut Expr) {
         let mut target_ident = None;
         if let Expr::Ident(ident) = expr {
