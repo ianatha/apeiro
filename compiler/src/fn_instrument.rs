@@ -28,6 +28,8 @@ struct WrapFunctions {
     moved_vars: Vec<Vec<Id>>,
     fn_hash: Vec<u64>,
     wrapping_function: String,
+    params: Vec<Vec<Id>>,
+    leaky_closure: Vec<Vec<Id>>,
 }
 
 fn penultimate(data: &Vec<u64>) -> Option<&u64> {
@@ -191,6 +193,7 @@ impl WrapFunctions {
 
     fn expr_from_fn_expr(&mut self, fn_expr: &mut FnExpr) -> Expr {
         let hash = self.fn_hash.last().unwrap();
+        println!("leaky closure({:?}): {:?}", self.fn_hash, self.leaky_closure);
         Expr::Call(CallExpr {
             span: fn_expr.span(),
             callee: Callee::Expr(quote_ident!(self.wrapping_function.clone()).into()),
@@ -387,8 +390,24 @@ impl WrapFunctions {
 }
 
 struct VarRewriter<'a> {
+    all_moved_vars: &'a Vec<Vec<Id>>,
     moved_vars: &'a Vec<Id>,
+    known_params: &'a Vec<Id>,
+    leaky_closure: &'a mut Vec<Id>,
     top_level: Ident,
+}
+
+impl<'a> VarRewriter<'a> {
+    fn not_captured(&mut self, ident: &Ident) -> () {
+        if ident.span.hi.0 == 0 && ident.span.lo.0 == 0 {
+            // ignore system idents
+            return
+        }
+        if self.known_params.contains(&ident.to_id()) || self.all_moved_vars.iter().any(|vars| vars.contains(&ident.to_id())) {
+            return
+        }
+        self.leaky_closure.push(ident.to_id());
+    }
 }
 
 impl<'a> VisitMut for VarRewriter<'a> {
@@ -401,6 +420,8 @@ impl<'a> VisitMut for VarRewriter<'a> {
         if let Pat::Ident(ident) = pat {
             if self.moved_vars.contains(&ident.id.to_id()) {
                 target_ident = Some(ident.id.clone());
+            } else {
+                self.not_captured(ident);
             }
         }
 
@@ -428,6 +449,8 @@ impl<'a> VisitMut for VarRewriter<'a> {
         if let SimpleAssignTarget::Ident(ident) = expr {
             if self.moved_vars.contains(&ident.to_id()) {
                 target_ident = Some(ident.clone());
+            } else {
+                self.not_captured(ident);
             }
         }
 
@@ -453,6 +476,8 @@ impl<'a> VisitMut for VarRewriter<'a> {
         if let Expr::Ident(ident) = expr {
             if self.moved_vars.contains(&ident.to_id()) {
                 target_ident = Some(ident.clone());
+            } else {
+                self.not_captured(ident);
             }
         }
 
@@ -588,10 +613,14 @@ impl VisitMut for WrapFunctions {
         block.visit_mut_children_with(self);
         if self.moved_vars.len() > 0 {
             let var_rewriter = &mut VarRewriter {
+                all_moved_vars: &self.moved_vars,
+                known_params: self.params.last().unwrap(),
                 moved_vars: self.moved_vars.last().unwrap(),
                 top_level: self.current_scope_identifier().unwrap().into(),
+                leaky_closure: &mut Vec::new(),
             };
             block.visit_mut_children_with(var_rewriter);
+            self.leaky_closure.push(var_rewriter.leaky_closure.clone());
         }
         self.frame_depth = self.frame_depth - 1;
     }
@@ -599,21 +628,34 @@ impl VisitMut for WrapFunctions {
     fn visit_mut_function(&mut self, function: &mut Function) {
         match function.body {
             Some(ref mut _block_stmt) => {
+                let mut params: Vec<Id> = vec![];
+                for param in function.params.iter() {
+                    if let Pat::Ident(ident) = &param.pat {
+                        params.push(ident.id.clone().to_id());
+                    }
+                }
                 self.moved_vars.push(vec![]);
+                self.params.push(params);
                 function.visit_mut_children_with(self);
-                _ = self.moved_vars.pop()
+                _ = self.moved_vars.pop();
+                _ = self.params.pop()
             }
             None => {}
         }
     }
 
+    // a previous step has converted all function declarations
+    // to function expressions.
     fn visit_mut_expr(&mut self, expr: &mut Expr) {
         if let Expr::Fn(fn_expr) = expr {
+            let fn_name = fn_expr.ident.clone();
+            println!("entering fn_expr: {:?}", fn_name);
             let hash = ast_to_hash(fn_expr);
             self.fn_hash.push(hash);
             fn_expr.visit_mut_children_with(self);
             *expr = self.expr_from_fn_expr(fn_expr);
             self.fn_hash.pop();
+            println!("exiting fn_expr: {:?}", fn_name);
         } else {
             expr.visit_mut_children_with(self);
         }
